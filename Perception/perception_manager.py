@@ -1,0 +1,92 @@
+"""
+感知层总控模块
+协调 CV 检测（UIED）与 Dump 解析，构建统一的 UIState
+"""
+import os
+import logging
+from typing import Optional
+
+from Perception.uied.detect import WidgetDetector
+from Perception.dump_parser import DumpParser
+from Perception.context_builder import ContextBuilder, UIState
+
+logger = logging.getLogger(__name__)
+
+
+class PerceptionManager:
+    """
+    多模态环境感知层总控
+    负责获取并清洗当前 GUI 环境的客观事实
+    1. 调用 WidgetDetector 做 CV 检测（OCR + 组件检测 + 融合）
+    2. 调用 DumpParser 解析 Android UI Dump
+    3. 调用 ContextBuilder 融合两路数据，输出精简 UIState
+    """
+
+    def __init__(self, cv_output_dir: str, resize_height: int = 800):
+        self.widget_detector = WidgetDetector()
+        self.widget_detector.resize_length = resize_height
+        self.widget_detector.output_root = cv_output_dir
+
+        self.dump_parser = DumpParser()
+        self.context_builder = ContextBuilder()
+
+        self.cv_output_dir = cv_output_dir
+        os.makedirs(cv_output_dir, exist_ok=True)
+
+        logger.info("PerceptionManager 初始化完成, CV 输出目录: %s", cv_output_dir)
+
+    def perceive(
+        self,
+        screenshot_path: str,
+        dump_path: Optional[str] = None,
+        screen_size: tuple = (1080, 1920),
+        activity_name: str = "",
+        package_name: str = "",
+    ) -> UIState:
+        """
+        执行一次完整的环境感知
+        :param screenshot_path: 截图文件路径
+        :param dump_path: UI Dump XML 文件路径（可选）
+        :param screen_size: 屏幕尺寸 (width, height)
+        :param activity_name: 当前 Activity 名
+        :param package_name: 当前包名
+        :return: 构建的 UIState
+        """
+        logger.info("开始环境感知: screenshot=%s, dump=%s", screenshot_path, dump_path)
+
+        # ---- CV 检测 ----
+        cv_elements = []
+        resize_ratio = 1.0
+        try:
+            img_res_path, resize_ratio, cv_compos = self.widget_detector.detect(
+                img_path=screenshot_path, debug=False
+            )
+            cv_elements = cv_compos
+            logger.info("CV 检测完成: 检测到 %d 个元素, resize_ratio=%.3f", len(cv_elements), resize_ratio)
+        except Exception as e:
+            logger.error("CV 检测失败: %s, 将仅使用 Dump 数据", e)
+
+        # ---- Dump 解析 ----
+        dump_elements = []
+        if dump_path and os.path.exists(dump_path):
+            try:
+                dump_elements = self.dump_parser.parse(dump_path)
+                logger.info("Dump 解析完成: 解析到 %d 个控件", len(dump_elements))
+            except Exception as e:
+                logger.error("Dump 解析失败: %s, 将仅使用 CV 数据", e)
+        else:
+            logger.warning("未提供 Dump 文件或文件不存在, 将仅使用 CV 数据")
+
+        # ---- 融合构建 UIState ----
+        ui_state = self.context_builder.build(
+            cv_elements=cv_elements,
+            dump_elements=dump_elements,
+            screenshot_path=screenshot_path,
+            screen_size=screen_size,
+            resize_ratio=resize_ratio,
+            activity_name=activity_name,
+            package_name=package_name,
+        )
+
+        logger.info("环境感知完成: 最终控件数=%d", len(ui_state.widgets))
+        return ui_state
