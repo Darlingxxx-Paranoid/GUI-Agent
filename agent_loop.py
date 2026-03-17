@@ -241,7 +241,7 @@ class AgentLoop:
         # 等待 UI 响应
         if not dry_run:
             import time as _time
-            _time.sleep(1.5)
+            _time.sleep(3)
 
         # ========================================
         # 6. 再次感知 + 事中检查(执行后)

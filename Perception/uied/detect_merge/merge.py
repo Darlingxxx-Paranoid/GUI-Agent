@@ -286,6 +286,10 @@ def compos_clip_and_fill(clip_root, org, compos):
 
 def merge(img_path, compo_path, text_path, merge_root=None, is_paragraph=False, is_remove_bar=True, show=False,
           wait_key=0):
+
+    if merge_root is not None:
+        os.makedirs(merge_root, exist_ok=True)
+        
     compo_json = json.load(open(compo_path, "r"))
     text_json = json.load(open(text_path, "r"))
 

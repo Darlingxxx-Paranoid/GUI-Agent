@@ -34,6 +34,9 @@ def setup_logging(log_level: str = "INFO", log_file: str = None):
 
     # 文件 handler（可选）
     if log_file:
+        # 如果传入的是目录，在目录下创建默认日志文件
+        if os.path.isdir(log_file):
+            log_file = os.path.join(log_file, "agent.log")
         os.makedirs(os.path.dirname(log_file) or ".", exist_ok=True)
         file_handler = logging.FileHandler(log_file, encoding="utf-8")
         file_handler.setLevel(logging.DEBUG)  # 文件记录所有级别
