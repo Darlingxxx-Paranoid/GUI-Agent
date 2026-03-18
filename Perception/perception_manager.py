@@ -2,6 +2,7 @@
 感知层总控模块
 协调 CV 检测（UIED）与 Dump 解析，构建统一的 UIState
 """
+import json
 import os
 import logging
 from typing import Optional
@@ -32,6 +33,8 @@ class PerceptionManager:
 
         self.cv_output_dir = cv_output_dir
         os.makedirs(cv_output_dir, exist_ok=True)
+        self.context_output_dir = os.path.join(os.path.dirname(cv_output_dir), "context")
+        os.makedirs(self.context_output_dir, exist_ok=True)
 
         logger.info("PerceptionManager 初始化完成, CV 输出目录: %s", cv_output_dir)
 
@@ -88,5 +91,34 @@ class PerceptionManager:
             package_name=package_name,
         )
 
+        self._save_context(ui_state, dump_path=dump_path)
         logger.info("环境感知完成: 最终控件数=%d", len(ui_state.widgets))
         return ui_state
+
+    def _save_context(self, ui_state: UIState, dump_path: Optional[str] = None) -> None:
+        screenshot_basename = os.path.basename(ui_state.screenshot_path or "")
+        stem, _ = os.path.splitext(screenshot_basename)
+        if not stem:
+            stem = "context"
+
+        out_path = os.path.join(self.context_output_dir, f"{stem}.json")
+        payload = {
+            "activity_name": ui_state.activity_name,
+            "package_name": ui_state.package_name,
+            "screen_width": ui_state.screen_width,
+            "screen_height": ui_state.screen_height,
+            "screenshot_path": ui_state.screenshot_path,
+            "dump_path": dump_path or "",
+            "widgets_count": len(ui_state.widgets),
+            "widgets": [
+                {**w.to_dict(), "cv_confidence": getattr(w, "cv_confidence", 0.0)}
+                for w in ui_state.widgets
+            ],
+        }
+
+        try:
+            with open(out_path, "w", encoding="utf-8") as f:
+                json.dump(payload, f, ensure_ascii=False, indent=2)
+            logger.info("已保存合并控件列表: %s", out_path)
+        except Exception as e:
+            logger.warning("保存合并控件列表失败: %s", e)
