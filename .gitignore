@@ -1,8 +1,11 @@
 #数据文件
-Data
+#data
 
 #模型文件
 Module
 
 #虚拟环境
 myvenv
+
+#测试文件
+*test*

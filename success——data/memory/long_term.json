@@ -1,0 +1,70 @@
+[
+  {
+    "task_description": "Send a email to 221240051@smail.nju.edu.cn notifying there is a meeting at 2026-3-18 14:00 using Gmail",
+    "action_sequence": [
+      {
+        "action_type": "tap",
+        "x": 828,
+        "y": 1901,
+        "x2": 0,
+        "y2": 0,
+        "text": "",
+        "widget_id": 55,
+        "description": "点击 'Compose'"
+      },
+      {
+        "action_type": "input",
+        "x": 540,
+        "y": 474,
+        "x2": 0,
+        "y2": 0,
+        "text": "221240051@smail.nju.edu.cn",
+        "widget_id": 11,
+        "description": "在 'com.google.android.gm:id/peoplekit_autocomplete_chip_group' 中输入 '221240051@smail.nju.edu.cn'"
+      },
+      {
+        "action_type": "tap",
+        "x": 482,
+        "y": 741,
+        "x2": 0,
+        "y2": 0,
+        "text": "",
+        "widget_id": 16,
+        "description": "点击 '221240051@smail.nju.edu.cn'"
+      },
+      {
+        "action_type": "input",
+        "x": 540,
+        "y": 753,
+        "x2": 0,
+        "y2": 0,
+        "text": "Meeting on 2026-03-18 14:00",
+        "widget_id": 18,
+        "description": "在 'Subject' 中输入 'Meeting on 2026-03-18 14:00'"
+      },
+      {
+        "action_type": "input",
+        "x": 540,
+        "y": 1511,
+        "x2": 0,
+        "y2": 0,
+        "text": "Hello,\n\nThis is a reminder that we have a meeting scheduled at 2026-03-18 14:00.\n\nBest regards,",
+        "widget_id": 18,
+        "description": "在 'com.google.android.gm:id/composearea_tap_trap_bottom' 中输入 'Hello,\n\nThis is a reminder that we have a meeting scheduled at 2026-03-18 14:00.\n\nBest regards,'"
+      },
+      {
+        "action_type": "tap",
+        "x": 882,
+        "y": 154,
+        "x2": 0,
+        "y2": 0,
+        "text": "",
+        "widget_id": 6,
+        "description": "点击 'com.google.android.gm:id/send'"
+      }
+    ],
+    "success": true,
+    "timestamp": 1773812818.0594308,
+    "metadata": {}
+  }
+]

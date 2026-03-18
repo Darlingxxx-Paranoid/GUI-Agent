@@ -1,0 +1,58 @@
+{
+    "compos": [
+        {
+            "id": 0,
+            "class": "Compo",
+            "height": 14,
+            "width": 14,
+            "position": {
+                "column_min": 78,
+                "row_min": 5,
+                "column_max": 92,
+                "row_max": 19
+            }
+        },
+        {
+            "id": 1,
+            "class": "Compo",
+            "height": 20,
+            "width": 21,
+            "position": {
+                "column_min": 211,
+                "row_min": 45,
+                "column_max": 232,
+                "row_max": 65
+            }
+        },
+        {
+            "id": 2,
+            "class": "Compo",
+            "height": 36,
+            "width": 239,
+            "position": {
+                "column_min": 70,
+                "row_min": 153,
+                "column_max": 309,
+                "row_max": 189
+            }
+        },
+        {
+            "id": 3,
+            "class": "Text",
+            "height": 28,
+            "width": 135,
+            "position": {
+                "column_min": 0,
+                "row_min": 307,
+                "column_max": 135,
+                "row_max": 335
+            },
+            "text_content": "Compose email"
+        }
+    ],
+    "img_shape": [
+        800,
+        389,
+        3
+    ]
+}

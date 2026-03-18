@@ -1,0 +1,102 @@
+{
+  "subgoal": "Tap the Subject field and enter a meeting subject",
+  "acceptance_criteria": "Success if the compose email screen remains open and the Subject field is focused/active with the subject value set to the provided text (or visibly present within the subject input). Minor UI changes like cursor/keyboard appearing are acceptable; no navigation away from the compose form should occur.",
+  "old_screenshot_path": "/Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/screenshots/step_4_before.png",
+  "new_screenshot_path": "/Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/screenshots/step_4_after.png",
+  "constraint_evidence": {
+    "old_package": "",
+    "new_package": "",
+    "old_activity": "",
+    "new_activity": "",
+    "expected_activity": "",
+    "expected_activity_matched": false,
+    "require_ui_change": true,
+    "ui_changed": true,
+    "widget_should_exist": [
+      "Subject"
+    ],
+    "missing_widget_should_exist": [],
+    "widget_should_vanish": [],
+    "present_widget_should_vanish": [],
+    "support_hits": [
+      "text:Meeting on 2026-03-18 14:00",
+      "widget:android.widget.EditText",
+      "widget:compose",
+      "widget:composearea"
+    ],
+    "support_score": 2.0,
+    "min_support_score": 1.0,
+    "state_reasons": [
+      "target_state=form 未命中",
+      "source_state=form 未明显退出"
+    ],
+    "hard_violations": []
+  },
+  "llm_result": {
+    "success": true,
+    "reason": "The UI remains on the compose email screen and the Subject field content changed from the placeholder 'Subject' to the entered text 'Meeting on 2026-03-18 14:00', indicating the subject was set (and likely focused during entry). No navigation away from the compose form is shown.",
+    "before_summary": {
+      "page_type": "compose_email",
+      "key_elements": [
+        "Compose email",
+        "Navigate up",
+        "Send",
+        "Attach",
+        "To recipients",
+        "Subject",
+        "compose body"
+      ],
+      "interaction_state": [
+        "compose_form_open"
+      ],
+      "entities": [
+        "qinchenjiang17@gmail.com",
+        "221240051@smail.nju.edu.cn"
+      ]
+    },
+    "after_summary": {
+      "page_type": "compose_email",
+      "key_elements": [
+        "Navigate up",
+        "Send",
+        "Attach",
+        "To recipients",
+        "Subject value present",
+        "compose body"
+      ],
+      "interaction_state": [
+        "compose_form_open"
+      ],
+      "entities": [
+        "Meeting on 2026-03-18 14:00",
+        "qinchenjiang17@gmail.com",
+        "221240051@smail.nju.edu.cn"
+      ]
+    },
+    "delta_summary": {
+      "notable_changes": [
+        "Subject placeholder replaced by entered subject text: 'Meeting on 2026-03-18 14:00'"
+      ],
+      "direction": "moved_toward_goal"
+    },
+    "evidence_used": {
+      "hard_violations": [],
+      "supporting_hits": [
+        "text:Meeting on 2026-03-18 14:00",
+        "widget:android.widget.EditText",
+        "widget:compose",
+        "widget:composearea"
+      ],
+      "suspicious_signals": [
+        "Focus/keyboard state not explicitly visible in widget list, but subject text presence strongly indicates successful entry"
+      ]
+    }
+  },
+  "raw_response": "```json\n{\n  \"success\": true,\n  \"reason\": \"The UI remains on the compose email screen and the Subject field content changed from the placeholder 'Subject' to the entered text 'Meeting on 2026-03-18 14:00', indicating the subject was set (and likely focused during entry). No navigation away from the compose form is shown.\",\n  \"before_summary\": {\n    \"page_type\": \"compose_email\",\n    \"key_elements\": [\"Compose email\", \"Navigate up\", \"Send\", \"Attach\", \"To recipients\", \"Subject\", \"compose body\"],\n    \"interaction_state\": [\"compose_form_open\"],\n    \"entities\": [\"qinchenjiang17@gmail.com\", \"221240051@smail.nju.edu.cn\"]\n  },\n  \"after_summary\": {\n    \"page_type\": \"compose_email\",\n    \"key_elements\": [\"Navigate up\", \"Send\", \"Attach\", \"To recipients\", \"Subject value present\", \"compose body\"],\n    \"interaction_state\": [\"compose_form_open\"],\n    \"entities\": [\"Meeting on 2026-03-18 14:00\", \"qinchenjiang17@gmail.com\", \"221240051@smail.nju.edu.cn\"]\n  },\n  \"delta_summary\": {\n    \"notable_changes\": [\"Subject placeholder replaced by entered subject text: 'Meeting on 2026-03-18 14:00'\"],\n    \"direction\": \"moved_toward_goal\"\n  },\n  \"evidence_used\": {\n    \"hard_violations\": [],\n    \"supporting_hits\": [\"text:Meeting on 2026-03-18 14:00\", \"widget:android.widget.EditText\", \"widget:compose\", \"widget:composearea\"],\n    \"suspicious_signals\": [\"Focus/keyboard state not explicitly visible in widget list, but subject text presence strongly indicates successful entry\"]\n  }\n}\n```",
+  "final": {
+    "success": true,
+    "reason": "The UI remains on the compose email screen and the Subject field content changed from the placeholder 'Subject' to the entered text 'Meeting on 2026-03-18 14:00', indicating the subject was set (and likely focused during entry). No navigation away from the compose form is shown.",
+    "constraint_passed": true,
+    "semantic_passed": true
+  }
+}

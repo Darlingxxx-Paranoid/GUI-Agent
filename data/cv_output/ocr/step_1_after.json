@@ -1,0 +1,249 @@
+{
+    "img_shape": [
+        2220,
+        1080,
+        3
+    ],
+    "texts": [
+        {
+            "id": 0,
+            "content": "Search in mail",
+            "column_min": 145,
+            "row_min": 69,
+            "column_max": 450,
+            "row_max": 129,
+            "width": 305,
+            "height": 60
+        },
+        {
+            "id": 1,
+            "content": "Primary",
+            "column_min": 0,
+            "row_min": 271,
+            "column_max": 143,
+            "row_max": 326,
+            "width": 143,
+            "height": 55
+        },
+        {
+            "id": 2,
+            "content": "Tap a sender image to select",
+            "column_min": 170,
+            "row_min": 419,
+            "column_max": 712,
+            "row_max": 468,
+            "width": 542,
+            "height": 49
+        },
+        {
+            "id": 3,
+            "content": "Dismiss",
+            "column_min": 845,
+            "row_min": 449,
+            "column_max": 1001,
+            "row_max": 495,
+            "width": 156,
+            "height": 46
+        },
+        {
+            "id": 4,
+            "content": "that conversation.",
+            "column_min": 170,
+            "row_min": 472,
+            "column_max": 507,
+            "row_max": 515,
+            "width": 337,
+            "height": 43
+        },
+        {
+            "id": 5,
+            "content": "Try notifications for only your high",
+            "column_min": 172,
+            "row_min": 655,
+            "column_max": 913,
+            "row_max": 709,
+            "width": 741,
+            "height": 54
+        },
+        {
+            "id": 6,
+            "content": "priority emails",
+            "column_min": 172,
+            "row_min": 714,
+            "column_max": 485,
+            "row_max": 770,
+            "width": 313,
+            "height": 56
+        },
+        {
+            "id": 7,
+            "content": "You can change your preference in Setings at any time",
+            "column_min": 167,
+            "row_min": 787,
+            "column_max": 981,
+            "row_max": 897,
+            "width": 814,
+            "height": 110
+        },
+        {
+            "id": 8,
+            "content": "Turn on",
+            "column_min": 168,
+            "row_min": 957,
+            "column_max": 326,
+            "row_max": 1007,
+            "width": 158,
+            "height": 50
+        },
+        {
+            "id": 9,
+            "content": "No thanks",
+            "column_min": 446,
+            "row_min": 953,
+            "column_max": 647,
+            "row_max": 1002,
+            "width": 201,
+            "height": 49
+        },
+        {
+            "id": 10,
+            "content": "Google",
+            "column_min": 166,
+            "row_min": 1157,
+            "column_max": 330,
+            "row_max": 1222,
+            "width": 164,
+            "height": 65
+        },
+        {
+            "id": 11,
+            "content": "Mar 17",
+            "column_min": 950,
+            "row_min": 1160,
+            "column_max": 1063,
+            "row_max": 1203,
+            "width": 113,
+            "height": 43
+        },
+        {
+            "id": 12,
+            "content": "安全提醒",
+            "column_min": 168,
+            "row_min": 1234,
+            "column_max": 340,
+            "row_max": 1287,
+            "width": 172,
+            "height": 53
+        },
+        {
+            "id": 13,
+            "content": "在 Android设备上有新的登录活动qinche.",
+            "column_min": 168,
+            "row_min": 1297,
+            "column_max": 962,
+            "row_max": 1353,
+            "width": 794,
+            "height": 56
+        },
+        {
+            "id": 14,
+            "content": "Dify Dify Raises $3OM, Human Input Node, Te.. Mar 14",
+            "column_min": 166,
+            "row_min": 1449,
+            "column_max": 1068,
+            "row_max": 1576,
+            "width": 902,
+            "height": 127
+        },
+        {
+            "id": 15,
+            "content": "Hi Dify Builders, It's been a busy couple.",
+            "column_min": 165,
+            "row_min": 1577,
+            "column_max": 942,
+            "row_max": 1636,
+            "width": 777,
+            "height": 59
+        },
+        {
+            "id": 16,
+            "content": "Notion Export",
+            "column_min": 171,
+            "row_min": 1723,
+            "column_max": 464,
+            "row_max": 1781,
+            "width": 293,
+            "height": 58
+        },
+        {
+            "id": 17,
+            "content": "Mar 13",
+            "column_min": 956,
+            "row_min": 1734,
+            "column_max": 1076,
+            "row_max": 1780,
+            "width": 120,
+            "height": 46
+        },
+        {
+            "id": 18,
+            "content": "你的Notion导出已准备就绪",
+            "column_min": 170,
+            "row_min": 1788,
+            "column_max": 687,
+            "row_max": 1851,
+            "width": 517,
+            "height": 63
+        },
+        {
+            "id": 19,
+            "content": "你的 Notion 导出已准备就绪点击此处下..",
+            "column_min": 168,
+            "row_min": 1853,
+            "column_max": 940,
+            "row_max": 1919,
+            "width": 772,
+            "height": 66
+        },
+        {
+            "id": 20,
+            "content": "Compose",
+            "column_min": 784,
+            "row_min": 1964,
+            "column_max": 993,
+            "row_max": 2027,
+            "width": 209,
+            "height": 63
+        },
+        {
+            "id": 21,
+            "content": "Dify Community",
+            "column_min": 173,
+            "row_min": 2001,
+            "column_max": 508,
+            "row_max": 2061,
+            "width": 335,
+            "height": 60
+        },
+        {
+            "id": 22,
+            "content": "「Difv C. lSummarv",
+            "column_min": 174,
+            "row_min": 2060,
+            "column_max": 533,
+            "row_max": 2109,
+            "width": 359,
+            "height": 49
+        },
+        {
+            "id": 23,
+            "content": "48",
+            "column_min": 312,
+            "row_min": 2116,
+            "column_max": 359,
+            "row_max": 2156,
+            "width": 47,
+            "height": 40
+        }
+    ]
+}

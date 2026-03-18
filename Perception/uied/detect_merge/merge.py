@@ -55,7 +55,7 @@ def refine_texts(texts, img_shape):
     return refined_texts
 
 
-def merge_text_line_to_paragraph(elements, max_line_gap=10, max_col_gap=10):
+def merge_text_line_to_paragraph(elements, max_line_gap=10, max_col_gap=10, img_shape=None):
     texts = []
     non_texts = []
     for ele in elements:
@@ -66,6 +66,29 @@ def merge_text_line_to_paragraph(elements, max_line_gap=10, max_col_gap=10):
         else:
             non_texts.append(ele)
 
+    img_h = int(img_shape[0]) if img_shape and len(img_shape) >= 1 else 0
+    img_w = int(img_shape[1]) if img_shape and len(img_shape) >= 2 else 0
+    img_area = img_h * img_w if img_h > 0 and img_w > 0 else 0
+
+    def blocks_non_text(nx1, ny1, nx2, ny2):
+        n_area = max(0, nx2 - nx1) * max(0, ny2 - ny1)
+        if n_area <= 0:
+            return True
+        for e in non_texts:
+            if e.category == "Block":
+                continue
+            ex1, ey1, ex2, ey2 = e.put_bbox()
+            ix1 = max(nx1, ex1)
+            iy1 = max(ny1, ey1)
+            ix2 = min(nx2, ex2)
+            iy2 = min(ny2, ey2)
+            inter = max(0, ix2 - ix1) * max(0, iy2 - iy1)
+            if inter <= 0:
+                continue
+            if inter / n_area > 0.12 and inter / max(1, e.area) > 0.25:
+                return True
+        return False
+
     changed = True
     while changed:
         changed = False
@@ -73,16 +96,51 @@ def merge_text_line_to_paragraph(elements, max_line_gap=10, max_col_gap=10):
         for text_a in texts:
             merged = False
             for text_b in temp_set:
-                inter_area, _, _, _ = text_a.calc_intersection_area(
-                    text_b, bias=(max_col_gap, max_line_gap)
-                )
-                if inter_area > 0:
-                    text_b.element_merge(text_a)
-                    if text_b.category != "Text":
-                        text_b.category = "Text"
-                    merged = True
-                    changed = True
-                    break
+                ax1, ay1, ax2, ay2 = text_a.put_bbox()
+                bx1, by1, bx2, by2 = text_b.put_bbox()
+
+                overlap_w = max(0, min(ax2, bx2) - max(ax1, bx1))
+                min_w = max(1, min(ax2 - ax1, bx2 - bx1))
+                overlap_ratio = overlap_w / min_w
+
+                a_h = max(1, ay2 - ay1)
+                b_h = max(1, by2 - by1)
+                h_ratio = max(a_h, b_h) / max(1, min(a_h, b_h))
+
+                vertical_gap = max(0, max(ay1, by1) - min(ay2, by2))
+                if overlap_ratio < 0.65:
+                    continue
+                if h_ratio > 2.0:
+                    continue
+                if vertical_gap > min(max_line_gap, int(0.35 * min(a_h, b_h))):
+                    continue
+
+                if abs(ax1 - bx1) > max(max_col_gap, int(0.18 * min_w)):
+                    continue
+                if abs(ax2 - bx2) > max(max_col_gap, int(0.18 * min_w)):
+                    continue
+
+                nx1 = min(ax1, bx1)
+                ny1 = min(ay1, by1)
+                nx2 = max(ax2, bx2)
+                ny2 = max(ay2, by2)
+                n_area = max(0, nx2 - nx1) * max(0, ny2 - ny1)
+
+                if img_area > 0:
+                    if n_area / img_area > 0.10:
+                        continue
+                if img_h > 0:
+                    if (ny2 - ny1) / img_h > 0.35:
+                        continue
+                if blocks_non_text(nx1, ny1, nx2, ny2):
+                    continue
+
+                text_b.element_merge(text_a)
+                if text_b.category != "Text":
+                    text_b.category = "Text"
+                merged = True
+                changed = True
+                break
             if not merged:
                 temp_set.append(text_a)
         texts = temp_set.copy()
@@ -129,6 +187,22 @@ def refine_elements(compos, texts, intersection_bias=(2, 2), containment_ratio=0
 def remove_fragments(elements, img_path):
     fragments = []
     screen = cv2.imread(img_path)
+    if screen is None:
+        return elements
+
+    max_x = 0
+    max_y = 0
+    for element in elements:
+        x1, y1, x2, y2 = element.put_bbox()
+        if x2 > max_x:
+            max_x = x2
+        if y2 > max_y:
+            max_y = y2
+
+    target_w = max(1, int(max_x))
+    target_h = max(1, int(max_y))
+    if target_w != screen.shape[1] or target_h != screen.shape[0]:
+        screen = cv2.resize(screen, (target_w, target_h))
 
     # elements contained in text blocks
     for i in range(len(elements) - 1):
@@ -151,6 +225,9 @@ def remove_fragments(elements, img_path):
         else:  # blank elements
             x1, y1, x2, y2 = element.put_bbox()
             ele = screen[y1:y2, x1:x2]
+            if ele.size == 0:
+                fragments.append(element)
+                continue
             ele_hsv = cv2.cvtColor(ele, cv2.COLOR_BGR2HSV)
             hue_var = np.var(ele_hsv[:, :, 0])
             sat_var = np.var(ele_hsv[:, :, 1])
@@ -200,6 +277,96 @@ def merge_related_elements(elements):
             if not merged:
                 temp_set.append(ele_a)
         new_elements = temp_set.copy()
+    return new_elements
+
+
+def merge_list_rows(elements, img_shape):
+    img_h = int(img_shape[0]) if img_shape and len(img_shape) >= 1 else 0
+    img_w = int(img_shape[1]) if img_shape and len(img_shape) >= 2 else 0
+    if img_h <= 0 or img_w <= 0:
+        return elements
+
+    if len(elements) < 35:
+        return elements
+
+    def center_y(e):
+        return (e.row_min + e.row_max) / 2
+
+    candidates = [
+        e
+        for e in elements
+        if e.category != "Block"
+        and e.height / img_h < 0.30
+        and e.width / img_w < 0.98
+    ]
+    if len(candidates) < 35:
+        return elements
+
+    candidates = sorted(candidates, key=lambda e: (center_y(e), e.col_min))
+    band_gap = max(12, int(0.06 * img_h))
+    max_band_height = int(0.24 * img_h)
+
+    bands = []
+    cur = []
+    cur_y_min = None
+    cur_y_max = None
+    cur_center = None
+
+    for e in candidates:
+        cy = center_y(e)
+        if not cur:
+            cur = [e]
+            cur_y_min = e.row_min
+            cur_y_max = e.row_max
+            cur_center = cy
+            continue
+
+        next_y_min = min(cur_y_min, e.row_min)
+        next_y_max = max(cur_y_max, e.row_max)
+        if abs(cy - cur_center) <= band_gap and (next_y_max - next_y_min) <= max_band_height:
+            cur.append(e)
+            cur_y_min = next_y_min
+            cur_y_max = next_y_max
+            cur_center = (cur_center * (len(cur) - 1) + cy) / len(cur)
+        else:
+            bands.append(cur)
+            cur = [e]
+            cur_y_min = e.row_min
+            cur_y_max = e.row_max
+            cur_center = cy
+
+    if cur:
+        bands.append(cur)
+
+    new_elements = elements.copy()
+    for band in bands:
+        if len(band) < 4:
+            continue
+
+        bx1 = min(e.col_min for e in band)
+        by1 = min(e.row_min for e in band)
+        bx2 = max(e.col_max for e in band)
+        by2 = max(e.row_max for e in band)
+
+        b_w = bx2 - bx1
+        b_h = by2 - by1
+        if b_w / img_w < 0.62:
+            continue
+        if b_h / img_h > 0.24:
+            continue
+
+        band_texts = sum(1 for e in band if e.category in ["Text", "Combined"])
+        if not (len(band) >= 6 or (len(band) >= 4 and band_texts >= 2)):
+            continue
+
+        merged = Element(-1, (bx1, by1, bx2, by2), "Combined")
+        for e in band:
+            merged.element_merge(e)
+
+        band_ids = {e.id for e in band}
+        new_elements = [e for e in new_elements if e.id not in band_ids]
+        new_elements.append(merged)
+
     return new_elements
 
 
@@ -330,11 +497,10 @@ def merge(img_path, compo_path, text_path, merge_root=None, is_paragraph=False, 
     # texts = refine_texts(texts, compo_json["img_shape"])
     elements = refine_elements(compos, texts)
     if is_remove_bar:
-        pass
-        # elements = remove_top_bar(elements, img_height=compo_json["img_shape"][0])
-        # elements = remove_bottom_bar(elements, img_height=compo_json["img_shape"][0])
+        elements = remove_top_bar(elements, img_height=compo_json["img_shape"][0])
+        elements = remove_bottom_bar(elements, img_height=compo_json["img_shape"][0])
     if is_paragraph:
-        elements = merge_text_line_to_paragraph(elements, max_line_gap=7)
+        elements = merge_text_line_to_paragraph(elements, max_line_gap=7, img_shape=compo_json.get("img_shape"))
 
     show_elements(img_resize, elements, show=show, win_name="1", wait_key=wait_key)
 
@@ -342,6 +508,8 @@ def merge(img_path, compo_path, text_path, merge_root=None, is_paragraph=False, 
     show_elements(img_resize, elements, show=show, win_name="2", wait_key=wait_key)
     elements = merge_related_elements(elements)
     show_elements(img_resize, elements, show=show, win_name="3", wait_key=wait_key)
+    elements = merge_list_rows(elements, img_shape=compo_json.get("img_shape"))
+    show_elements(img_resize, elements, show=show, win_name="4", wait_key=wait_key)
     reassign_ids(elements)
     check_containment(elements)
     board = show_elements(img_resize, elements, show=show, win_name="elements after merging", wait_key=wait_key)

@@ -1,0 +1,59 @@
+{
+    "img_shape": [
+        2220,
+        1080,
+        3
+    ],
+    "texts": [
+        {
+            "id": 0,
+            "content": "…△U",
+            "column_min": 715,
+            "row_min": 51,
+            "column_max": 1072,
+            "row_max": 123,
+            "width": 357,
+            "height": 72
+        },
+        {
+            "id": 1,
+            "content": "From qinchenjiang17@gmail.com",
+            "column_min": 0,
+            "row_min": 230,
+            "column_max": 746,
+            "row_max": 288,
+            "width": 746,
+            "height": 58
+        },
+        {
+            "id": 2,
+            "content": "To",
+            "column_min": 0,
+            "row_min": 389,
+            "column_max": 62,
+            "row_max": 447,
+            "width": 62,
+            "height": 58
+        },
+        {
+            "id": 3,
+            "content": "Subject",
+            "column_min": 0,
+            "row_min": 538,
+            "column_max": 191,
+            "row_max": 608,
+            "width": 191,
+            "height": 70
+        },
+        {
+            "id": 4,
+            "content": "Composeemail",
+            "column_min": 0,
+            "row_min": 697,
+            "column_max": 369,
+            "row_max": 773,
+            "width": 369,
+            "height": 76
+        }
+    ]
+}

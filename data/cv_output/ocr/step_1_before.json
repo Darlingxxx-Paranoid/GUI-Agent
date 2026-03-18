@@ -1,0 +1,269 @@
+{
+    "img_shape": [
+        2220,
+        1080,
+        3
+    ],
+    "texts": [
+        {
+            "id": 0,
+            "content": "18",
+            "column_min": 718,
+            "row_min": 262,
+            "column_max": 775,
+            "row_max": 318,
+            "width": 57,
+            "height": 56
+        },
+        {
+            "id": 1,
+            "content": "Photos",
+            "column_min": 14,
+            "row_min": 380,
+            "column_max": 154,
+            "row_max": 437,
+            "width": 140,
+            "height": 57
+        },
+        {
+            "id": 2,
+            "content": "Clock",
+            "column_min": 259,
+            "row_min": 398,
+            "column_max": 361,
+            "row_max": 442,
+            "width": 102,
+            "height": 44
+        },
+        {
+            "id": 3,
+            "content": "Contacts",
+            "column_min": 453,
+            "row_min": 398,
+            "column_max": 603,
+            "row_max": 436,
+            "width": 150,
+            "height": 38
+        },
+        {
+            "id": 4,
+            "content": "Calendar",
+            "column_min": 672,
+            "row_min": 393,
+            "column_max": 822,
+            "row_max": 437,
+            "width": 150,
+            "height": 44
+        },
+        {
+            "id": 5,
+            "content": "YouTube",
+            "column_min": 885,
+            "row_min": 386,
+            "column_max": 1035,
+            "row_max": 433,
+            "width": 150,
+            "height": 47
+        },
+        {
+            "id": 6,
+            "content": "All apps",
+            "column_min": 446,
+            "row_min": 522,
+            "column_max": 608,
+            "row_max": 579,
+            "width": 162,
+            "height": 57
+        },
+        {
+            "id": 7,
+            "content": "18",
+            "column_min": 57,
+            "row_min": 721,
+            "column_max": 114,
+            "row_max": 766,
+            "width": 57,
+            "height": 45
+        },
+        {
+            "id": 8,
+            "content": "Calendar",
+            "column_min": 1,
+            "row_min": 846,
+            "column_max": 165,
+            "row_max": 888,
+            "width": 164,
+            "height": 42
+        },
+        {
+            "id": 9,
+            "content": "Chrome",
+            "column_min": 463,
+            "row_min": 849,
+            "column_max": 595,
+            "row_max": 886,
+            "width": 132,
+            "height": 37
+        },
+        {
+            "id": 10,
+            "content": "Clock",
+            "column_min": 695,
+            "row_min": 844,
+            "column_max": 792,
+            "row_max": 885,
+            "width": 97,
+            "height": 41
+        },
+        {
+            "id": 11,
+            "content": "Contacts",
+            "column_min": 882,
+            "row_min": 837,
+            "column_max": 1032,
+            "row_max": 881,
+            "width": 150,
+            "height": 44
+        },
+        {
+            "id": 12,
+            "content": "Camera",
+            "column_min": 245,
+            "row_min": 855,
+            "column_max": 374,
+            "row_max": 890,
+            "width": 129,
+            "height": 35
+        },
+        {
+            "id": 13,
+            "content": "Google",
+            "column_min": 684,
+            "row_min": 1186,
+            "column_max": 805,
+            "row_max": 1236,
+            "width": 121,
+            "height": 50
+        },
+        {
+            "id": 14,
+            "content": "Maps",
+            "column_min": 906,
+            "row_min": 1184,
+            "column_max": 1010,
+            "row_max": 1236,
+            "width": 104,
+            "height": 52
+        },
+        {
+            "id": 15,
+            "content": "Drive",
+            "column_min": 35,
+            "row_min": 1202,
+            "column_max": 138,
+            "row_max": 1246,
+            "width": 103,
+            "height": 44
+        },
+        {
+            "id": 16,
+            "content": "Files",
+            "column_min": 269,
+            "row_min": 1200,
+            "column_max": 354,
+            "row_max": 1242,
+            "width": 85,
+            "height": 42
+        },
+        {
+            "id": 17,
+            "content": "Gmail",
+            "column_min": 476,
+            "row_min": 1195,
+            "column_max": 581,
+            "row_max": 1238,
+            "width": 105,
+            "height": 43
+        },
+        {
+            "id": 18,
+            "content": "Safety",
+            "column_min": 691,
+            "row_min": 1531,
+            "column_max": 804,
+            "row_max": 1584,
+            "width": 113,
+            "height": 53
+        },
+        {
+            "id": 19,
+            "content": "Settings",
+            "column_min": 888,
+            "row_min": 1531,
+            "column_max": 1034,
+            "row_max": 1581,
+            "width": 146,
+            "height": 50
+        },
+        {
+            "id": 20,
+            "content": "Phone",
+            "column_min": 257,
+            "row_min": 1549,
+            "column_max": 367,
+            "row_max": 1593,
+            "width": 110,
+            "height": 44
+        },
+        {
+            "id": 21,
+            "content": "Photos",
+            "column_min": 468,
+            "row_min": 1546,
+            "column_max": 592,
+            "row_max": 1583,
+            "width": 124,
+            "height": 37
+        },
+        {
+            "id": 22,
+            "content": "Messages",
+            "column_min": 0,
+            "row_min": 1556,
+            "column_max": 183,
+            "row_max": 1601,
+            "width": 183,
+            "height": 45
+        },
+        {
+            "id": 23,
+            "content": "YT Music",
+            "column_min": 451,
+            "row_min": 1895,
+            "column_max": 614,
+            "row_max": 1941,
+            "width": 163,
+            "height": 46
+        },
+        {
+            "id": 24,
+            "content": "YouTube",
+            "column_min": 238,
+            "row_min": 1908,
+            "column_max": 387,
+            "row_max": 1954,
+            "width": 149,
+            "height": 46
+        },
+        {
+            "id": 25,
+            "content": "TMoble",
+            "column_min": 8,
+            "row_min": 1918,
+            "column_max": 157,
+            "row_max": 1967,
+            "width": 149,
+            "height": 49
+        }
+    ]
+}

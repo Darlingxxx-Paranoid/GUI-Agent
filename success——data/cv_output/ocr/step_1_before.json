@@ -1,0 +1,249 @@
+{
+    "img_shape": [
+        2220,
+        1080,
+        3
+    ],
+    "texts": [
+        {
+            "id": 0,
+            "content": "Search in mail",
+            "column_min": 147,
+            "row_min": 61,
+            "column_max": 447,
+            "row_max": 119,
+            "width": 300,
+            "height": 58
+        },
+        {
+            "id": 1,
+            "content": "Primary",
+            "column_min": 0,
+            "row_min": 248,
+            "column_max": 141,
+            "row_max": 303,
+            "width": 141,
+            "height": 55
+        },
+        {
+            "id": 2,
+            "content": "Tap a sender image to select that conversation.",
+            "column_min": 164,
+            "row_min": 388,
+            "column_max": 713,
+            "row_max": 497,
+            "width": 549,
+            "height": 109
+        },
+        {
+            "id": 3,
+            "content": "Dismiss",
+            "column_min": 851,
+            "row_min": 408,
+            "column_max": 1008,
+            "row_max": 453,
+            "width": 157,
+            "height": 45
+        },
+        {
+            "id": 4,
+            "content": "Google",
+            "column_min": 164,
+            "row_min": 601,
+            "column_max": 329,
+            "row_max": 663,
+            "width": 165,
+            "height": 62
+        },
+        {
+            "id": 5,
+            "content": "Mar 17",
+            "column_min": 948,
+            "row_min": 587,
+            "column_max": 1073,
+            "row_max": 640,
+            "width": 125,
+            "height": 53
+        },
+        {
+            "id": 6,
+            "content": "安全提醒",
+            "column_min": 162,
+            "row_min": 672,
+            "column_max": 340,
+            "row_max": 730,
+            "width": 178,
+            "height": 58
+        },
+        {
+            "id": 7,
+            "content": "在 Android设备上有新的登录活动 qinche..",
+            "column_min": 163,
+            "row_min": 729,
+            "column_max": 965,
+            "row_max": 794,
+            "width": 802,
+            "height": 65
+        },
+        {
+            "id": 8,
+            "content": "Dify Dify Raises $3OM, Human Input Node, Te... Hi Dify Builders, It's been a busy couple. Mar 14",
+            "column_min": 157,
+            "row_min": 877,
+            "column_max": 1078,
+            "row_max": 1078,
+            "width": 921,
+            "height": 201
+        },
+        {
+            "id": 9,
+            "content": "Mar13",
+            "column_min": 967,
+            "row_min": 1161,
+            "column_max": 1080,
+            "row_max": 1200,
+            "width": 113,
+            "height": 39
+        },
+        {
+            "id": 10,
+            "content": "Notion Export",
+            "column_min": 162,
+            "row_min": 1168,
+            "column_max": 468,
+            "row_max": 1227,
+            "width": 306,
+            "height": 59
+        },
+        {
+            "id": 11,
+            "content": "你的Notion导出已准备就绪",
+            "column_min": 163,
+            "row_min": 1229,
+            "column_max": 699,
+            "row_max": 1293,
+            "width": 536,
+            "height": 64
+        },
+        {
+            "id": 12,
+            "content": "你的Notion导出已准备就绪点击此处下...",
+            "column_min": 164,
+            "row_min": 1293,
+            "column_max": 956,
+            "row_max": 1360,
+            "width": 792,
+            "height": 67
+        },
+        {
+            "id": 13,
+            "content": "Dify Community",
+            "column_min": 163,
+            "row_min": 1450,
+            "column_max": 518,
+            "row_max": 1519,
+            "width": 355,
+            "height": 69
+        },
+        {
+            "id": 14,
+            "content": "Mar",
+            "column_min": 982,
+            "row_min": 1455,
+            "column_max": 1059,
+            "row_max": 1487,
+            "width": 77,
+            "height": 32
+        },
+        {
+            "id": 15,
+            "content": "[Dify C..] Summary A brief summary since 2026-03-05 02:4..",
+            "column_min": 162,
+            "row_min": 1522,
+            "column_max": 992,
+            "row_max": 1644,
+            "width": 830,
+            "height": 122
+        },
+        {
+            "id": 16,
+            "content": "智联招聘",
+            "column_min": 165,
+            "row_min": 1745,
+            "column_max": 364,
+            "row_max": 1803,
+            "width": 199,
+            "height": 58
+        },
+        {
+            "id": 17,
+            "content": "Mar",
+            "column_min": 987,
+            "row_min": 1748,
+            "column_max": 1076,
+            "row_max": 1792,
+            "width": 89,
+            "height": 44
+        },
+        {
+            "id": 18,
+            "content": "你有一条邀请投递消息待查看：现在沟通...",
+            "column_min": 166,
+            "row_min": 1810,
+            "column_max": 978,
+            "row_max": 1872,
+            "width": 812,
+            "height": 62
+        },
+        {
+            "id": 19,
+            "content": "HR近期活跃岗位C++开发",
+            "column_min": 170,
+            "row_min": 1885,
+            "column_max": 650,
+            "row_max": 1938,
+            "width": 480,
+            "height": 53
+        },
+        {
+            "id": 20,
+            "content": "Compose",
+            "column_min": 809,
+            "row_min": 1929,
+            "column_max": 1016,
+            "row_max": 1985,
+            "width": 207,
+            "height": 56
+        },
+        {
+            "id": 21,
+            "content": "Google Developer Program",
+            "column_min": 171,
+            "row_min": 2035,
+            "column_max": 763,
+            "row_max": 2088,
+            "width": 592,
+            "height": 53
+        },
+        {
+            "id": 22,
+            "content": "Mar",
+            "column_min": 997,
+            "row_min": 2052,
+            "column_max": 1080,
+            "row_max": 2097,
+            "width": 83,
+            "height": 45
+        },
+        {
+            "id": 23,
+            "content": "48",
+            "column_min": 315,
+            "row_min": 2102,
+            "column_max": 363,
+            "row_max": 2142,
+            "width": 48,
+            "height": 40
+        }
+    ]
+}

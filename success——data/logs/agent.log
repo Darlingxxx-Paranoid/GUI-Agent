@@ -1,0 +1,741 @@
+2026-03-18 13:39:13 | INFO    | __main__                       | GUI Agent 启动
+2026-03-18 13:39:13 | INFO    | __main__                       | 任务: Send a email to 221240051@smail.nju.edu.cn notifying there is a meeting at 2026-3-18 14:00 using Gmail
+2026-03-18 13:39:13 | INFO    | __main__                       | 设备: 默认
+2026-03-18 13:39:13 | INFO    | __main__                       | Dry Run: False
+2026-03-18 13:39:13 | INFO    | utils.llm_client               | LLMClient 初始化完成: model=gpt-5.2, api_base=https://api.poixe.com/v1
+2026-03-18 13:39:13 | DEBUG   | Perception.dump_parser         | DumpParser 初始化完成
+2026-03-18 13:39:13 | DEBUG   | Perception.context_builder     | ContextBuilder 初始化完成
+2026-03-18 13:39:13 | INFO    | Perception.perception_manager  | PerceptionManager 初始化完成, CV 输出目录: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/cv_output
+2026-03-18 13:39:13 | DEBUG   | Memory.memory_manager          | 短期记忆已初始化
+2026-03-18 13:39:13 | INFO    | Memory.experience_store        | 经验库文件不存在，将创建新文件: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/memory/long_term.json
+2026-03-18 13:39:13 | INFO    | Memory.memory_manager          | 记忆管理器初始化完成, 经验库路径: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/memory/long_term.json
+2026-03-18 13:39:13 | INFO    | Planning.planner               | Planner 初始化完成
+2026-03-18 13:39:13 | INFO    | Planning.oracle_pre            | OraclePre 初始化完成
+2026-03-18 13:39:13 | INFO    | Planning.safety_interceptor    | SafetyInterceptor 初始化完成, 高风险关键词: 17 个
+2026-03-18 13:39:13 | INFO    | Execution.action_executor      | ActionExecutor 初始化完成, serial='default'
+2026-03-18 13:39:13 | INFO    | Execution.action_mapper        | ActionMapper 初始化完成
+2026-03-18 13:39:13 | INFO    | Execution.oracle_runtime       | OracleRuntime 初始化完成: dead_loop_threshold=3, screen_var_threshold=10.0
+2026-03-18 13:39:13 | INFO    | Evaluation.evaluator           | Evaluator 初始化完成
+2026-03-18 13:39:13 | INFO    | Evaluation.replanner           | Replanner 初始化完成, 死胡同阈值=3
+2026-03-18 13:39:13 | INFO    | agent_loop                     | AgentLoop 初始化完成, 最大步数=30
+2026-03-18 13:39:13 | INFO    | agent_loop                     | ============================================================
+2026-03-18 13:39:13 | INFO    | agent_loop                     | 开始执行任务: 'Send a email to 221240051@smail.nju.edu.cn notifying there is a meeting at 2026-3-18 14:00 using Gmail'
+2026-03-18 13:39:13 | INFO    | agent_loop                     | ============================================================
+2026-03-18 13:39:13 | INFO    | Memory.memory_manager          | 短期记忆已清空
+2026-03-18 13:39:13 | DEBUG   | Execution.oracle_runtime       | 事中 Oracle 历史已重置
+2026-03-18 13:39:13 | DEBUG   | Evaluation.replanner           | Replanner 状态已重置
+2026-03-18 13:39:13 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb shell wm size
+2026-03-18 13:39:13 | INFO    | Execution.action_executor      | 设备屏幕分辨率: (1080, 2220)
+2026-03-18 13:39:13 | INFO    | agent_loop                     | ========================================
+2026-03-18 13:39:13 | INFO    | agent_loop                     | 第 1 步 (最大 30)
+2026-03-18 13:39:13 | INFO    | agent_loop                     | ========================================
+2026-03-18 13:39:13 | INFO    | agent_loop                     | [Step 1] 阶段1: 环境感知
+2026-03-18 13:39:13 | INFO    | Execution.action_executor      | 截屏: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/screenshots/step_1_before.png
+2026-03-18 13:39:13 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb shell screencap -p /sdcard/step_1_before.png
+2026-03-18 13:39:14 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb pull /sdcard/step_1_before.png /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/screenshots/step_1_before.png
+2026-03-18 13:39:14 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb shell rm /sdcard/step_1_before.png
+2026-03-18 13:39:14 | INFO    | Execution.action_executor      | Dump UI: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/dumps/step_1.xml
+2026-03-18 13:39:14 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb shell uiautomator dump /sdcard/window_dump.xml
+2026-03-18 13:39:16 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb pull /sdcard/window_dump.xml /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/dumps/step_1.xml
+2026-03-18 13:39:16 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb shell dumpsys activity activities
+2026-03-18 13:39:16 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb shell dumpsys window windows
+2026-03-18 13:39:16 | INFO    | Perception.perception_manager  | 开始环境感知: screenshot=/Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/screenshots/step_1_before.png, dump=/Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/dumps/step_1.xml
+2026-03-18 13:39:19 | INFO    | Perception.uied.detect_text.ocr | OCRDetector initialized successfully
+2026-03-18 13:39:30 | DEBUG   | Perception.uied.detect_text.ocr | PaddleOCR page keys: ['input_path', 'page_index', 'doc_preprocessor_res', 'dt_polys', 'model_settings', 'text_det_params', 'text_type', 'text_rec_score_thresh', 'return_word_box', 'rec_texts', 'rec_scores', 'rec_polys', 'vis_fonts', 'textline_orientation_angles', 'rec_boxes']
+2026-03-18 13:39:30 | DEBUG   | Perception.uied.detect_text.ocr | PaddleOCR counts: rec_texts=34, rec_scores=34, rec_polys=34
+2026-03-18 13:39:30 | DEBUG   | Perception.uied.detect_text.ocr | PaddleOCR converted count: 34
+2026-03-18 13:39:30 | DEBUG   | Perception.uied.detect_text.text_detection | After convert: 34
+2026-03-18 13:39:30 | DEBUG   | Perception.uied.detect_text.text_detection | After merge: 29
+2026-03-18 13:39:30 | DEBUG   | Perception.uied.detect_text.text_detection | After filter: 24
+2026-03-18 13:39:30 | DEBUG   | Perception.uied.detect_text.text_detection | After sentence merge: 24
+2026-03-18 13:39:30 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[0]: 'Search in mail'
+2026-03-18 13:39:30 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[1]: 'Primary'
+2026-03-18 13:39:30 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[2]: 'Tap a sender image to select that conversation.'
+2026-03-18 13:39:30 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[3]: 'Dismiss'
+2026-03-18 13:39:30 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[4]: 'Google'
+2026-03-18 13:39:30 | INFO    | Perception.uied.detect_text.text_detection | Text detection completed in 13.807s, text_count=24
+2026-03-18 13:39:30 | INFO    | Perception.perception_manager  | CV 检测完成: 检测到 16 个元素, resize_ratio=0.360
+2026-03-18 13:39:30 | INFO    | Perception.dump_parser         | 解析 UI Dump: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/dumps/step_1.xml
+2026-03-18 13:39:30 | INFO    | Perception.dump_parser         | Dump 解析完成, 提取 95 个控件
+2026-03-18 13:39:30 | INFO    | Perception.perception_manager  | Dump 解析完成: 解析到 95 个控件
+2026-03-18 13:39:30 | INFO    | Perception.context_builder     | 开始构建 UIState: CV元素=16, Dump控件=95
+2026-03-18 13:39:30 | DEBUG   | Perception.context_builder     | CV[4] <-> Dump[com.google.android.gm:id/contact_image] 匹配成功, IoU=0.314
+2026-03-18 13:39:30 | DEBUG   | Perception.context_builder     | CV[5] <-> Dump[com.google.android.gm:id/contact_image] 匹配成功, IoU=0.314
+2026-03-18 13:39:30 | DEBUG   | Perception.context_builder     | CV[9] <-> Dump[com.google.android.gm:id/viewified_conversation_item_view] 匹配成功, IoU=0.645
+2026-03-18 13:39:30 | DEBUG   | Perception.context_builder     | CV[10] <-> Dump[com.google.android.gm:id/toast_bar] 匹配成功, IoU=0.578
+2026-03-18 13:39:30 | DEBUG   | Perception.context_builder     | CV[11] <-> Dump[com.google.android.gm:id/conversation_tip_text] 匹配成功, IoU=0.482
+2026-03-18 13:39:30 | DEBUG   | Perception.context_builder     | CV[13] <-> Dump[com.google.android.gm:id/viewified_conversation_item_view] 匹配成功, IoU=0.661
+2026-03-18 13:39:30 | DEBUG   | Perception.context_builder     | CV[14] <-> Dump[com.google.android.gm:id/viewified_conversation_item_view] 匹配成功, IoU=0.626
+2026-03-18 13:39:30 | DEBUG   | Perception.context_builder     | CV[15] <-> Dump[com.google.android.gm:id/viewified_conversation_item_view] 匹配成功, IoU=0.608
+2026-03-18 13:39:30 | DEBUG   | Perception.context_builder     | 上下文瘦身: 60 -> 58 控件 (过滤了 2 个冗余控件)
+2026-03-18 13:39:30 | INFO    | Perception.context_builder     | UIState 构建完成: 最终控件数=58 (CV原始=16, Dump原始=95)
+2026-03-18 13:39:30 | INFO    | Perception.perception_manager  | 已保存合并控件列表: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/context/step_1_before.json
+2026-03-18 13:39:30 | INFO    | Perception.perception_manager  | 环境感知完成: 最终控件数=58
+2026-03-18 13:39:30 | INFO    | agent_loop                     | [Step 1] 阶段2: 认知规划
+2026-03-18 13:39:30 | INFO    | Planning.planner               | 开始规划, 任务: 'Send a email to 221240051@smail.nju.edu.cn notifying there is a meeting at 2026-'
+2026-03-18 13:39:30 | DEBUG   | Memory.memory_manager          | 未找到匹配经验, 最高相似度=0.000
+2026-03-18 13:39:30 | DEBUG   | Planning.planner               | 发送规划请求到 LLM
+2026-03-18 13:39:30 | DEBUG   | utils.llm_client               | 发送 LLM 请求: model=gpt-5.2, prompt_len=7131
+2026-03-18 13:39:43 | DEBUG   | utils.llm_client               | LLM 响应: len=657
+2026-03-18 13:39:43 | INFO    | Planning.planner               | LLM 规划完成: subgoal='Tap the Compose button to start a new email draft', action=tap, complete=False
+2026-03-18 13:39:43 | INFO    | agent_loop                     | 子目标: 'Tap the Compose button to start a new email draft' (action=tap)
+2026-03-18 13:39:43 | INFO    | Planning.oracle_pre            | 生成事前约束: subgoal='Tap the Compose button to start a new email draft'
+2026-03-18 13:39:43 | DEBUG   | utils.llm_client               | 发送 LLM 请求: model=gpt-5.2, prompt_len=4455
+2026-03-18 13:39:53 | DEBUG   | utils.llm_client               | LLM 响应: len=1303
+2026-03-18 13:39:53 | INFO    | Planning.oracle_pre            | 事前约束生成完成: target_state=form, transition=new_page
+2026-03-18 13:39:53 | INFO    | agent_loop                     | 事前约束: transition=new_page
+2026-03-18 13:39:53 | INFO    | agent_loop                     | [Step 1] 阶段3: 安全检查
+2026-03-18 13:39:53 | DEBUG   | Planning.safety_interceptor    | 安全检查通过: 'Tap the Compose button to start a new email draft'
+2026-03-18 13:39:53 | INFO    | agent_loop                     | [Step 1] 阶段4: 动作映射
+2026-03-18 13:39:53 | INFO    | Execution.action_mapper        | 映射动作: subgoal='Tap the Compose button to start a new email draft'
+2026-03-18 13:39:53 | INFO    | agent_loop                     | 映射动作: tap at (828, 1901)
+2026-03-18 13:39:53 | DEBUG   | Execution.oracle_runtime       | 执行前检查通过: tap at (828, 1901)
+2026-03-18 13:39:53 | INFO    | agent_loop                     | [Step 1] 阶段5: 执行动作
+2026-03-18 13:39:53 | INFO    | Execution.action_executor      | 执行点击: (828, 1901)
+2026-03-18 13:39:53 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb shell input tap 828 1901
+2026-03-18 13:39:56 | INFO    | agent_loop                     | [Step 1] 阶段6: 执行后感知 + 事中检查
+2026-03-18 13:39:56 | INFO    | Execution.action_executor      | 截屏: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/screenshots/step_1_after.png
+2026-03-18 13:39:56 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb shell screencap -p /sdcard/step_1_after.png
+2026-03-18 13:39:56 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb pull /sdcard/step_1_after.png /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/screenshots/step_1_after.png
+2026-03-18 13:39:56 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb shell rm /sdcard/step_1_after.png
+2026-03-18 13:39:56 | INFO    | Execution.action_executor      | Dump UI: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/dumps/step_1_after.xml
+2026-03-18 13:39:56 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb shell uiautomator dump /sdcard/window_dump.xml
+2026-03-18 13:39:58 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb pull /sdcard/window_dump.xml /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/dumps/step_1_after.xml
+2026-03-18 13:39:58 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb shell dumpsys activity activities
+2026-03-18 13:39:59 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb shell dumpsys window windows
+2026-03-18 13:39:59 | INFO    | Perception.perception_manager  | 开始环境感知: screenshot=/Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/screenshots/step_1_after.png, dump=/Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/dumps/step_1_after.xml
+2026-03-18 13:39:59 | INFO    | Perception.uied.detect_text.ocr | OCRDetector initialized successfully
+2026-03-18 13:40:08 | DEBUG   | Perception.uied.detect_text.ocr | PaddleOCR page keys: ['input_path', 'page_index', 'doc_preprocessor_res', 'dt_polys', 'model_settings', 'text_det_params', 'text_type', 'text_rec_score_thresh', 'return_word_box', 'rec_texts', 'rec_scores', 'rec_polys', 'vis_fonts', 'textline_orientation_angles', 'rec_boxes']
+2026-03-18 13:40:08 | DEBUG   | Perception.uied.detect_text.ocr | PaddleOCR counts: rec_texts=9, rec_scores=9, rec_polys=9
+2026-03-18 13:40:08 | DEBUG   | Perception.uied.detect_text.ocr | PaddleOCR converted count: 9
+2026-03-18 13:40:08 | DEBUG   | Perception.uied.detect_text.text_detection | After convert: 9
+2026-03-18 13:40:08 | DEBUG   | Perception.uied.detect_text.text_detection | After merge: 9
+2026-03-18 13:40:08 | DEBUG   | Perception.uied.detect_text.text_detection | After filter: 6
+2026-03-18 13:40:08 | DEBUG   | Perception.uied.detect_text.text_detection | After sentence merge: 5
+2026-03-18 13:40:08 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[0]: '…△'
+2026-03-18 13:40:08 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[1]: 'From qinchenjiang17@gmail.com'
+2026-03-18 13:40:08 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[2]: 'To'
+2026-03-18 13:40:08 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[3]: 'Subject'
+2026-03-18 13:40:08 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[4]: 'Composeemail'
+2026-03-18 13:40:08 | INFO    | Perception.uied.detect_text.text_detection | Text detection completed in 9.021s, text_count=5
+2026-03-18 13:40:08 | INFO    | Perception.perception_manager  | CV 检测完成: 检测到 2 个元素, resize_ratio=0.360
+2026-03-18 13:40:08 | INFO    | Perception.dump_parser         | 解析 UI Dump: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/dumps/step_1_after.xml
+2026-03-18 13:40:08 | INFO    | Perception.dump_parser         | Dump 解析完成, 提取 46 个控件
+2026-03-18 13:40:08 | INFO    | Perception.perception_manager  | Dump 解析完成: 解析到 46 个控件
+2026-03-18 13:40:08 | INFO    | Perception.context_builder     | 开始构建 UIState: CV元素=2, Dump控件=46
+2026-03-18 13:40:08 | DEBUG   | Perception.context_builder     | 上下文瘦身: 18 -> 17 控件 (过滤了 1 个冗余控件)
+2026-03-18 13:40:08 | INFO    | Perception.context_builder     | UIState 构建完成: 最终控件数=17 (CV原始=2, Dump原始=46)
+2026-03-18 13:40:08 | INFO    | Perception.perception_manager  | 已保存合并控件列表: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/context/step_1_after.json
+2026-03-18 13:40:08 | INFO    | Perception.perception_manager  | 环境感知完成: 最终控件数=17
+2026-03-18 13:40:08 | DEBUG   | Execution.oracle_runtime       | 事中检查通过
+2026-03-18 13:40:08 | INFO    | agent_loop                     | [Step 1] 阶段7: 事后评估
+2026-03-18 13:40:08 | INFO    | Evaluation.evaluator           | 开始事后评估: 'Tap the Compose button to start a new email draft'
+2026-03-18 13:40:08 | DEBUG   | utils.llm_client               | 发送 LLM 请求: model=gpt-5.2, prompt_len=5660
+2026-03-18 13:40:23 | DEBUG   | utils.llm_client               | LLM 响应: len=1512
+2026-03-18 13:40:23 | INFO    | Evaluation.evaluator           | 事后评估通过: 'Tap the Compose button to start a new email draft'
+2026-03-18 13:40:23 | INFO    | agent_loop                     | ✓ 子目标完成: 'Tap the Compose button to start a new email draft'
+2026-03-18 13:40:23 | DEBUG   | Evaluation.replanner           | 子目标成功, 重置连续失败计数
+2026-03-18 13:40:23 | DEBUG   | Memory.memory_manager          | 短期记忆新增步骤 #1
+2026-03-18 13:40:23 | INFO    | agent_loop                     | ========================================
+2026-03-18 13:40:23 | INFO    | agent_loop                     | 第 2 步 (最大 30)
+2026-03-18 13:40:23 | INFO    | agent_loop                     | ========================================
+2026-03-18 13:40:23 | INFO    | agent_loop                     | [Step 2] 阶段1: 环境感知
+2026-03-18 13:40:23 | INFO    | Execution.action_executor      | 截屏: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/screenshots/step_2_before.png
+2026-03-18 13:40:23 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb shell screencap -p /sdcard/step_2_before.png
+2026-03-18 13:40:23 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb pull /sdcard/step_2_before.png /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/screenshots/step_2_before.png
+2026-03-18 13:40:23 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb shell rm /sdcard/step_2_before.png
+2026-03-18 13:40:23 | INFO    | Execution.action_executor      | Dump UI: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/dumps/step_2.xml
+2026-03-18 13:40:23 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb shell uiautomator dump /sdcard/window_dump.xml
+2026-03-18 13:40:25 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb pull /sdcard/window_dump.xml /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/dumps/step_2.xml
+2026-03-18 13:40:25 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb shell dumpsys activity activities
+2026-03-18 13:40:25 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb shell dumpsys window windows
+2026-03-18 13:40:26 | INFO    | Perception.perception_manager  | 开始环境感知: screenshot=/Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/screenshots/step_2_before.png, dump=/Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/dumps/step_2.xml
+2026-03-18 13:40:26 | INFO    | Perception.uied.detect_text.ocr | OCRDetector initialized successfully
+2026-03-18 13:40:34 | DEBUG   | Perception.uied.detect_text.ocr | PaddleOCR page keys: ['input_path', 'page_index', 'doc_preprocessor_res', 'dt_polys', 'model_settings', 'text_det_params', 'text_type', 'text_rec_score_thresh', 'return_word_box', 'rec_texts', 'rec_scores', 'rec_polys', 'vis_fonts', 'textline_orientation_angles', 'rec_boxes']
+2026-03-18 13:40:34 | DEBUG   | Perception.uied.detect_text.ocr | PaddleOCR counts: rec_texts=7, rec_scores=7, rec_polys=7
+2026-03-18 13:40:34 | DEBUG   | Perception.uied.detect_text.ocr | PaddleOCR converted count: 7
+2026-03-18 13:40:34 | DEBUG   | Perception.uied.detect_text.text_detection | After convert: 7
+2026-03-18 13:40:34 | DEBUG   | Perception.uied.detect_text.text_detection | After merge: 7
+2026-03-18 13:40:34 | DEBUG   | Perception.uied.detect_text.text_detection | After filter: 6
+2026-03-18 13:40:34 | DEBUG   | Perception.uied.detect_text.text_detection | After sentence merge: 5
+2026-03-18 13:40:34 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[0]: '…△U'
+2026-03-18 13:40:34 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[1]: 'From qinchenjiang17@gmail.com'
+2026-03-18 13:40:34 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[2]: 'To'
+2026-03-18 13:40:34 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[3]: 'Subject'
+2026-03-18 13:40:34 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[4]: 'Composeemail'
+2026-03-18 13:40:34 | INFO    | Perception.uied.detect_text.text_detection | Text detection completed in 8.297s, text_count=5
+2026-03-18 13:40:34 | INFO    | Perception.perception_manager  | CV 检测完成: 检测到 3 个元素, resize_ratio=0.360
+2026-03-18 13:40:34 | INFO    | Perception.dump_parser         | 解析 UI Dump: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/dumps/step_2.xml
+2026-03-18 13:40:34 | INFO    | Perception.dump_parser         | Dump 解析完成, 提取 46 个控件
+2026-03-18 13:40:34 | INFO    | Perception.perception_manager  | Dump 解析完成: 解析到 46 个控件
+2026-03-18 13:40:34 | INFO    | Perception.context_builder     | 开始构建 UIState: CV元素=3, Dump控件=46
+2026-03-18 13:40:34 | DEBUG   | Perception.context_builder     | 上下文瘦身: 19 -> 18 控件 (过滤了 1 个冗余控件)
+2026-03-18 13:40:34 | INFO    | Perception.context_builder     | UIState 构建完成: 最终控件数=18 (CV原始=3, Dump原始=46)
+2026-03-18 13:40:34 | INFO    | Perception.perception_manager  | 已保存合并控件列表: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/context/step_2_before.json
+2026-03-18 13:40:34 | INFO    | Perception.perception_manager  | 环境感知完成: 最终控件数=18
+2026-03-18 13:40:34 | INFO    | agent_loop                     | [Step 2] 阶段2: 认知规划
+2026-03-18 13:40:34 | INFO    | Planning.planner               | 开始规划, 任务: 'Send a email to 221240051@smail.nju.edu.cn notifying there is a meeting at 2026-'
+2026-03-18 13:40:34 | DEBUG   | Memory.memory_manager          | 未找到匹配经验, 最高相似度=0.000
+2026-03-18 13:40:34 | DEBUG   | Planning.planner               | 发送规划请求到 LLM
+2026-03-18 13:40:34 | DEBUG   | utils.llm_client               | 发送 LLM 请求: model=gpt-5.2, prompt_len=2314
+2026-03-18 13:40:40 | DEBUG   | utils.llm_client               | LLM 响应: len=640
+2026-03-18 13:40:40 | INFO    | Planning.planner               | LLM 规划完成: subgoal='Tap the recipient (To) field and input the email address 221240051@smail.nju.edu.cn', action=input, complete=False
+2026-03-18 13:40:40 | INFO    | agent_loop                     | 子目标: 'Tap the recipient (To) field and input the email address 221240051@smail.nju.edu.cn' (action=input)
+2026-03-18 13:40:40 | INFO    | Planning.oracle_pre            | 生成事前约束: subgoal='Tap the recipient (To) field and input the email address 221240051@smail.nju.edu.cn'
+2026-03-18 13:40:40 | DEBUG   | utils.llm_client               | 发送 LLM 请求: model=gpt-5.2, prompt_len=3652
+2026-03-18 13:40:45 | DEBUG   | utils.llm_client               | LLM 响应: len=1121
+2026-03-18 13:40:45 | INFO    | Planning.oracle_pre            | 事前约束生成完成: target_state=form, transition=partial_refresh
+2026-03-18 13:40:45 | INFO    | agent_loop                     | 事前约束: transition=partial_refresh
+2026-03-18 13:40:45 | INFO    | agent_loop                     | [Step 2] 阶段3: 安全检查
+2026-03-18 13:40:45 | DEBUG   | Planning.safety_interceptor    | 安全检查通过: 'Tap the recipient (To) field and input the email address 221240051@smail.nju.edu.cn'
+2026-03-18 13:40:45 | INFO    | agent_loop                     | [Step 2] 阶段4: 动作映射
+2026-03-18 13:40:45 | INFO    | Execution.action_mapper        | 映射动作: subgoal='Tap the recipient (To) field and input the email address 221240051@smail.nju.edu.cn'
+2026-03-18 13:40:45 | INFO    | agent_loop                     | 映射动作: input at (540, 474)
+2026-03-18 13:40:45 | DEBUG   | Execution.oracle_runtime       | 执行前检查通过: input at (540, 474)
+2026-03-18 13:40:45 | INFO    | agent_loop                     | [Step 2] 阶段5: 执行动作
+2026-03-18 13:40:45 | INFO    | Execution.action_executor      | 执行点击: (540, 474)
+2026-03-18 13:40:45 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb shell input tap 540 474
+2026-03-18 13:40:45 | INFO    | Execution.action_executor      | 执行文本输入: '221240051@smail.nju.edu.cn'
+2026-03-18 13:40:45 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb shell input text 221240051@smail.nju.edu.cn
+2026-03-18 13:40:49 | INFO    | agent_loop                     | [Step 2] 阶段6: 执行后感知 + 事中检查
+2026-03-18 13:40:49 | INFO    | Execution.action_executor      | 截屏: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/screenshots/step_2_after.png
+2026-03-18 13:40:49 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb shell screencap -p /sdcard/step_2_after.png
+2026-03-18 13:40:49 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb pull /sdcard/step_2_after.png /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/screenshots/step_2_after.png
+2026-03-18 13:40:49 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb shell rm /sdcard/step_2_after.png
+2026-03-18 13:40:49 | INFO    | Execution.action_executor      | Dump UI: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/dumps/step_2_after.xml
+2026-03-18 13:40:49 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb shell uiautomator dump /sdcard/window_dump.xml
+2026-03-18 13:40:51 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb pull /sdcard/window_dump.xml /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/dumps/step_2_after.xml
+2026-03-18 13:40:51 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb shell dumpsys activity activities
+2026-03-18 13:40:51 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb shell dumpsys window windows
+2026-03-18 13:40:51 | INFO    | Perception.perception_manager  | 开始环境感知: screenshot=/Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/screenshots/step_2_after.png, dump=/Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/dumps/step_2_after.xml
+2026-03-18 13:40:52 | INFO    | Perception.uied.detect_text.ocr | OCRDetector initialized successfully
+2026-03-18 13:41:00 | DEBUG   | Perception.uied.detect_text.ocr | PaddleOCR page keys: ['input_path', 'page_index', 'doc_preprocessor_res', 'dt_polys', 'model_settings', 'text_det_params', 'text_type', 'text_rec_score_thresh', 'return_word_box', 'rec_texts', 'rec_scores', 'rec_polys', 'vis_fonts', 'textline_orientation_angles', 'rec_boxes']
+2026-03-18 13:41:00 | DEBUG   | Perception.uied.detect_text.ocr | PaddleOCR counts: rec_texts=8, rec_scores=8, rec_polys=8
+2026-03-18 13:41:00 | DEBUG   | Perception.uied.detect_text.ocr | PaddleOCR converted count: 8
+2026-03-18 13:41:00 | DEBUG   | Perception.uied.detect_text.text_detection | After convert: 8
+2026-03-18 13:41:00 | DEBUG   | Perception.uied.detect_text.text_detection | After merge: 8
+2026-03-18 13:41:00 | DEBUG   | Perception.uied.detect_text.text_detection | After filter: 7
+2026-03-18 13:41:00 | DEBUG   | Perception.uied.detect_text.text_detection | After sentence merge: 6
+2026-03-18 13:41:00 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[0]: 'From qinchenjiang17@gmail.com'
+2026-03-18 13:41:00 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[1]: 'To'
+2026-03-18 13:41:00 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[2]: '221240051@smail.nju.edu.cn'
+2026-03-18 13:41:00 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[3]: 'Suggestions'
+2026-03-18 13:41:00 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[4]: '221240051@smail.nju.edu.cn'
+2026-03-18 13:41:00 | INFO    | Perception.uied.detect_text.text_detection | Text detection completed in 8.508s, text_count=6
+2026-03-18 13:41:00 | INFO    | Perception.perception_manager  | CV 检测完成: 检测到 3 个元素, resize_ratio=0.360
+2026-03-18 13:41:00 | INFO    | Perception.dump_parser         | 解析 UI Dump: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/dumps/step_2_after.xml
+2026-03-18 13:41:00 | INFO    | Perception.dump_parser         | Dump 解析完成, 提取 51 个控件
+2026-03-18 13:41:00 | INFO    | Perception.perception_manager  | Dump 解析完成: 解析到 51 个控件
+2026-03-18 13:41:00 | INFO    | Perception.context_builder     | 开始构建 UIState: CV元素=3, Dump控件=51
+2026-03-18 13:41:00 | DEBUG   | Perception.context_builder     | CV[2] <-> Dump[] 匹配成功, IoU=0.467
+2026-03-18 13:41:00 | DEBUG   | Perception.context_builder     | 上下文瘦身: 20 -> 20 控件 (过滤了 0 个冗余控件)
+2026-03-18 13:41:00 | INFO    | Perception.context_builder     | UIState 构建完成: 最终控件数=20 (CV原始=3, Dump原始=51)
+2026-03-18 13:41:00 | INFO    | Perception.perception_manager  | 已保存合并控件列表: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/context/step_2_after.json
+2026-03-18 13:41:00 | INFO    | Perception.perception_manager  | 环境感知完成: 最终控件数=20
+2026-03-18 13:41:00 | DEBUG   | Execution.oracle_runtime       | 事中检查通过
+2026-03-18 13:41:00 | INFO    | agent_loop                     | [Step 2] 阶段7: 事后评估
+2026-03-18 13:41:00 | INFO    | Evaluation.evaluator           | 开始事后评估: 'Tap the recipient (To) field and input the email address 221240051@smail.nju.edu.cn'
+2026-03-18 13:41:00 | DEBUG   | utils.llm_client               | 发送 LLM 请求: model=gpt-5.2, prompt_len=5267
+2026-03-18 13:41:10 | DEBUG   | utils.llm_client               | LLM 响应: len=1420
+2026-03-18 13:41:10 | INFO    | Evaluation.evaluator           | 事后评估通过: 'Tap the recipient (To) field and input the email address 221240051@smail.nju.edu.cn'
+2026-03-18 13:41:10 | INFO    | agent_loop                     | ✓ 子目标完成: 'Tap the recipient (To) field and input the email address 221240051@smail.nju.edu.cn'
+2026-03-18 13:41:10 | DEBUG   | Evaluation.replanner           | 子目标成功, 重置连续失败计数
+2026-03-18 13:41:10 | DEBUG   | Memory.memory_manager          | 短期记忆新增步骤 #2
+2026-03-18 13:41:10 | INFO    | agent_loop                     | ========================================
+2026-03-18 13:41:10 | INFO    | agent_loop                     | 第 3 步 (最大 30)
+2026-03-18 13:41:10 | INFO    | agent_loop                     | ========================================
+2026-03-18 13:41:10 | INFO    | agent_loop                     | [Step 3] 阶段1: 环境感知
+2026-03-18 13:41:10 | INFO    | Execution.action_executor      | 截屏: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/screenshots/step_3_before.png
+2026-03-18 13:41:10 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb shell screencap -p /sdcard/step_3_before.png
+2026-03-18 13:41:10 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb pull /sdcard/step_3_before.png /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/screenshots/step_3_before.png
+2026-03-18 13:41:10 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb shell rm /sdcard/step_3_before.png
+2026-03-18 13:41:10 | INFO    | Execution.action_executor      | Dump UI: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/dumps/step_3.xml
+2026-03-18 13:41:10 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb shell uiautomator dump /sdcard/window_dump.xml
+2026-03-18 13:41:12 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb pull /sdcard/window_dump.xml /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/dumps/step_3.xml
+2026-03-18 13:41:12 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb shell dumpsys activity activities
+2026-03-18 13:41:13 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb shell dumpsys window windows
+2026-03-18 13:41:13 | INFO    | Perception.perception_manager  | 开始环境感知: screenshot=/Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/screenshots/step_3_before.png, dump=/Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/dumps/step_3.xml
+2026-03-18 13:41:13 | INFO    | Perception.uied.detect_text.ocr | OCRDetector initialized successfully
+2026-03-18 13:41:21 | DEBUG   | Perception.uied.detect_text.ocr | PaddleOCR page keys: ['input_path', 'page_index', 'doc_preprocessor_res', 'dt_polys', 'model_settings', 'text_det_params', 'text_type', 'text_rec_score_thresh', 'return_word_box', 'rec_texts', 'rec_scores', 'rec_polys', 'vis_fonts', 'textline_orientation_angles', 'rec_boxes']
+2026-03-18 13:41:21 | DEBUG   | Perception.uied.detect_text.ocr | PaddleOCR counts: rec_texts=8, rec_scores=8, rec_polys=8
+2026-03-18 13:41:21 | DEBUG   | Perception.uied.detect_text.ocr | PaddleOCR converted count: 8
+2026-03-18 13:41:21 | DEBUG   | Perception.uied.detect_text.text_detection | After convert: 8
+2026-03-18 13:41:21 | DEBUG   | Perception.uied.detect_text.text_detection | After merge: 8
+2026-03-18 13:41:21 | DEBUG   | Perception.uied.detect_text.text_detection | After filter: 7
+2026-03-18 13:41:21 | DEBUG   | Perception.uied.detect_text.text_detection | After sentence merge: 7
+2026-03-18 13:41:21 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[0]: 'From'
+2026-03-18 13:41:21 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[1]: 'qinchenjiang17@gmail.com'
+2026-03-18 13:41:21 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[2]: 'To'
+2026-03-18 13:41:21 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[3]: '221240051@smail.nju.edu.cn'
+2026-03-18 13:41:21 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[4]: 'Suggestions'
+2026-03-18 13:41:21 | INFO    | Perception.uied.detect_text.text_detection | Text detection completed in 8.714s, text_count=7
+2026-03-18 13:41:21 | INFO    | Perception.perception_manager  | CV 检测完成: 检测到 3 个元素, resize_ratio=0.360
+2026-03-18 13:41:21 | INFO    | Perception.dump_parser         | 解析 UI Dump: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/dumps/step_3.xml
+2026-03-18 13:41:21 | INFO    | Perception.dump_parser         | Dump 解析完成, 提取 51 个控件
+2026-03-18 13:41:21 | INFO    | Perception.perception_manager  | Dump 解析完成: 解析到 51 个控件
+2026-03-18 13:41:21 | INFO    | Perception.context_builder     | 开始构建 UIState: CV元素=3, Dump控件=51
+2026-03-18 13:41:21 | DEBUG   | Perception.context_builder     | CV[2] <-> Dump[] 匹配成功, IoU=0.467
+2026-03-18 13:41:21 | DEBUG   | Perception.context_builder     | 上下文瘦身: 20 -> 20 控件 (过滤了 0 个冗余控件)
+2026-03-18 13:41:21 | INFO    | Perception.context_builder     | UIState 构建完成: 最终控件数=20 (CV原始=3, Dump原始=51)
+2026-03-18 13:41:21 | INFO    | Perception.perception_manager  | 已保存合并控件列表: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/context/step_3_before.json
+2026-03-18 13:41:21 | INFO    | Perception.perception_manager  | 环境感知完成: 最终控件数=20
+2026-03-18 13:41:21 | INFO    | agent_loop                     | [Step 3] 阶段2: 认知规划
+2026-03-18 13:41:21 | INFO    | Planning.planner               | 开始规划, 任务: 'Send a email to 221240051@smail.nju.edu.cn notifying there is a meeting at 2026-'
+2026-03-18 13:41:21 | DEBUG   | Memory.memory_manager          | 未找到匹配经验, 最高相似度=0.000
+2026-03-18 13:41:21 | DEBUG   | Planning.planner               | 发送规划请求到 LLM
+2026-03-18 13:41:21 | DEBUG   | utils.llm_client               | 发送 LLM 请求: model=gpt-5.2, prompt_len=2599
+2026-03-18 13:41:38 | DEBUG   | utils.llm_client               | LLM 响应: len=731
+2026-03-18 13:41:38 | INFO    | Planning.planner               | LLM 规划完成: subgoal='Tap the suggested recipient email to confirm it in the To field', action=tap, complete=False
+2026-03-18 13:41:38 | INFO    | agent_loop                     | 子目标: 'Tap the suggested recipient email to confirm it in the To field' (action=tap)
+2026-03-18 13:41:38 | INFO    | Planning.oracle_pre            | 生成事前约束: subgoal='Tap the suggested recipient email to confirm it in the To field'
+2026-03-18 13:41:38 | DEBUG   | utils.llm_client               | 发送 LLM 请求: model=gpt-5.2, prompt_len=3808
+2026-03-18 13:41:44 | DEBUG   | utils.llm_client               | LLM 响应: len=1252
+2026-03-18 13:41:44 | INFO    | Planning.oracle_pre            | 事前约束生成完成: target_state=form, transition=partial_refresh
+2026-03-18 13:41:44 | INFO    | agent_loop                     | 事前约束: transition=partial_refresh
+2026-03-18 13:41:44 | INFO    | agent_loop                     | [Step 3] 阶段3: 安全检查
+2026-03-18 13:41:44 | DEBUG   | Planning.safety_interceptor    | 安全检查通过: 'Tap the suggested recipient email to confirm it in the To field'
+2026-03-18 13:41:44 | INFO    | agent_loop                     | [Step 3] 阶段4: 动作映射
+2026-03-18 13:41:44 | INFO    | Execution.action_mapper        | 映射动作: subgoal='Tap the suggested recipient email to confirm it in the To field'
+2026-03-18 13:41:44 | INFO    | agent_loop                     | 映射动作: tap at (482, 741)
+2026-03-18 13:41:44 | DEBUG   | Execution.oracle_runtime       | 执行前检查通过: tap at (482, 741)
+2026-03-18 13:41:44 | INFO    | agent_loop                     | [Step 3] 阶段5: 执行动作
+2026-03-18 13:41:44 | INFO    | Execution.action_executor      | 执行点击: (482, 741)
+2026-03-18 13:41:44 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb shell input tap 482 741
+2026-03-18 13:41:47 | INFO    | agent_loop                     | [Step 3] 阶段6: 执行后感知 + 事中检查
+2026-03-18 13:41:47 | INFO    | Execution.action_executor      | 截屏: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/screenshots/step_3_after.png
+2026-03-18 13:41:47 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb shell screencap -p /sdcard/step_3_after.png
+2026-03-18 13:41:47 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb pull /sdcard/step_3_after.png /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/screenshots/step_3_after.png
+2026-03-18 13:41:47 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb shell rm /sdcard/step_3_after.png
+2026-03-18 13:41:47 | INFO    | Execution.action_executor      | Dump UI: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/dumps/step_3_after.xml
+2026-03-18 13:41:47 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb shell uiautomator dump /sdcard/window_dump.xml
+2026-03-18 13:41:49 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb pull /sdcard/window_dump.xml /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/dumps/step_3_after.xml
+2026-03-18 13:41:49 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb shell dumpsys activity activities
+2026-03-18 13:41:49 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb shell dumpsys window windows
+2026-03-18 13:41:50 | INFO    | Perception.perception_manager  | 开始环境感知: screenshot=/Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/screenshots/step_3_after.png, dump=/Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/dumps/step_3_after.xml
+2026-03-18 13:41:50 | INFO    | Perception.uied.detect_text.ocr | OCRDetector initialized successfully
+2026-03-18 13:41:58 | DEBUG   | Perception.uied.detect_text.ocr | PaddleOCR page keys: ['input_path', 'page_index', 'doc_preprocessor_res', 'dt_polys', 'model_settings', 'text_det_params', 'text_type', 'text_rec_score_thresh', 'return_word_box', 'rec_texts', 'rec_scores', 'rec_polys', 'vis_fonts', 'textline_orientation_angles', 'rec_boxes']
+2026-03-18 13:41:58 | DEBUG   | Perception.uied.detect_text.ocr | PaddleOCR counts: rec_texts=10, rec_scores=10, rec_polys=10
+2026-03-18 13:41:58 | DEBUG   | Perception.uied.detect_text.ocr | PaddleOCR converted count: 10
+2026-03-18 13:41:58 | DEBUG   | Perception.uied.detect_text.text_detection | After convert: 10
+2026-03-18 13:41:58 | DEBUG   | Perception.uied.detect_text.text_detection | After merge: 10
+2026-03-18 13:41:58 | DEBUG   | Perception.uied.detect_text.text_detection | After filter: 7
+2026-03-18 13:41:58 | DEBUG   | Perception.uied.detect_text.text_detection | After sentence merge: 6
+2026-03-18 13:41:58 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[0]: 'V…'
+2026-03-18 13:41:58 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[1]: 'From qinchenjiang17@gmail.com'
+2026-03-18 13:41:58 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[2]: 'To'
+2026-03-18 13:41:58 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[3]: '221240051@smail.nju.edu.cn'
+2026-03-18 13:41:58 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[4]: 'Subject'
+2026-03-18 13:41:58 | INFO    | Perception.uied.detect_text.text_detection | Text detection completed in 8.516s, text_count=6
+2026-03-18 13:41:58 | INFO    | Perception.perception_manager  | CV 检测完成: 检测到 4 个元素, resize_ratio=0.360
+2026-03-18 13:41:58 | INFO    | Perception.dump_parser         | 解析 UI Dump: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/dumps/step_3_after.xml
+2026-03-18 13:41:58 | INFO    | Perception.dump_parser         | Dump 解析完成, 提取 48 个控件
+2026-03-18 13:41:58 | INFO    | Perception.perception_manager  | Dump 解析完成: 解析到 48 个控件
+2026-03-18 13:41:58 | INFO    | Perception.context_builder     | 开始构建 UIState: CV元素=4, Dump控件=48
+2026-03-18 13:41:58 | DEBUG   | Perception.context_builder     | CV[2] <-> Dump[] 匹配成功, IoU=0.751
+2026-03-18 13:41:58 | DEBUG   | Perception.context_builder     | 上下文瘦身: 22 -> 21 控件 (过滤了 1 个冗余控件)
+2026-03-18 13:41:58 | INFO    | Perception.context_builder     | UIState 构建完成: 最终控件数=21 (CV原始=4, Dump原始=48)
+2026-03-18 13:41:58 | INFO    | Perception.perception_manager  | 已保存合并控件列表: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/context/step_3_after.json
+2026-03-18 13:41:58 | INFO    | Perception.perception_manager  | 环境感知完成: 最终控件数=21
+2026-03-18 13:41:58 | DEBUG   | Execution.oracle_runtime       | 事中检查通过
+2026-03-18 13:41:58 | INFO    | agent_loop                     | [Step 3] 阶段7: 事后评估
+2026-03-18 13:41:58 | INFO    | Evaluation.evaluator           | 开始事后评估: 'Tap the suggested recipient email to confirm it in the To field'
+2026-03-18 13:41:58 | DEBUG   | utils.llm_client               | 发送 LLM 请求: model=gpt-5.2, prompt_len=5457
+2026-03-18 13:42:21 | DEBUG   | utils.llm_client               | LLM 响应: len=1741
+2026-03-18 13:42:21 | INFO    | Evaluation.evaluator           | 事后评估通过: 'Tap the suggested recipient email to confirm it in the To field'
+2026-03-18 13:42:21 | INFO    | agent_loop                     | ✓ 子目标完成: 'Tap the suggested recipient email to confirm it in the To field'
+2026-03-18 13:42:21 | DEBUG   | Evaluation.replanner           | 子目标成功, 重置连续失败计数
+2026-03-18 13:42:21 | DEBUG   | Memory.memory_manager          | 短期记忆新增步骤 #3
+2026-03-18 13:42:21 | INFO    | agent_loop                     | ========================================
+2026-03-18 13:42:21 | INFO    | agent_loop                     | 第 4 步 (最大 30)
+2026-03-18 13:42:21 | INFO    | agent_loop                     | ========================================
+2026-03-18 13:42:21 | INFO    | agent_loop                     | [Step 4] 阶段1: 环境感知
+2026-03-18 13:42:21 | INFO    | Execution.action_executor      | 截屏: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/screenshots/step_4_before.png
+2026-03-18 13:42:21 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb shell screencap -p /sdcard/step_4_before.png
+2026-03-18 13:42:21 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb pull /sdcard/step_4_before.png /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/screenshots/step_4_before.png
+2026-03-18 13:42:21 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb shell rm /sdcard/step_4_before.png
+2026-03-18 13:42:21 | INFO    | Execution.action_executor      | Dump UI: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/dumps/step_4.xml
+2026-03-18 13:42:21 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb shell uiautomator dump /sdcard/window_dump.xml
+2026-03-18 13:42:23 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb pull /sdcard/window_dump.xml /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/dumps/step_4.xml
+2026-03-18 13:42:24 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb shell dumpsys activity activities
+2026-03-18 13:42:24 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb shell dumpsys window windows
+2026-03-18 13:42:24 | INFO    | Perception.perception_manager  | 开始环境感知: screenshot=/Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/screenshots/step_4_before.png, dump=/Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/dumps/step_4.xml
+2026-03-18 13:42:24 | INFO    | Perception.uied.detect_text.ocr | OCRDetector initialized successfully
+2026-03-18 13:42:32 | DEBUG   | Perception.uied.detect_text.ocr | PaddleOCR page keys: ['input_path', 'page_index', 'doc_preprocessor_res', 'dt_polys', 'model_settings', 'text_det_params', 'text_type', 'text_rec_score_thresh', 'return_word_box', 'rec_texts', 'rec_scores', 'rec_polys', 'vis_fonts', 'textline_orientation_angles', 'rec_boxes']
+2026-03-18 13:42:32 | DEBUG   | Perception.uied.detect_text.ocr | PaddleOCR counts: rec_texts=10, rec_scores=10, rec_polys=10
+2026-03-18 13:42:32 | DEBUG   | Perception.uied.detect_text.ocr | PaddleOCR converted count: 10
+2026-03-18 13:42:32 | DEBUG   | Perception.uied.detect_text.text_detection | After convert: 10
+2026-03-18 13:42:32 | DEBUG   | Perception.uied.detect_text.text_detection | After merge: 10
+2026-03-18 13:42:32 | DEBUG   | Perception.uied.detect_text.text_detection | After filter: 7
+2026-03-18 13:42:32 | DEBUG   | Perception.uied.detect_text.text_detection | After sentence merge: 6
+2026-03-18 13:42:32 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[0]: 'V…'
+2026-03-18 13:42:32 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[1]: 'From qinchenjiang17@gmail.com'
+2026-03-18 13:42:32 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[2]: 'To'
+2026-03-18 13:42:32 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[3]: '221240051@smail.nju.edu.cn'
+2026-03-18 13:42:32 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[4]: 'Subject'
+2026-03-18 13:42:32 | INFO    | Perception.uied.detect_text.text_detection | Text detection completed in 8.542s, text_count=6
+2026-03-18 13:42:32 | INFO    | Perception.perception_manager  | CV 检测完成: 检测到 4 个元素, resize_ratio=0.360
+2026-03-18 13:42:32 | INFO    | Perception.dump_parser         | 解析 UI Dump: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/dumps/step_4.xml
+2026-03-18 13:42:32 | INFO    | Perception.dump_parser         | Dump 解析完成, 提取 48 个控件
+2026-03-18 13:42:32 | INFO    | Perception.perception_manager  | Dump 解析完成: 解析到 48 个控件
+2026-03-18 13:42:32 | INFO    | Perception.context_builder     | 开始构建 UIState: CV元素=4, Dump控件=48
+2026-03-18 13:42:32 | DEBUG   | Perception.context_builder     | CV[2] <-> Dump[] 匹配成功, IoU=0.751
+2026-03-18 13:42:32 | DEBUG   | Perception.context_builder     | 上下文瘦身: 22 -> 21 控件 (过滤了 1 个冗余控件)
+2026-03-18 13:42:32 | INFO    | Perception.context_builder     | UIState 构建完成: 最终控件数=21 (CV原始=4, Dump原始=48)
+2026-03-18 13:42:32 | INFO    | Perception.perception_manager  | 已保存合并控件列表: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/context/step_4_before.json
+2026-03-18 13:42:32 | INFO    | Perception.perception_manager  | 环境感知完成: 最终控件数=21
+2026-03-18 13:42:32 | INFO    | agent_loop                     | [Step 4] 阶段2: 认知规划
+2026-03-18 13:42:32 | INFO    | Planning.planner               | 开始规划, 任务: 'Send a email to 221240051@smail.nju.edu.cn notifying there is a meeting at 2026-'
+2026-03-18 13:42:32 | DEBUG   | Memory.memory_manager          | 未找到匹配经验, 最高相似度=0.000
+2026-03-18 13:42:32 | DEBUG   | Planning.planner               | 发送规划请求到 LLM
+2026-03-18 13:42:32 | DEBUG   | utils.llm_client               | 发送 LLM 请求: model=gpt-5.2, prompt_len=2698
+2026-03-18 13:42:40 | DEBUG   | utils.llm_client               | LLM 响应: len=554
+2026-03-18 13:42:40 | INFO    | Planning.planner               | LLM 规划完成: subgoal='Tap the Subject field and enter a meeting subject', action=input, complete=False
+2026-03-18 13:42:40 | INFO    | agent_loop                     | 子目标: 'Tap the Subject field and enter a meeting subject' (action=input)
+2026-03-18 13:42:40 | INFO    | Planning.oracle_pre            | 生成事前约束: subgoal='Tap the Subject field and enter a meeting subject'
+2026-03-18 13:42:40 | DEBUG   | utils.llm_client               | 发送 LLM 请求: model=gpt-5.2, prompt_len=3816
+2026-03-18 13:42:47 | DEBUG   | utils.llm_client               | LLM 响应: len=1160
+2026-03-18 13:42:47 | INFO    | Planning.oracle_pre            | 事前约束生成完成: target_state=form, transition=partial_refresh
+2026-03-18 13:42:47 | INFO    | agent_loop                     | 事前约束: transition=partial_refresh
+2026-03-18 13:42:47 | INFO    | agent_loop                     | [Step 4] 阶段3: 安全检查
+2026-03-18 13:42:47 | DEBUG   | Planning.safety_interceptor    | 安全检查通过: 'Tap the Subject field and enter a meeting subject'
+2026-03-18 13:42:47 | INFO    | agent_loop                     | [Step 4] 阶段4: 动作映射
+2026-03-18 13:42:47 | INFO    | Execution.action_mapper        | 映射动作: subgoal='Tap the Subject field and enter a meeting subject'
+2026-03-18 13:42:47 | INFO    | agent_loop                     | 映射动作: input at (540, 753)
+2026-03-18 13:42:47 | DEBUG   | Execution.oracle_runtime       | 执行前检查通过: input at (540, 753)
+2026-03-18 13:42:47 | INFO    | agent_loop                     | [Step 4] 阶段5: 执行动作
+2026-03-18 13:42:47 | INFO    | Execution.action_executor      | 执行点击: (540, 753)
+2026-03-18 13:42:47 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb shell input tap 540 753
+2026-03-18 13:42:48 | INFO    | Execution.action_executor      | 执行文本输入: 'Meeting on 2026-03-18 14:00'
+2026-03-18 13:42:48 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb shell input text Meeting%son%s2026-03-18%s14:00
+2026-03-18 13:42:51 | INFO    | agent_loop                     | [Step 4] 阶段6: 执行后感知 + 事中检查
+2026-03-18 13:42:51 | INFO    | Execution.action_executor      | 截屏: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/screenshots/step_4_after.png
+2026-03-18 13:42:51 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb shell screencap -p /sdcard/step_4_after.png
+2026-03-18 13:42:51 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb pull /sdcard/step_4_after.png /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/screenshots/step_4_after.png
+2026-03-18 13:42:52 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb shell rm /sdcard/step_4_after.png
+2026-03-18 13:42:52 | INFO    | Execution.action_executor      | Dump UI: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/dumps/step_4_after.xml
+2026-03-18 13:42:52 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb shell uiautomator dump /sdcard/window_dump.xml
+2026-03-18 13:42:54 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb pull /sdcard/window_dump.xml /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/dumps/step_4_after.xml
+2026-03-18 13:42:54 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb shell dumpsys activity activities
+2026-03-18 13:42:54 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb shell dumpsys window windows
+2026-03-18 13:42:54 | INFO    | Perception.perception_manager  | 开始环境感知: screenshot=/Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/screenshots/step_4_after.png, dump=/Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/dumps/step_4_after.xml
+2026-03-18 13:42:54 | INFO    | Perception.uied.detect_text.ocr | OCRDetector initialized successfully
+2026-03-18 13:43:02 | DEBUG   | Perception.uied.detect_text.ocr | PaddleOCR page keys: ['input_path', 'page_index', 'doc_preprocessor_res', 'dt_polys', 'model_settings', 'text_det_params', 'text_type', 'text_rec_score_thresh', 'return_word_box', 'rec_texts', 'rec_scores', 'rec_polys', 'vis_fonts', 'textline_orientation_angles', 'rec_boxes']
+2026-03-18 13:43:02 | DEBUG   | Perception.uied.detect_text.ocr | PaddleOCR counts: rec_texts=9, rec_scores=9, rec_polys=9
+2026-03-18 13:43:02 | DEBUG   | Perception.uied.detect_text.ocr | PaddleOCR converted count: 9
+2026-03-18 13:43:02 | DEBUG   | Perception.uied.detect_text.text_detection | After convert: 9
+2026-03-18 13:43:02 | DEBUG   | Perception.uied.detect_text.text_detection | After merge: 9
+2026-03-18 13:43:02 | DEBUG   | Perception.uied.detect_text.text_detection | After filter: 7
+2026-03-18 13:43:02 | DEBUG   | Perception.uied.detect_text.text_detection | After sentence merge: 6
+2026-03-18 13:43:02 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[0]: 'V…'
+2026-03-18 13:43:02 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[1]: 'From qinchenjiang17@gmail.com'
+2026-03-18 13:43:02 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[2]: 'To'
+2026-03-18 13:43:02 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[3]: '221240051@smail.nju.edu.cn'
+2026-03-18 13:43:02 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[4]: 'Meeting on 2026-03-18 14:00'
+2026-03-18 13:43:02 | INFO    | Perception.uied.detect_text.text_detection | Text detection completed in 8.541s, text_count=6
+2026-03-18 13:43:03 | INFO    | Perception.perception_manager  | CV 检测完成: 检测到 3 个元素, resize_ratio=0.360
+2026-03-18 13:43:03 | INFO    | Perception.dump_parser         | 解析 UI Dump: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/dumps/step_4_after.xml
+2026-03-18 13:43:03 | INFO    | Perception.dump_parser         | Dump 解析完成, 提取 47 个控件
+2026-03-18 13:43:03 | INFO    | Perception.perception_manager  | Dump 解析完成: 解析到 47 个控件
+2026-03-18 13:43:03 | INFO    | Perception.context_builder     | 开始构建 UIState: CV元素=3, Dump控件=47
+2026-03-18 13:43:03 | DEBUG   | Perception.context_builder     | CV[2] <-> Dump[] 匹配成功, IoU=0.751
+2026-03-18 13:43:03 | DEBUG   | Perception.context_builder     | 上下文瘦身: 20 -> 19 控件 (过滤了 1 个冗余控件)
+2026-03-18 13:43:03 | INFO    | Perception.context_builder     | UIState 构建完成: 最终控件数=19 (CV原始=3, Dump原始=47)
+2026-03-18 13:43:03 | INFO    | Perception.perception_manager  | 已保存合并控件列表: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/context/step_4_after.json
+2026-03-18 13:43:03 | INFO    | Perception.perception_manager  | 环境感知完成: 最终控件数=19
+2026-03-18 13:43:03 | DEBUG   | Execution.oracle_runtime       | 事中检查通过
+2026-03-18 13:43:03 | INFO    | agent_loop                     | [Step 4] 阶段7: 事后评估
+2026-03-18 13:43:03 | INFO    | Evaluation.evaluator           | 开始事后评估: 'Tap the Subject field and enter a meeting subject'
+2026-03-18 13:43:03 | DEBUG   | utils.llm_client               | 发送 LLM 请求: model=gpt-5.2, prompt_len=5368
+2026-03-18 13:44:17 | DEBUG   | utils.llm_client               | LLM 响应: len=1470
+2026-03-18 13:44:17 | INFO    | Evaluation.evaluator           | 事后评估通过: 'Tap the Subject field and enter a meeting subject'
+2026-03-18 13:44:17 | INFO    | agent_loop                     | ✓ 子目标完成: 'Tap the Subject field and enter a meeting subject'
+2026-03-18 13:44:17 | DEBUG   | Evaluation.replanner           | 子目标成功, 重置连续失败计数
+2026-03-18 13:44:17 | DEBUG   | Memory.memory_manager          | 短期记忆新增步骤 #4
+2026-03-18 13:44:17 | INFO    | agent_loop                     | ========================================
+2026-03-18 13:44:17 | INFO    | agent_loop                     | 第 5 步 (最大 30)
+2026-03-18 13:44:17 | INFO    | agent_loop                     | ========================================
+2026-03-18 13:44:17 | INFO    | agent_loop                     | [Step 5] 阶段1: 环境感知
+2026-03-18 13:44:17 | INFO    | Execution.action_executor      | 截屏: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/screenshots/step_5_before.png
+2026-03-18 13:44:17 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb shell screencap -p /sdcard/step_5_before.png
+2026-03-18 13:44:17 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb pull /sdcard/step_5_before.png /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/screenshots/step_5_before.png
+2026-03-18 13:44:17 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb shell rm /sdcard/step_5_before.png
+2026-03-18 13:44:17 | INFO    | Execution.action_executor      | Dump UI: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/dumps/step_5.xml
+2026-03-18 13:44:17 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb shell uiautomator dump /sdcard/window_dump.xml
+2026-03-18 13:44:20 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb pull /sdcard/window_dump.xml /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/dumps/step_5.xml
+2026-03-18 13:44:20 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb shell dumpsys activity activities
+2026-03-18 13:44:20 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb shell dumpsys window windows
+2026-03-18 13:44:20 | INFO    | Perception.perception_manager  | 开始环境感知: screenshot=/Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/screenshots/step_5_before.png, dump=/Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/dumps/step_5.xml
+2026-03-18 13:44:20 | INFO    | Perception.uied.detect_text.ocr | OCRDetector initialized successfully
+2026-03-18 13:44:28 | DEBUG   | Perception.uied.detect_text.ocr | PaddleOCR page keys: ['input_path', 'page_index', 'doc_preprocessor_res', 'dt_polys', 'model_settings', 'text_det_params', 'text_type', 'text_rec_score_thresh', 'return_word_box', 'rec_texts', 'rec_scores', 'rec_polys', 'vis_fonts', 'textline_orientation_angles', 'rec_boxes']
+2026-03-18 13:44:28 | DEBUG   | Perception.uied.detect_text.ocr | PaddleOCR counts: rec_texts=9, rec_scores=9, rec_polys=9
+2026-03-18 13:44:28 | DEBUG   | Perception.uied.detect_text.ocr | PaddleOCR converted count: 9
+2026-03-18 13:44:28 | DEBUG   | Perception.uied.detect_text.text_detection | After convert: 9
+2026-03-18 13:44:28 | DEBUG   | Perception.uied.detect_text.text_detection | After merge: 9
+2026-03-18 13:44:28 | DEBUG   | Perception.uied.detect_text.text_detection | After filter: 7
+2026-03-18 13:44:28 | DEBUG   | Perception.uied.detect_text.text_detection | After sentence merge: 6
+2026-03-18 13:44:28 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[0]: ':'
+2026-03-18 13:44:28 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[1]: 'From qinchenjiang17@gmail.com'
+2026-03-18 13:44:28 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[2]: 'To'
+2026-03-18 13:44:28 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[3]: '221240051@smail.nju.edu.cn'
+2026-03-18 13:44:28 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[4]: 'Meeting on 2026-03-18 14:00'
+2026-03-18 13:44:28 | INFO    | Perception.uied.detect_text.text_detection | Text detection completed in 8.596s, text_count=6
+2026-03-18 13:44:29 | INFO    | Perception.perception_manager  | CV 检测完成: 检测到 3 个元素, resize_ratio=0.360
+2026-03-18 13:44:29 | INFO    | Perception.dump_parser         | 解析 UI Dump: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/dumps/step_5.xml
+2026-03-18 13:44:29 | INFO    | Perception.dump_parser         | Dump 解析完成, 提取 47 个控件
+2026-03-18 13:44:29 | INFO    | Perception.perception_manager  | Dump 解析完成: 解析到 47 个控件
+2026-03-18 13:44:29 | INFO    | Perception.context_builder     | 开始构建 UIState: CV元素=3, Dump控件=47
+2026-03-18 13:44:29 | DEBUG   | Perception.context_builder     | CV[2] <-> Dump[] 匹配成功, IoU=0.751
+2026-03-18 13:44:29 | DEBUG   | Perception.context_builder     | 上下文瘦身: 20 -> 19 控件 (过滤了 1 个冗余控件)
+2026-03-18 13:44:29 | INFO    | Perception.context_builder     | UIState 构建完成: 最终控件数=19 (CV原始=3, Dump原始=47)
+2026-03-18 13:44:29 | INFO    | Perception.perception_manager  | 已保存合并控件列表: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/context/step_5_before.json
+2026-03-18 13:44:29 | INFO    | Perception.perception_manager  | 环境感知完成: 最终控件数=19
+2026-03-18 13:44:29 | INFO    | agent_loop                     | [Step 5] 阶段2: 认知规划
+2026-03-18 13:44:29 | INFO    | Planning.planner               | 开始规划, 任务: 'Send a email to 221240051@smail.nju.edu.cn notifying there is a meeting at 2026-'
+2026-03-18 13:44:29 | DEBUG   | Memory.memory_manager          | 未找到匹配经验, 最高相似度=0.000
+2026-03-18 13:44:29 | DEBUG   | Planning.planner               | 发送规划请求到 LLM
+2026-03-18 13:44:29 | DEBUG   | utils.llm_client               | 发送 LLM 请求: model=gpt-5.2, prompt_len=2704
+2026-03-18 13:44:36 | DEBUG   | utils.llm_client               | LLM 响应: len=788
+2026-03-18 13:44:36 | INFO    | Planning.planner               | LLM 规划完成: subgoal='Tap the email body compose area to focus it and type a short message notifying about the meeting at 2026-03-18 14:00', action=input, complete=False
+2026-03-18 13:44:36 | INFO    | agent_loop                     | 子目标: 'Tap the email body compose area to focus it and type a short message notifying about the meeting at 2026-03-18 14:00' (action=input)
+2026-03-18 13:44:36 | INFO    | Planning.oracle_pre            | 生成事前约束: subgoal='Tap the email body compose area to focus it and type a short message notifying about the meeting at 2026-03-18 14:00'
+2026-03-18 13:44:36 | DEBUG   | utils.llm_client               | 发送 LLM 请求: model=gpt-5.2, prompt_len=3891
+2026-03-18 13:44:42 | DEBUG   | utils.llm_client               | LLM 响应: len=1339
+2026-03-18 13:44:42 | INFO    | Planning.oracle_pre            | 事前约束生成完成: target_state=form, transition=partial_refresh
+2026-03-18 13:44:42 | INFO    | agent_loop                     | 事前约束: transition=partial_refresh
+2026-03-18 13:44:42 | INFO    | agent_loop                     | [Step 5] 阶段3: 安全检查
+2026-03-18 13:44:42 | DEBUG   | Planning.safety_interceptor    | 安全检查通过: 'Tap the email body compose area to focus it and type a short message notifying about the meeting at 2026-03-18 14:00'
+2026-03-18 13:44:42 | INFO    | agent_loop                     | [Step 5] 阶段4: 动作映射
+2026-03-18 13:44:42 | INFO    | Execution.action_mapper        | 映射动作: subgoal='Tap the email body compose area to focus it and type a short message notifying about the meeting at 2026-03-18 14:00'
+2026-03-18 13:44:42 | INFO    | agent_loop                     | 映射动作: input at (540, 1511)
+2026-03-18 13:44:42 | DEBUG   | Execution.oracle_runtime       | 执行前检查通过: input at (540, 1511)
+2026-03-18 13:44:42 | INFO    | agent_loop                     | [Step 5] 阶段5: 执行动作
+2026-03-18 13:44:42 | INFO    | Execution.action_executor      | 执行点击: (540, 1511)
+2026-03-18 13:44:42 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb shell input tap 540 1511
+2026-03-18 13:44:42 | INFO    | Execution.action_executor      | 执行文本输入: 'Hello,
+
+This is a reminder that we have a meeting '
+2026-03-18 13:44:42 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb shell input text Hello,
+
+This%sis%sa%sreminder%sthat%swe%shave%sa%smeeting%sscheduled%sat%s2026-03-18%s14:00.
+
+Best%sregards,
+2026-03-18 13:44:43 | WARNING | Execution.action_executor      | ADB 命令返回非零: 127, stderr: /system/bin/sh: This%sis%sa%sreminder%sthat%swe%shave%sa%smeeting%sscheduled%sat%s2026-03-18%s14:00.: inaccessible or not found
+/system/bin/sh: Best%sregards,: inaccessible or not found
+2026-03-18 13:44:46 | INFO    | agent_loop                     | [Step 5] 阶段6: 执行后感知 + 事中检查
+2026-03-18 13:44:46 | INFO    | Execution.action_executor      | 截屏: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/screenshots/step_5_after.png
+2026-03-18 13:44:46 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb shell screencap -p /sdcard/step_5_after.png
+2026-03-18 13:44:46 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb pull /sdcard/step_5_after.png /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/screenshots/step_5_after.png
+2026-03-18 13:44:46 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb shell rm /sdcard/step_5_after.png
+2026-03-18 13:44:46 | INFO    | Execution.action_executor      | Dump UI: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/dumps/step_5_after.xml
+2026-03-18 13:44:46 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb shell uiautomator dump /sdcard/window_dump.xml
+2026-03-18 13:44:48 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb pull /sdcard/window_dump.xml /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/dumps/step_5_after.xml
+2026-03-18 13:44:48 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb shell dumpsys activity activities
+2026-03-18 13:44:48 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb shell dumpsys window windows
+2026-03-18 13:44:48 | INFO    | Perception.perception_manager  | 开始环境感知: screenshot=/Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/screenshots/step_5_after.png, dump=/Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/dumps/step_5_after.xml
+2026-03-18 13:44:49 | INFO    | Perception.uied.detect_text.ocr | OCRDetector initialized successfully
+2026-03-18 13:44:57 | DEBUG   | Perception.uied.detect_text.ocr | PaddleOCR page keys: ['input_path', 'page_index', 'doc_preprocessor_res', 'dt_polys', 'model_settings', 'text_det_params', 'text_type', 'text_rec_score_thresh', 'return_word_box', 'rec_texts', 'rec_scores', 'rec_polys', 'vis_fonts', 'textline_orientation_angles', 'rec_boxes']
+2026-03-18 13:44:57 | DEBUG   | Perception.uied.detect_text.ocr | PaddleOCR counts: rec_texts=10, rec_scores=10, rec_polys=10
+2026-03-18 13:44:57 | DEBUG   | Perception.uied.detect_text.ocr | PaddleOCR converted count: 10
+2026-03-18 13:44:57 | DEBUG   | Perception.uied.detect_text.text_detection | After convert: 10
+2026-03-18 13:44:57 | DEBUG   | Perception.uied.detect_text.text_detection | After merge: 10
+2026-03-18 13:44:57 | DEBUG   | Perception.uied.detect_text.text_detection | After filter: 7
+2026-03-18 13:44:57 | DEBUG   | Perception.uied.detect_text.text_detection | After sentence merge: 6
+2026-03-18 13:44:57 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[0]: 'V.'
+2026-03-18 13:44:57 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[1]: 'From qinchenjiang17@gmail.com'
+2026-03-18 13:44:57 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[2]: 'To'
+2026-03-18 13:44:57 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[3]: '221240051@smail.nju.edu.cn'
+2026-03-18 13:44:57 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[4]: 'Meeting on 2026-03-18 14:00'
+2026-03-18 13:44:57 | INFO    | Perception.uied.detect_text.text_detection | Text detection completed in 8.506s, text_count=6
+2026-03-18 13:44:57 | INFO    | Perception.perception_manager  | CV 检测完成: 检测到 3 个元素, resize_ratio=0.360
+2026-03-18 13:44:57 | INFO    | Perception.dump_parser         | 解析 UI Dump: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/dumps/step_5_after.xml
+2026-03-18 13:44:57 | INFO    | Perception.dump_parser         | Dump 解析完成, 提取 47 个控件
+2026-03-18 13:44:57 | INFO    | Perception.perception_manager  | Dump 解析完成: 解析到 47 个控件
+2026-03-18 13:44:57 | INFO    | Perception.context_builder     | 开始构建 UIState: CV元素=3, Dump控件=47
+2026-03-18 13:44:57 | DEBUG   | Perception.context_builder     | CV[2] <-> Dump[] 匹配成功, IoU=0.751
+2026-03-18 13:44:57 | DEBUG   | Perception.context_builder     | 上下文瘦身: 20 -> 19 控件 (过滤了 1 个冗余控件)
+2026-03-18 13:44:57 | INFO    | Perception.context_builder     | UIState 构建完成: 最终控件数=19 (CV原始=3, Dump原始=47)
+2026-03-18 13:44:57 | INFO    | Perception.perception_manager  | 已保存合并控件列表: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/context/step_5_after.json
+2026-03-18 13:44:57 | INFO    | Perception.perception_manager  | 环境感知完成: 最终控件数=19
+2026-03-18 13:44:57 | DEBUG   | Execution.oracle_runtime       | 事中检查通过
+2026-03-18 13:44:57 | INFO    | agent_loop                     | [Step 5] 阶段7: 事后评估
+2026-03-18 13:44:57 | INFO    | Evaluation.evaluator           | 开始事后评估: 'Tap the email body compose area to focus it and type a short message notifying about the meeting at 2026-03-18 14:00'
+2026-03-18 13:44:57 | DEBUG   | utils.llm_client               | 发送 LLM 请求: model=gpt-5.2, prompt_len=5515
+2026-03-18 13:45:13 | DEBUG   | utils.llm_client               | LLM 响应: len=1776
+2026-03-18 13:45:13 | INFO    | Evaluation.evaluator           | 事后评估通过: 'Tap the email body compose area to focus it and type a short message notifying about the meeting at 2026-03-18 14:00'
+2026-03-18 13:45:13 | INFO    | agent_loop                     | ✓ 子目标完成: 'Tap the email body compose area to focus it and type a short message notifying about the meeting at 2026-03-18 14:00'
+2026-03-18 13:45:13 | DEBUG   | Evaluation.replanner           | 子目标成功, 重置连续失败计数
+2026-03-18 13:45:13 | DEBUG   | Memory.memory_manager          | 短期记忆新增步骤 #5
+2026-03-18 13:45:13 | INFO    | agent_loop                     | ========================================
+2026-03-18 13:45:13 | INFO    | agent_loop                     | 第 6 步 (最大 30)
+2026-03-18 13:45:13 | INFO    | agent_loop                     | ========================================
+2026-03-18 13:45:13 | INFO    | agent_loop                     | [Step 6] 阶段1: 环境感知
+2026-03-18 13:45:13 | INFO    | Execution.action_executor      | 截屏: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/screenshots/step_6_before.png
+2026-03-18 13:45:13 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb shell screencap -p /sdcard/step_6_before.png
+2026-03-18 13:45:13 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb pull /sdcard/step_6_before.png /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/screenshots/step_6_before.png
+2026-03-18 13:45:14 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb shell rm /sdcard/step_6_before.png
+2026-03-18 13:45:14 | INFO    | Execution.action_executor      | Dump UI: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/dumps/step_6.xml
+2026-03-18 13:45:14 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb shell uiautomator dump /sdcard/window_dump.xml
+2026-03-18 13:45:16 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb pull /sdcard/window_dump.xml /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/dumps/step_6.xml
+2026-03-18 13:45:16 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb shell dumpsys activity activities
+2026-03-18 13:45:16 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb shell dumpsys window windows
+2026-03-18 13:45:16 | INFO    | Perception.perception_manager  | 开始环境感知: screenshot=/Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/screenshots/step_6_before.png, dump=/Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/dumps/step_6.xml
+2026-03-18 13:45:16 | INFO    | Perception.uied.detect_text.ocr | OCRDetector initialized successfully
+2026-03-18 13:45:24 | DEBUG   | Perception.uied.detect_text.ocr | PaddleOCR page keys: ['input_path', 'page_index', 'doc_preprocessor_res', 'dt_polys', 'model_settings', 'text_det_params', 'text_type', 'text_rec_score_thresh', 'return_word_box', 'rec_texts', 'rec_scores', 'rec_polys', 'vis_fonts', 'textline_orientation_angles', 'rec_boxes']
+2026-03-18 13:45:24 | DEBUG   | Perception.uied.detect_text.ocr | PaddleOCR counts: rec_texts=10, rec_scores=10, rec_polys=10
+2026-03-18 13:45:24 | DEBUG   | Perception.uied.detect_text.ocr | PaddleOCR converted count: 10
+2026-03-18 13:45:24 | DEBUG   | Perception.uied.detect_text.text_detection | After convert: 10
+2026-03-18 13:45:24 | DEBUG   | Perception.uied.detect_text.text_detection | After merge: 10
+2026-03-18 13:45:24 | DEBUG   | Perception.uied.detect_text.text_detection | After filter: 7
+2026-03-18 13:45:24 | DEBUG   | Perception.uied.detect_text.text_detection | After sentence merge: 6
+2026-03-18 13:45:24 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[0]: ':'
+2026-03-18 13:45:24 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[1]: 'From qinchenjiang17@gmail.com'
+2026-03-18 13:45:24 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[2]: 'To'
+2026-03-18 13:45:24 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[3]: '221240051@smail.nju.edu.cn'
+2026-03-18 13:45:24 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[4]: 'Meeting on 2026-03-18 14:00'
+2026-03-18 13:45:24 | INFO    | Perception.uied.detect_text.text_detection | Text detection completed in 8.390s, text_count=6
+2026-03-18 13:45:24 | INFO    | Perception.perception_manager  | CV 检测完成: 检测到 3 个元素, resize_ratio=0.360
+2026-03-18 13:45:24 | INFO    | Perception.dump_parser         | 解析 UI Dump: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/dumps/step_6.xml
+2026-03-18 13:45:24 | INFO    | Perception.dump_parser         | Dump 解析完成, 提取 47 个控件
+2026-03-18 13:45:24 | INFO    | Perception.perception_manager  | Dump 解析完成: 解析到 47 个控件
+2026-03-18 13:45:24 | INFO    | Perception.context_builder     | 开始构建 UIState: CV元素=3, Dump控件=47
+2026-03-18 13:45:24 | DEBUG   | Perception.context_builder     | CV[2] <-> Dump[] 匹配成功, IoU=0.751
+2026-03-18 13:45:24 | DEBUG   | Perception.context_builder     | 上下文瘦身: 20 -> 19 控件 (过滤了 1 个冗余控件)
+2026-03-18 13:45:24 | INFO    | Perception.context_builder     | UIState 构建完成: 最终控件数=19 (CV原始=3, Dump原始=47)
+2026-03-18 13:45:24 | INFO    | Perception.perception_manager  | 已保存合并控件列表: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/context/step_6_before.json
+2026-03-18 13:45:24 | INFO    | Perception.perception_manager  | 环境感知完成: 最终控件数=19
+2026-03-18 13:45:24 | INFO    | agent_loop                     | [Step 6] 阶段2: 认知规划
+2026-03-18 13:45:24 | INFO    | Planning.planner               | 开始规划, 任务: 'Send a email to 221240051@smail.nju.edu.cn notifying there is a meeting at 2026-'
+2026-03-18 13:45:24 | DEBUG   | Memory.memory_manager          | 未找到匹配经验, 最高相似度=0.000
+2026-03-18 13:45:24 | DEBUG   | Planning.planner               | 发送规划请求到 LLM
+2026-03-18 13:45:24 | DEBUG   | utils.llm_client               | 发送 LLM 请求: model=gpt-5.2, prompt_len=2836
+2026-03-18 13:45:50 | DEBUG   | utils.llm_client               | LLM 响应: len=578
+2026-03-18 13:45:50 | INFO    | Planning.planner               | LLM 规划完成: subgoal='Tap the Send button to send the email', action=tap, complete=False
+2026-03-18 13:45:50 | INFO    | agent_loop                     | 子目标: 'Tap the Send button to send the email' (action=tap)
+2026-03-18 13:45:50 | INFO    | Planning.oracle_pre            | 生成事前约束: subgoal='Tap the Send button to send the email'
+2026-03-18 13:45:50 | DEBUG   | utils.llm_client               | 发送 LLM 请求: model=gpt-5.2, prompt_len=3700
+2026-03-18 13:46:03 | DEBUG   | utils.llm_client               | LLM 响应: len=1286
+2026-03-18 13:46:03 | INFO    | Planning.oracle_pre            | 事前约束生成完成: target_state=list, transition=new_page
+2026-03-18 13:46:03 | INFO    | agent_loop                     | 事前约束: transition=new_page
+2026-03-18 13:46:03 | INFO    | agent_loop                     | [Step 6] 阶段3: 安全检查
+2026-03-18 13:46:03 | DEBUG   | Planning.safety_interceptor    | 安全检查通过: 'Tap the Send button to send the email'
+2026-03-18 13:46:03 | INFO    | agent_loop                     | [Step 6] 阶段4: 动作映射
+2026-03-18 13:46:03 | INFO    | Execution.action_mapper        | 映射动作: subgoal='Tap the Send button to send the email'
+2026-03-18 13:46:03 | INFO    | agent_loop                     | 映射动作: tap at (882, 154)
+2026-03-18 13:46:03 | DEBUG   | Execution.oracle_runtime       | 执行前检查通过: tap at (882, 154)
+2026-03-18 13:46:03 | INFO    | agent_loop                     | [Step 6] 阶段5: 执行动作
+2026-03-18 13:46:03 | INFO    | Execution.action_executor      | 执行点击: (882, 154)
+2026-03-18 13:46:03 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb shell input tap 882 154
+2026-03-18 13:46:06 | INFO    | agent_loop                     | [Step 6] 阶段6: 执行后感知 + 事中检查
+2026-03-18 13:46:06 | INFO    | Execution.action_executor      | 截屏: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/screenshots/step_6_after.png
+2026-03-18 13:46:06 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb shell screencap -p /sdcard/step_6_after.png
+2026-03-18 13:46:06 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb pull /sdcard/step_6_after.png /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/screenshots/step_6_after.png
+2026-03-18 13:46:06 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb shell rm /sdcard/step_6_after.png
+2026-03-18 13:46:06 | INFO    | Execution.action_executor      | Dump UI: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/dumps/step_6_after.xml
+2026-03-18 13:46:06 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb shell uiautomator dump /sdcard/window_dump.xml
+2026-03-18 13:46:09 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb pull /sdcard/window_dump.xml /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/dumps/step_6_after.xml
+2026-03-18 13:46:09 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb shell dumpsys activity activities
+2026-03-18 13:46:09 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb shell dumpsys window windows
+2026-03-18 13:46:09 | INFO    | Perception.perception_manager  | 开始环境感知: screenshot=/Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/screenshots/step_6_after.png, dump=/Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/dumps/step_6_after.xml
+2026-03-18 13:46:09 | INFO    | Perception.uied.detect_text.ocr | OCRDetector initialized successfully
+2026-03-18 13:46:20 | DEBUG   | Perception.uied.detect_text.ocr | PaddleOCR page keys: ['input_path', 'page_index', 'doc_preprocessor_res', 'dt_polys', 'model_settings', 'text_det_params', 'text_type', 'text_rec_score_thresh', 'return_word_box', 'rec_texts', 'rec_scores', 'rec_polys', 'vis_fonts', 'textline_orientation_angles', 'rec_boxes']
+2026-03-18 13:46:20 | DEBUG   | Perception.uied.detect_text.ocr | PaddleOCR counts: rec_texts=37, rec_scores=37, rec_polys=37
+2026-03-18 13:46:20 | DEBUG   | Perception.uied.detect_text.ocr | PaddleOCR converted count: 37
+2026-03-18 13:46:20 | DEBUG   | Perception.uied.detect_text.text_detection | After convert: 37
+2026-03-18 13:46:20 | DEBUG   | Perception.uied.detect_text.text_detection | After merge: 31
+2026-03-18 13:46:20 | DEBUG   | Perception.uied.detect_text.text_detection | After filter: 26
+2026-03-18 13:46:20 | DEBUG   | Perception.uied.detect_text.text_detection | After sentence merge: 26
+2026-03-18 13:46:20 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[0]: 'Search in mail'
+2026-03-18 13:46:20 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[1]: 'Primary'
+2026-03-18 13:46:20 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[2]: 'Tap a sender image to select that conversation.'
+2026-03-18 13:46:20 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[3]: 'Dismiss'
+2026-03-18 13:46:20 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[4]: 'Google'
+2026-03-18 13:46:20 | INFO    | Perception.uied.detect_text.text_detection | Text detection completed in 10.988s, text_count=26
+2026-03-18 13:46:20 | INFO    | Perception.perception_manager  | CV 检测完成: 检测到 22 个元素, resize_ratio=0.360
+2026-03-18 13:46:20 | INFO    | Perception.dump_parser         | 解析 UI Dump: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/dumps/step_6_after.xml
+2026-03-18 13:46:20 | INFO    | Perception.dump_parser         | Dump 解析完成, 提取 99 个控件
+2026-03-18 13:46:20 | INFO    | Perception.perception_manager  | Dump 解析完成: 解析到 99 个控件
+2026-03-18 13:46:20 | INFO    | Perception.context_builder     | 开始构建 UIState: CV元素=22, Dump控件=99
+2026-03-18 13:46:20 | DEBUG   | Perception.context_builder     | CV[4] <-> Dump[com.google.android.gm:id/contact_image] 匹配成功, IoU=0.314
+2026-03-18 13:46:20 | DEBUG   | Perception.context_builder     | CV[5] <-> Dump[com.google.android.gm:id/contact_image] 匹配成功, IoU=0.314
+2026-03-18 13:46:20 | DEBUG   | Perception.context_builder     | CV[7] <-> Dump[com.google.android.gm:id/subject] 匹配成功, IoU=0.389
+2026-03-18 13:46:20 | DEBUG   | Perception.context_builder     | CV[8] <-> Dump[] 匹配成功, IoU=0.862
+2026-03-18 13:46:20 | DEBUG   | Perception.context_builder     | CV[10] <-> Dump[com.google.android.gm:id/viewified_conversation_item_view] 匹配成功, IoU=0.607
+2026-03-18 13:46:20 | DEBUG   | Perception.context_builder     | CV[11] <-> Dump[com.google.android.gm:id/viewified_conversation_item_view] 匹配成功, IoU=0.622
+2026-03-18 13:46:20 | DEBUG   | Perception.context_builder     | CV[14] <-> Dump[com.google.android.gm:id/conversation_tip_text] 匹配成功, IoU=0.470
+2026-03-18 13:46:20 | DEBUG   | Perception.context_builder     | CV[16] <-> Dump[com.google.android.gm:id/viewified_conversation_item_view] 匹配成功, IoU=0.618
+2026-03-18 13:46:20 | DEBUG   | Perception.context_builder     | CV[17] <-> Dump[com.google.android.gm:id/viewified_conversation_item_view] 匹配成功, IoU=0.572
+2026-03-18 13:46:20 | DEBUG   | Perception.context_builder     | CV[19] <-> Dump[com.google.android.gm:id/snippet] 匹配成功, IoU=0.368
+2026-03-18 13:46:20 | DEBUG   | Perception.context_builder     | CV[20] <-> Dump[com.google.android.gm:id/date] 匹配成功, IoU=0.369
+2026-03-18 13:46:20 | DEBUG   | Perception.context_builder     | CV[21] <-> Dump[com.google.android.gm:id/hub_tabs_nav_container] 匹配成功, IoU=0.559
+2026-03-18 13:46:20 | DEBUG   | Perception.context_builder     | 上下文瘦身: 65 -> 63 控件 (过滤了 2 个冗余控件)
+2026-03-18 13:46:20 | INFO    | Perception.context_builder     | UIState 构建完成: 最终控件数=63 (CV原始=22, Dump原始=99)
+2026-03-18 13:46:20 | INFO    | Perception.perception_manager  | 已保存合并控件列表: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/context/step_6_after.json
+2026-03-18 13:46:20 | INFO    | Perception.perception_manager  | 环境感知完成: 最终控件数=63
+2026-03-18 13:46:20 | DEBUG   | Execution.oracle_runtime       | 事中检查通过
+2026-03-18 13:46:20 | INFO    | agent_loop                     | [Step 6] 阶段7: 事后评估
+2026-03-18 13:46:20 | INFO    | Evaluation.evaluator           | 开始事后评估: 'Tap the Send button to send the email'
+2026-03-18 13:46:20 | DEBUG   | utils.llm_client               | 发送 LLM 请求: model=gpt-5.2, prompt_len=5649
+2026-03-18 13:46:30 | DEBUG   | utils.llm_client               | LLM 响应: len=1349
+2026-03-18 13:46:30 | INFO    | Evaluation.evaluator           | 事后评估通过: 'Tap the Send button to send the email'
+2026-03-18 13:46:30 | INFO    | agent_loop                     | ✓ 子目标完成: 'Tap the Send button to send the email'
+2026-03-18 13:46:30 | DEBUG   | Evaluation.replanner           | 子目标成功, 重置连续失败计数
+2026-03-18 13:46:30 | DEBUG   | Memory.memory_manager          | 短期记忆新增步骤 #6
+2026-03-18 13:46:30 | INFO    | agent_loop                     | ========================================
+2026-03-18 13:46:30 | INFO    | agent_loop                     | 第 7 步 (最大 30)
+2026-03-18 13:46:30 | INFO    | agent_loop                     | ========================================
+2026-03-18 13:46:30 | INFO    | agent_loop                     | [Step 7] 阶段1: 环境感知
+2026-03-18 13:46:30 | INFO    | Execution.action_executor      | 截屏: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/screenshots/step_7_before.png
+2026-03-18 13:46:30 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb shell screencap -p /sdcard/step_7_before.png
+2026-03-18 13:46:30 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb pull /sdcard/step_7_before.png /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/screenshots/step_7_before.png
+2026-03-18 13:46:30 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb shell rm /sdcard/step_7_before.png
+2026-03-18 13:46:30 | INFO    | Execution.action_executor      | Dump UI: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/dumps/step_7.xml
+2026-03-18 13:46:30 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb shell uiautomator dump /sdcard/window_dump.xml
+2026-03-18 13:46:32 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb pull /sdcard/window_dump.xml /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/dumps/step_7.xml
+2026-03-18 13:46:32 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb shell dumpsys activity activities
+2026-03-18 13:46:32 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: adb shell dumpsys window windows
+2026-03-18 13:46:32 | INFO    | Perception.perception_manager  | 开始环境感知: screenshot=/Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/screenshots/step_7_before.png, dump=/Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/dumps/step_7.xml
+2026-03-18 13:46:33 | INFO    | Perception.uied.detect_text.ocr | OCRDetector initialized successfully
+2026-03-18 13:46:43 | DEBUG   | Perception.uied.detect_text.ocr | PaddleOCR page keys: ['input_path', 'page_index', 'doc_preprocessor_res', 'dt_polys', 'model_settings', 'text_det_params', 'text_type', 'text_rec_score_thresh', 'return_word_box', 'rec_texts', 'rec_scores', 'rec_polys', 'vis_fonts', 'textline_orientation_angles', 'rec_boxes']
+2026-03-18 13:46:43 | DEBUG   | Perception.uied.detect_text.ocr | PaddleOCR counts: rec_texts=33, rec_scores=33, rec_polys=33
+2026-03-18 13:46:43 | DEBUG   | Perception.uied.detect_text.ocr | PaddleOCR converted count: 33
+2026-03-18 13:46:43 | DEBUG   | Perception.uied.detect_text.text_detection | After convert: 33
+2026-03-18 13:46:43 | DEBUG   | Perception.uied.detect_text.text_detection | After merge: 29
+2026-03-18 13:46:43 | DEBUG   | Perception.uied.detect_text.text_detection | After filter: 23
+2026-03-18 13:46:43 | DEBUG   | Perception.uied.detect_text.text_detection | After sentence merge: 23
+2026-03-18 13:46:43 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[0]: 'Search in mail'
+2026-03-18 13:46:43 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[1]: 'Primary'
+2026-03-18 13:46:43 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[2]: 'Tap a sender image to select'
+2026-03-18 13:46:43 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[3]: 'Dismiss'
+2026-03-18 13:46:43 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[4]: 'that conversation.'
+2026-03-18 13:46:43 | INFO    | Perception.uied.detect_text.text_detection | Text detection completed in 10.480s, text_count=23
+2026-03-18 13:46:43 | INFO    | Perception.perception_manager  | CV 检测完成: 检测到 21 个元素, resize_ratio=0.360
+2026-03-18 13:46:43 | INFO    | Perception.dump_parser         | 解析 UI Dump: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/dumps/step_7.xml
+2026-03-18 13:46:43 | INFO    | Perception.dump_parser         | Dump 解析完成, 提取 92 个控件
+2026-03-18 13:46:43 | INFO    | Perception.perception_manager  | Dump 解析完成: 解析到 92 个控件
+2026-03-18 13:46:43 | INFO    | Perception.context_builder     | 开始构建 UIState: CV元素=21, Dump控件=92
+2026-03-18 13:46:43 | DEBUG   | Perception.context_builder     | CV[6] <-> Dump[com.google.android.gm:id/date] 匹配成功, IoU=0.321
+2026-03-18 13:46:43 | DEBUG   | Perception.context_builder     | CV[10] <-> Dump[com.google.android.gm:id/navigation_bar_item_inner_content_container] 匹配成功, IoU=0.599
+2026-03-18 13:46:43 | DEBUG   | Perception.context_builder     | CV[11] <-> Dump[com.google.android.gm:id/viewified_conversation_item_view] 匹配成功, IoU=0.630
+2026-03-18 13:46:43 | DEBUG   | Perception.context_builder     | CV[15] <-> Dump[com.google.android.gm:id/conversation_tip_text] 匹配成功, IoU=0.463
+2026-03-18 13:46:43 | DEBUG   | Perception.context_builder     | CV[17] <-> Dump[com.google.android.gm:id/item_list_card_title] 匹配成功, IoU=0.692
+2026-03-18 13:46:43 | DEBUG   | Perception.context_builder     | CV[18] <-> Dump[com.google.android.gm:id/item_list_card_body] 匹配成功, IoU=0.890
+2026-03-18 13:46:43 | DEBUG   | Perception.context_builder     | CV[19] <-> Dump[com.google.android.gm:id/viewified_conversation_item_view] 匹配成功, IoU=0.610
+2026-03-18 13:46:43 | DEBUG   | Perception.context_builder     | CV[20] <-> Dump[com.google.android.gm:id/viewified_conversation_item_view] 匹配成功, IoU=0.515
+2026-03-18 13:46:43 | DEBUG   | Perception.context_builder     | 上下文瘦身: 59 -> 57 控件 (过滤了 2 个冗余控件)
+2026-03-18 13:46:43 | INFO    | Perception.context_builder     | UIState 构建完成: 最终控件数=57 (CV原始=21, Dump原始=92)
+2026-03-18 13:46:43 | INFO    | Perception.perception_manager  | 已保存合并控件列表: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/context/step_7_before.json
+2026-03-18 13:46:43 | INFO    | Perception.perception_manager  | 环境感知完成: 最终控件数=57
+2026-03-18 13:46:43 | INFO    | agent_loop                     | [Step 7] 阶段2: 认知规划
+2026-03-18 13:46:43 | INFO    | Planning.planner               | 开始规划, 任务: 'Send a email to 221240051@smail.nju.edu.cn notifying there is a meeting at 2026-'
+2026-03-18 13:46:43 | DEBUG   | Memory.memory_manager          | 未找到匹配经验, 最高相似度=0.000
+2026-03-18 13:46:43 | DEBUG   | Planning.planner               | 发送规划请求到 LLM
+2026-03-18 13:46:43 | DEBUG   | utils.llm_client               | 发送 LLM 请求: model=gpt-5.2, prompt_len=6539
+2026-03-18 13:46:58 | DEBUG   | utils.llm_client               | LLM 响应: len=719
+2026-03-18 13:46:58 | INFO    | Planning.planner               | LLM 规划完成: subgoal='No further action needed; the email has been sent.', action=tap, complete=True
+2026-03-18 13:46:58 | INFO    | agent_loop                     | LLM 判断任务已完成
+2026-03-18 13:46:58 | DEBUG   | Memory.experience_store        | 经验库已保存，共 1 条记录
+2026-03-18 13:46:58 | INFO    | Memory.experience_store        | 新增经验记录: task='Send a email to 221240051@smail.nju.edu.cn notifyi', success=True
+2026-03-18 13:46:58 | INFO    | Memory.memory_manager          | 经验已沉淀: success=True, actions=6
+2026-03-18 13:46:58 | INFO    | Evaluation.replanner           | 任务经验已沉淀: 6 个动作
+2026-03-18 13:46:58 | INFO    | agent_loop                     | ✅ 任务成功完成: 'Send a email to 221240051@smail.nju.edu.cn notifying there is a meeting at 2026-3-18 14:00 using Gmail'
+2026-03-18 13:46:58 | INFO    | __main__                       | 🎉 任务执行成功!

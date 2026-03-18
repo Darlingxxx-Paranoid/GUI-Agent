@@ -1,0 +1,69 @@
+{
+    "img_shape": [
+        2220,
+        1080,
+        3
+    ],
+    "texts": [
+        {
+            "id": 0,
+            "content": ":",
+            "column_min": 955,
+            "row_min": 77,
+            "column_max": 1061,
+            "row_max": 122,
+            "width": 106,
+            "height": 45
+        },
+        {
+            "id": 1,
+            "content": "From qinchenjiang17@gmail.com",
+            "column_min": 0,
+            "row_min": 226,
+            "column_max": 751,
+            "row_max": 288,
+            "width": 751,
+            "height": 62
+        },
+        {
+            "id": 2,
+            "content": "To",
+            "column_min": 0,
+            "row_min": 385,
+            "column_max": 62,
+            "row_max": 443,
+            "width": 62,
+            "height": 58
+        },
+        {
+            "id": 3,
+            "content": "221240051@smail.nju.edu.cn",
+            "column_min": 283,
+            "row_min": 392,
+            "column_max": 848,
+            "row_max": 449,
+            "width": 565,
+            "height": 57
+        },
+        {
+            "id": 4,
+            "content": "Meeting on 2026-03-18 14:00",
+            "column_min": 0,
+            "row_min": 549,
+            "column_max": 718,
+            "row_max": 626,
+            "width": 718,
+            "height": 77
+        },
+        {
+            "id": 5,
+            "content": "Compose email",
+            "column_min": 0,
+            "row_min": 707,
+            "column_max": 374,
+            "row_max": 782,
+            "width": 374,
+            "height": 75
+        }
+    ]
+}

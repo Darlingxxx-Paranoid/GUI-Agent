@@ -5,8 +5,9 @@
 """
 import json
 import logging
+import os
 from dataclasses import dataclass
-from typing import Optional, List
+from typing import Optional, List, Dict, Any, Tuple
 
 from Perception.context_builder import UIState
 from Planning.oracle_pre import PreConstraints
@@ -47,32 +48,52 @@ class Evaluator:
         """
         logger.info("开始事后评估: '%s'", subgoal_description)
 
-        constraint_result = self._check_constraints(constraints, old_state, new_state)
+        constraint_result, evidence = self._check_constraints(constraints, old_state, new_state)
         if not constraint_result.constraint_passed:
             logger.info("基础约束未通过: %s", constraint_result.reason)
+            self._save_eval_artifact(
+                subgoal_description=subgoal_description,
+                acceptance_criteria=constraints.semantic_criteria or subgoal_description,
+                old_state=old_state,
+                new_state=new_state,
+                constraint_evidence=evidence,
+                llm_result=None,
+                raw_response=None,
+                final_result=constraint_result,
+            )
             return constraint_result
 
-        if constraints.semantic_criteria:
-            semantic_result = self._semantic_check(
-                subgoal_description,
-                constraints.semantic_criteria,
-                old_state,
-                new_state,
-            )
-            if not semantic_result.success:
-                logger.info("语义确认未通过: %s", semantic_result.reason)
-                return semantic_result
+        semantic_result, llm_payload, raw_response = self._semantic_check(
+            subgoal_description=subgoal_description,
+            acceptance_criteria=constraints.semantic_criteria or subgoal_description,
+            old_state=old_state,
+            new_state=new_state,
+            constraint_evidence=evidence,
+        )
+        self._save_eval_artifact(
+            subgoal_description=subgoal_description,
+            acceptance_criteria=constraints.semantic_criteria or subgoal_description,
+            old_state=old_state,
+            new_state=new_state,
+            constraint_evidence=evidence,
+            llm_result=llm_payload,
+            raw_response=raw_response,
+            final_result=semantic_result,
+        )
+
+        if not semantic_result.success:
+            logger.info("语义确认未通过: %s", semantic_result.reason)
+            return semantic_result
 
         logger.info("事后评估通过: '%s'", subgoal_description)
-        return EvalResult(success=True, reason="基础约束和语义确认均通过")
+        return semantic_result
 
     def _check_constraints(
         self,
         constraints: PreConstraints,
         old_state: UIState,
         new_state: UIState,
-    ) -> EvalResult:
-        """基础约束检测"""
+    ) -> Tuple[EvalResult, Dict[str, Any]]:
 
         old_package = self._get_package(old_state)
         new_package = self._get_package(new_state)
@@ -82,64 +103,32 @@ class Evaluator:
         old_texts = self._collect_texts(old_state)
         new_texts = self._collect_texts(new_state)
 
+        hard_violations: List[str] = []
+
         # 1. app/package 边界检查
         if constraints.must_stay_in_app and old_package and new_package and old_package != new_package:
-            return EvalResult(
-                success=False,
-                constraint_passed=False,
-                reason=f"要求留在当前App，但package发生变化: '{old_package}' -> '{new_package}'",
-            )
+            hard_violations.append(f"must_stay_in_app violated: '{old_package}' -> '{new_package}'")
 
         if constraints.expected_package and new_package and new_package != constraints.expected_package:
-            return EvalResult(
-                success=False,
-                constraint_passed=False,
-                reason=f"当前package不符合预期: expected='{constraints.expected_package}', actual='{new_package}'",
+            hard_violations.append(
+                f"expected_package mismatch: expected='{constraints.expected_package}', actual='{new_package}'"
             )
 
         if new_package in constraints.forbidden_packages:
-            return EvalResult(
-                success=False,
-                constraint_passed=False,
-                reason=f"跳转到了禁止package: '{new_package}'",
-            )
+            hard_violations.append(f"forbidden_package opened: '{new_package}'")
 
-        # 2. activity 检查
-        if constraints.expected_activity and constraints.expected_activity not in new_activity:
-            return EvalResult(
-                success=False,
-                constraint_passed=False,
-                reason=f"当前Activity不符合预期: expected contains '{constraints.expected_activity}', actual='{new_activity}'",
-            )
-
-        # 3. 是否发生UI变化
-        if constraints.require_ui_change:
-            if not self._has_meaningful_ui_change(old_state, new_state):
-                return EvalResult(
-                    success=False,
-                    constraint_passed=False,
-                    reason="期望发生UI变化，但执行前后界面无明显变化",
-                )
-
-        # 4. 强约束：期望存在的控件
+        missing_should_exist: List[str] = []
         for feature in constraints.widget_should_exist:
             if not self._widget_feature_exists(feature, new_state):
-                return EvalResult(
-                    success=False,
-                    constraint_passed=False,
-                    reason=f"期望控件未出现: '{feature}'",
-                )
+                missing_should_exist.append(feature)
 
-        # 5. 强约束：期望消失的控件
+        present_should_vanish: List[str] = []
         for feature in constraints.widget_should_vanish:
             if self._widget_feature_exists(feature, new_state):
-                return EvalResult(
-                    success=False,
-                    constraint_passed=False,
-                    reason=f"期望消失的控件仍然存在: '{feature}'",
-                )
+                present_should_vanish.append(feature)
 
-        # 6. 目标状态类型弱判断
+        ui_changed = self._has_meaningful_ui_change(old_state, new_state)
+
         state_score = 0.0
         state_reasons: List[str] = []
 
@@ -173,23 +162,41 @@ class Evaluator:
 
         total_support = state_score + support_score
 
-        if constraints.min_support_score > 0 and total_support < constraints.min_support_score:
-            return EvalResult(
-                success=False,
-                constraint_passed=False,
-                reason=(
-                    f"弱证据不足: score={total_support:.1f} < required={constraints.min_support_score:.1f}; "
-                    f"hits={support_hits}; state_reasons={state_reasons}"
-                ),
+        evidence: Dict[str, Any] = {
+            "old_package": old_package,
+            "new_package": new_package,
+            "old_activity": old_activity,
+            "new_activity": new_activity,
+            "expected_activity": constraints.expected_activity or "",
+            "expected_activity_matched": bool(
+                constraints.expected_activity and (constraints.expected_activity in (new_activity or ""))
+            ),
+            "require_ui_change": bool(constraints.require_ui_change),
+            "ui_changed": bool(ui_changed),
+            "widget_should_exist": list(constraints.widget_should_exist or []),
+            "missing_widget_should_exist": missing_should_exist,
+            "widget_should_vanish": list(constraints.widget_should_vanish or []),
+            "present_widget_should_vanish": present_should_vanish,
+            "support_hits": support_hits,
+            "support_score": total_support,
+            "min_support_score": float(getattr(constraints, "min_support_score", 0.0) or 0.0),
+            "state_reasons": state_reasons,
+            "hard_violations": hard_violations,
+        }
+
+        if hard_violations:
+            return (
+                EvalResult(success=False, constraint_passed=False, reason="; ".join(hard_violations)),
+                evidence,
             )
 
-        return EvalResult(
-            success=True,
-            constraint_passed=True,
-            reason=(
-                f"基础约束通过; support_score={total_support:.1f}; "
-                f"support_hits={support_hits}; state_reasons={state_reasons}"
+        return (
+            EvalResult(
+                success=True,
+                constraint_passed=True,
+                reason=f"evidence_collected support_score={total_support:.1f}",
             ),
+            evidence,
         )
 
     def _semantic_check(
@@ -198,24 +205,26 @@ class Evaluator:
         acceptance_criteria: str,
         old_state: UIState,
         new_state: UIState,
-    ) -> EvalResult:
-        """通过 LLM 进行高阶语义确认"""
+        constraint_evidence: Dict[str, Any],
+    ) -> Tuple[EvalResult, Optional[Dict[str, Any]], Optional[str]]:
         prompt = EVALUATOR_PROMPT.format(
             subgoal_description=subgoal_description,
             acceptance_criteria=acceptance_criteria,
-            old_state_summary=old_state.to_prompt_text()[:800],
-            new_state_summary=new_state.to_prompt_text()[:800],
+            constraint_evidence=json.dumps(constraint_evidence, ensure_ascii=False),
+            old_state_summary=old_state.to_prompt_text()[:1400],
+            new_state_summary=new_state.to_prompt_text()[:1400],
         )
 
         try:
             response = self.llm.chat(prompt)
-            return self._parse_semantic_response(response)
+            result, payload = self._parse_semantic_response(response)
+            return result, payload, response
         except Exception as e:
-            logger.error("LLM 语义确认失败: %s, 默认通过", e)
-            return EvalResult(success=True, reason=f"LLM调用失败({e}), 默认通过")
+            logger.error("LLM 语义确认失败: %s", e)
+            fallback = self._fallback_from_evidence(constraint_evidence, error=str(e))
+            return fallback, None, None
 
-    def _parse_semantic_response(self, response: str) -> EvalResult:
-        """解析 LLM 语义确认结果"""
+    def _parse_semantic_response(self, response: str) -> Tuple[EvalResult, Optional[Dict[str, Any]]]:
         json_str = response
         if "```json" in response:
             json_str = response.split("```json")[1].split("```")[0]
@@ -224,14 +233,99 @@ class Evaluator:
 
         try:
             data = json.loads(json_str.strip())
-            return EvalResult(
-                success=data.get("success", False),
-                semantic_passed=data.get("success", False),
-                reason=data.get("reason", ""),
+            return (
+                EvalResult(
+                    success=bool(data.get("success", False)),
+                    semantic_passed=bool(data.get("success", False)),
+                    reason=str(data.get("reason", "")),
+                ),
+                data,
             )
-        except json.JSONDecodeError:
-            logger.warning("语义确认 JSON 解析失败, 默认通过")
-            return EvalResult(success=True, reason="JSON解析失败, 默认通过")
+        except json.JSONDecodeError as e:
+            logger.warning("语义确认 JSON 解析失败: %s", e)
+            return (
+                EvalResult(success=False, semantic_passed=False, reason="JSON解析失败"),
+                None,
+            )
+
+    def _fallback_from_evidence(self, evidence: Dict[str, Any], error: str = "") -> EvalResult:
+        hard_violations = evidence.get("hard_violations") or []
+        if hard_violations:
+            return EvalResult(
+                success=False,
+                semantic_passed=False,
+                reason="; ".join([*hard_violations, error] if error else hard_violations),
+            )
+
+        ui_changed = bool(evidence.get("ui_changed", False))
+        support_score = float(evidence.get("support_score", 0.0) or 0.0)
+        missing_should_exist = evidence.get("missing_widget_should_exist") or []
+        present_should_vanish = evidence.get("present_widget_should_vanish") or []
+
+        if missing_should_exist or present_should_vanish:
+            ok = ui_changed and support_score >= 0.8
+        else:
+            ok = ui_changed or support_score >= 0.8
+
+        reason_parts = [
+            f"fallback: ui_changed={ui_changed}",
+            f"support_score={support_score:.1f}",
+        ]
+        if missing_should_exist:
+            reason_parts.append(f"missing_exist={missing_should_exist[:5]}")
+        if present_should_vanish:
+            reason_parts.append(f"present_vanish={present_should_vanish[:5]}")
+        if error:
+            reason_parts.append(f"llm_error={error}")
+
+        return EvalResult(
+            success=ok,
+            semantic_passed=ok,
+            reason="; ".join(reason_parts),
+        )
+
+    def _save_eval_artifact(
+        self,
+        subgoal_description: str,
+        acceptance_criteria: str,
+        old_state: UIState,
+        new_state: UIState,
+        constraint_evidence: Dict[str, Any],
+        llm_result: Optional[Dict[str, Any]],
+        raw_response: Optional[str],
+        final_result: EvalResult,
+    ) -> None:
+        screenshot_path = getattr(new_state, "screenshot_path", "") or ""
+        if not screenshot_path:
+            return
+
+        data_dir = os.path.dirname(os.path.dirname(screenshot_path))
+        context_dir = os.path.join(data_dir, "context")
+        os.makedirs(context_dir, exist_ok=True)
+
+        stem = os.path.splitext(os.path.basename(screenshot_path))[0] or "eval"
+        out_path = os.path.join(context_dir, f"{stem}.eval.json")
+
+        payload = {
+            "subgoal": subgoal_description,
+            "acceptance_criteria": acceptance_criteria,
+            "old_screenshot_path": getattr(old_state, "screenshot_path", "") or "",
+            "new_screenshot_path": screenshot_path,
+            "constraint_evidence": constraint_evidence,
+            "llm_result": llm_result,
+            "raw_response": raw_response,
+            "final": {
+                "success": bool(final_result.success),
+                "reason": final_result.reason,
+                "constraint_passed": bool(final_result.constraint_passed),
+                "semantic_passed": bool(final_result.semantic_passed),
+            },
+        }
+        try:
+            with open(out_path, "w", encoding="utf-8") as f:
+                json.dump(payload, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            logger.warning("保存评估复盘文件失败: %s", e)
 
     # -----------------------
     # 辅助函数

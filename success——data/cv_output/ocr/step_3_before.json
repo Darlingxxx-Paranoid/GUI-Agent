@@ -1,0 +1,79 @@
+{
+    "img_shape": [
+        2220,
+        1080,
+        3
+    ],
+    "texts": [
+        {
+            "id": 0,
+            "content": "From",
+            "column_min": 0,
+            "row_min": 235,
+            "column_max": 116,
+            "row_max": 284,
+            "width": 116,
+            "height": 49
+        },
+        {
+            "id": 1,
+            "content": "qinchenjiang17@gmail.com",
+            "column_min": 166,
+            "row_min": 233,
+            "column_max": 761,
+            "row_max": 294,
+            "width": 595,
+            "height": 61
+        },
+        {
+            "id": 2,
+            "content": "To",
+            "column_min": 0,
+            "row_min": 392,
+            "column_max": 59,
+            "row_max": 443,
+            "width": 59,
+            "height": 51
+        },
+        {
+            "id": 3,
+            "content": "221240051@smail.nju.edu.cn",
+            "column_min": 164,
+            "row_min": 399,
+            "column_max": 816,
+            "row_max": 454,
+            "width": 652,
+            "height": 55
+        },
+        {
+            "id": 4,
+            "content": "Suggestions",
+            "column_min": 0,
+            "row_min": 542,
+            "column_max": 213,
+            "row_max": 593,
+            "width": 213,
+            "height": 51
+        },
+        {
+            "id": 5,
+            "content": "221240051@smail.nju.edu.cn",
+            "column_min": 158,
+            "row_min": 675,
+            "column_max": 792,
+            "row_max": 730,
+            "width": 634,
+            "height": 55
+        },
+        {
+            "id": 6,
+            "content": "221240051@smail.nju.edu.cn",
+            "column_min": 158,
+            "row_min": 742,
+            "column_max": 642,
+            "row_max": 784,
+            "width": 484,
+            "height": 42
+        }
+    ]
+}

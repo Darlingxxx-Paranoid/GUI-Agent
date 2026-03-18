@@ -39,7 +39,6 @@ class WidgetDetector:
             "ffl-block": 5,
             "min-ele-area": 50,
             "merge-contained-ele": True,
-            "merge-line-to-paragraph": True,
             "remove-bar": True,
         }
 
@@ -88,7 +87,7 @@ class WidgetDetector:
             ocr_path,
             p_join(self.output_root, "merge"),
             is_remove_bar=self.key_params['remove-bar'],
-            is_paragraph=self.key_params['merge-line-to-paragraph'],
+            is_paragraph=True,
             show=debug,
         )
         return screen_with_bbox_path, resize_ratio, elements

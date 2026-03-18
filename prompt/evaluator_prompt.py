@@ -21,11 +21,16 @@ Important evaluation principles:
 5. If the result clearly goes in the wrong direction (wrong page, no meaningful change, unexpected app jump, error-like page), then return success=false.
 6. Be conservative: do not mark success unless the after-state reasonably satisfies the acceptance criteria.
 
+You MUST first summarize the BEFORE and AFTER UI states into a compact semantic representation, then decide success based on that summary.
+
 ## Subgoal
 {subgoal_description}
 
 ## Acceptance Criteria
 {acceptance_criteria}
+
+## Constraint Evidence (may be noisy)
+{constraint_evidence}
 
 ## UI State Summary Before Execution
 {old_state_summary}
@@ -37,7 +42,28 @@ Return JSON only:
 ```json
 {{
     "success": true,
-    "reason": "Brief explanation focusing on semantic state transition and whether the subgoal was achieved"
+    "reason": "Brief explanation focusing on semantic state transition and whether the subgoal was achieved",
+    "before_summary": {{
+        "page_type": "unknown",
+        "key_elements": ["short tokens like 'Send', 'Subject', 'Search bar', 'Dialog'"],
+        "interaction_state": ["e.g. 'keyboard_visible', 'input_focused', 'scrollable_list'"],
+        "entities": ["emails, names, dates, amounts if present"]
+    }},
+    "after_summary": {{
+        "page_type": "unknown",
+        "key_elements": [],
+        "interaction_state": [],
+        "entities": []
+    }},
+    "delta_summary": {{
+        "notable_changes": ["what changed from before to after"],
+        "direction": "moved_toward_goal/moved_away/no_change/unclear"
+    }},
+    "evidence_used": {{
+        "hard_violations": [],
+        "supporting_hits": [],
+        "suspicious_signals": []
+    }}
 }}
 ```
 """

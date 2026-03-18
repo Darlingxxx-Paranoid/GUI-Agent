@@ -1,0 +1,410 @@
+{
+  "activity_name": "",
+  "package_name": "",
+  "screen_width": 1080,
+  "screen_height": 2220,
+  "screenshot_path": "/Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/screenshots/step_5_before.png",
+  "dump_path": "/Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/dumps/step_5.xml",
+  "widgets_count": 19,
+  "widgets": [
+    {
+      "id": 0,
+      "bounds": [
+        216,
+        13,
+        255,
+        52
+      ],
+      "center": [
+        235,
+        32
+      ],
+      "category": "Compo",
+      "text": "",
+      "resource_id": "",
+      "class": "",
+      "content_desc": "",
+      "clickable": false,
+      "scrollable": false,
+      "cv_confidence": 0.0
+    },
+    {
+      "id": 1,
+      "bounds": [
+        585,
+        124,
+        643,
+        180
+      ],
+      "center": [
+        614,
+        152
+      ],
+      "category": "Compo",
+      "text": "",
+      "resource_id": "",
+      "class": "",
+      "content_desc": "",
+      "clickable": false,
+      "scrollable": false,
+      "cv_confidence": 0.0
+    },
+    {
+      "id": 2,
+      "bounds": [
+        194,
+        424,
+        857,
+        524
+      ],
+      "center": [
+        525,
+        474
+      ],
+      "category": "Compo",
+      "text": "",
+      "resource_id": "",
+      "class": "android.widget.RelativeLayout",
+      "content_desc": "",
+      "clickable": false,
+      "scrollable": false,
+      "cv_confidence": 0.0
+    },
+    {
+      "id": 3,
+      "bounds": [
+        0,
+        77,
+        154,
+        231
+      ],
+      "center": [
+        77,
+        154
+      ],
+      "category": "",
+      "text": "",
+      "resource_id": "",
+      "class": "android.widget.ImageButton",
+      "content_desc": "Navigate up",
+      "clickable": true,
+      "scrollable": false,
+      "cv_confidence": 0.0
+    },
+    {
+      "id": 4,
+      "bounds": [
+        552,
+        88,
+        684,
+        220
+      ],
+      "center": [
+        618,
+        154
+      ],
+      "category": "",
+      "text": "",
+      "resource_id": "com.google.android.gm:id/smart_draft_app_bar",
+      "class": "android.widget.Button",
+      "content_desc": "Help me write",
+      "clickable": true,
+      "scrollable": false,
+      "cv_confidence": 0.0
+    },
+    {
+      "id": 5,
+      "bounds": [
+        684,
+        88,
+        816,
+        220
+      ],
+      "center": [
+        750,
+        154
+      ],
+      "category": "",
+      "text": "",
+      "resource_id": "com.google.android.gm:id/add_attachment",
+      "class": "android.widget.Button",
+      "content_desc": "Attach",
+      "clickable": true,
+      "scrollable": false,
+      "cv_confidence": 0.0
+    },
+    {
+      "id": 6,
+      "bounds": [
+        816,
+        88,
+        948,
+        220
+      ],
+      "center": [
+        882,
+        154
+      ],
+      "category": "",
+      "text": "",
+      "resource_id": "com.google.android.gm:id/send",
+      "class": "android.widget.Button",
+      "content_desc": "Send",
+      "clickable": true,
+      "scrollable": false,
+      "cv_confidence": 0.0
+    },
+    {
+      "id": 7,
+      "bounds": [
+        948,
+        88,
+        1080,
+        220
+      ],
+      "center": [
+        1014,
+        154
+      ],
+      "category": "",
+      "text": "",
+      "resource_id": "",
+      "class": "android.widget.ImageView",
+      "content_desc": "More options",
+      "clickable": true,
+      "scrollable": false,
+      "cv_confidence": 0.0
+    },
+    {
+      "id": 8,
+      "bounds": [
+        0,
+        242,
+        1080,
+        2154
+      ],
+      "center": [
+        540,
+        1198
+      ],
+      "category": "",
+      "text": "",
+      "resource_id": "com.google.android.gm:id/compose",
+      "class": "android.widget.ScrollView",
+      "content_desc": "",
+      "clickable": false,
+      "scrollable": false,
+      "cv_confidence": 0.0
+    },
+    {
+      "id": 9,
+      "bounds": [
+        44,
+        242,
+        198,
+        396
+      ],
+      "center": [
+        121,
+        319
+      ],
+      "category": "",
+      "text": "From",
+      "resource_id": "com.google.android.gm:id/from_label",
+      "class": "android.widget.TextView",
+      "content_desc": "From",
+      "clickable": true,
+      "scrollable": false,
+      "cv_confidence": 0.0
+    },
+    {
+      "id": 10,
+      "bounds": [
+        198,
+        286,
+        1080,
+        352
+      ],
+      "center": [
+        639,
+        319
+      ],
+      "category": "",
+      "text": "qinchenjiang17@gmail.com",
+      "resource_id": "com.google.android.gm:id/from_account_name",
+      "class": "android.widget.TextView",
+      "content_desc": "",
+      "clickable": false,
+      "scrollable": false,
+      "cv_confidence": 0.0
+    },
+    {
+      "id": 11,
+      "bounds": [
+        0,
+        397,
+        1080,
+        551
+      ],
+      "center": [
+        540,
+        474
+      ],
+      "category": "",
+      "text": "",
+      "resource_id": "com.google.android.gm:id/peoplekit_chipgroup_bar",
+      "class": "android.widget.RelativeLayout",
+      "content_desc": "Recipients: 221240051@smail.nju.edu.cn,",
+      "clickable": false,
+      "scrollable": false,
+      "cv_confidence": 0.0
+    },
+    {
+      "id": 12,
+      "bounds": [
+        0,
+        408,
+        1080,
+        540
+      ],
+      "center": [
+        540,
+        474
+      ],
+      "category": "",
+      "text": "",
+      "resource_id": "com.google.android.gm:id/peoplekit_autocomplete_chip_group",
+      "class": "android.view.ViewGroup",
+      "content_desc": "",
+      "clickable": true,
+      "scrollable": false,
+      "cv_confidence": 0.0
+    },
+    {
+      "id": 13,
+      "bounds": [
+        198,
+        408,
+        860,
+        540
+      ],
+      "center": [
+        529,
+        474
+      ],
+      "category": "",
+      "text": "221240051@smail.nju.edu.cn",
+      "resource_id": "com.google.android.gm:id/peoplekit_chip",
+      "class": "android.widget.Button",
+      "content_desc": "221240051@smail.nju.edu.cn, 221240051@smail.nju.edu.cn",
+      "clickable": true,
+      "scrollable": false,
+      "cv_confidence": 0.0
+    },
+    {
+      "id": 14,
+      "bounds": [
+        0,
+        397,
+        114,
+        551
+      ],
+      "center": [
+        57,
+        474
+      ],
+      "category": "",
+      "text": "To",
+      "resource_id": "com.google.android.gm:id/to_prefix_text",
+      "class": "android.widget.TextView",
+      "content_desc": "",
+      "clickable": false,
+      "scrollable": false,
+      "cv_confidence": 0.0
+    },
+    {
+      "id": 15,
+      "bounds": [
+        926,
+        397,
+        1080,
+        551
+      ],
+      "center": [
+        1003,
+        474
+      ],
+      "category": "",
+      "text": "",
+      "resource_id": "com.google.android.gm:id/add_cc_bcc",
+      "class": "android.widget.ImageView",
+      "content_desc": "Add Cc/Bcc",
+      "clickable": true,
+      "scrollable": false,
+      "cv_confidence": 0.0
+    },
+    {
+      "id": 16,
+      "bounds": [
+        44,
+        552,
+        1036,
+        713
+      ],
+      "center": [
+        540,
+        632
+      ],
+      "category": "",
+      "text": "Meeting on 2026-03-18 14:00",
+      "resource_id": "com.google.android.gm:id/subject",
+      "class": "android.widget.EditText",
+      "content_desc": "",
+      "clickable": true,
+      "scrollable": false,
+      "cv_confidence": 0.0
+    },
+    {
+      "id": 17,
+      "bounds": [
+        44,
+        758,
+        1037,
+        818
+      ],
+      "center": [
+        540,
+        788
+      ],
+      "category": "",
+      "text": "Compose email",
+      "resource_id": "",
+      "class": "android.widget.EditText",
+      "content_desc": "",
+      "clickable": false,
+      "scrollable": false,
+      "cv_confidence": 0.0
+    },
+    {
+      "id": 18,
+      "bounds": [
+        0,
+        868,
+        1080,
+        2154
+      ],
+      "center": [
+        540,
+        1511
+      ],
+      "category": "",
+      "text": "",
+      "resource_id": "com.google.android.gm:id/composearea_tap_trap_bottom",
+      "class": "android.view.View",
+      "content_desc": "",
+      "clickable": true,
+      "scrollable": false,
+      "cv_confidence": 0.0
+    }
+  ]
+}

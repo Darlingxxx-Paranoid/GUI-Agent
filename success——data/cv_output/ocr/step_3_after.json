@@ -1,0 +1,69 @@
+{
+    "img_shape": [
+        2220,
+        1080,
+        3
+    ],
+    "texts": [
+        {
+            "id": 0,
+            "content": "V…",
+            "column_min": 840,
+            "row_min": 72,
+            "column_max": 1059,
+            "row_max": 129,
+            "width": 219,
+            "height": 57
+        },
+        {
+            "id": 1,
+            "content": "From qinchenjiang17@gmail.com",
+            "column_min": 0,
+            "row_min": 236,
+            "column_max": 749,
+            "row_max": 298,
+            "width": 749,
+            "height": 62
+        },
+        {
+            "id": 2,
+            "content": "To",
+            "column_min": 0,
+            "row_min": 400,
+            "column_max": 63,
+            "row_max": 458,
+            "width": 63,
+            "height": 58
+        },
+        {
+            "id": 3,
+            "content": "221240051@smail.nju.edu.cn",
+            "column_min": 282,
+            "row_min": 404,
+            "column_max": 846,
+            "row_max": 462,
+            "width": 564,
+            "height": 58
+        },
+        {
+            "id": 4,
+            "content": "Subject",
+            "column_min": 0,
+            "row_min": 691,
+            "column_max": 196,
+            "row_max": 766,
+            "width": 196,
+            "height": 75
+        },
+        {
+            "id": 5,
+            "content": "Compose email",
+            "column_min": 0,
+            "row_min": 853,
+            "column_max": 375,
+            "row_max": 930,
+            "width": 375,
+            "height": 77
+        }
+    ]
+}

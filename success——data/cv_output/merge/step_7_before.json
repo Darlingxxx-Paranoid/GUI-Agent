@@ -1,0 +1,276 @@
+{
+    "compos": [
+        {
+            "id": 1,
+            "class": "Compo",
+            "height": 10,
+            "width": 28,
+            "position": {
+                "column_min": 31,
+                "row_min": 116,
+                "column_max": 59,
+                "row_max": 126
+            }
+        },
+        {
+            "id": 5,
+            "class": "Compo",
+            "height": 11,
+            "width": 17,
+            "position": {
+                "column_min": 337,
+                "row_min": 168,
+                "column_max": 354,
+                "row_max": 179
+            }
+        },
+        {
+            "id": 4,
+            "class": "Combined",
+            "height": 11,
+            "width": 31,
+            "position": {
+                "column_min": 305,
+                "row_min": 168,
+                "column_max": 336,
+                "row_max": 179
+            }
+        },
+        {
+            "id": 6,
+            "class": "Compo",
+            "height": 12,
+            "width": 81,
+            "position": {
+                "column_min": 100,
+                "row_min": 177,
+                "column_max": 181,
+                "row_max": 189
+            }
+        },
+        {
+            "id": 11,
+            "class": "Combined",
+            "height": 13,
+            "width": 46,
+            "position": {
+                "column_min": 71,
+                "row_min": 599,
+                "column_max": 117,
+                "row_max": 612
+            },
+            "parent": 12
+        },
+        {
+            "id": 13,
+            "class": "Combined",
+            "height": 15,
+            "width": 37,
+            "position": {
+                "column_min": 132,
+                "row_min": 600,
+                "column_max": 169,
+                "row_max": 615
+            },
+            "parent": 12
+        },
+        {
+            "id": 14,
+            "class": "Compo",
+            "height": 10,
+            "width": 20,
+            "position": {
+                "column_min": 338,
+                "row_min": 602,
+                "column_max": 358,
+                "row_max": 612
+            }
+        },
+        {
+            "id": 15,
+            "class": "Compo",
+            "height": 10,
+            "width": 10,
+            "position": {
+                "column_min": 362,
+                "row_min": 602,
+                "column_max": 372,
+                "row_max": 612
+            }
+        },
+        {
+            "id": 17,
+            "class": "Compo",
+            "height": 35,
+            "width": 40,
+            "position": {
+                "column_min": 15,
+                "row_min": 694,
+                "column_max": 55,
+                "row_max": 729
+            }
+        },
+        {
+            "id": 18,
+            "class": "Compo",
+            "height": 13,
+            "width": 32,
+            "position": {
+                "column_min": 104,
+                "row_min": 697,
+                "column_max": 136,
+                "row_max": 710
+            }
+        },
+        {
+            "id": 20,
+            "class": "Compo",
+            "height": 16,
+            "width": 21,
+            "position": {
+                "column_min": 266,
+                "row_min": 744,
+                "column_max": 287,
+                "row_max": 760
+            }
+        },
+        {
+            "id": 10,
+            "class": "Combined",
+            "height": 84,
+            "width": 329,
+            "position": {
+                "column_min": 59,
+                "row_min": 505,
+                "column_max": 388,
+                "row_max": 589
+            },
+            "text_content": "Dify Dify Raises $3OM, Human Input Node, Te Hi Dify Builders, It's been a busy couple. Mar 14"
+        },
+        {
+            "id": 19,
+            "class": "Text",
+            "height": 10,
+            "width": 29,
+            "position": {
+                "column_min": 138,
+                "row_min": 700,
+                "column_max": 167,
+                "row_max": 710
+            }
+        },
+        {
+            "id": 16,
+            "class": "Combined",
+            "height": 48,
+            "width": 87,
+            "position": {
+                "column_min": 285,
+                "row_min": 682,
+                "column_max": 372,
+                "row_max": 730
+            },
+            "text_content": "Compose"
+        },
+        {
+            "id": 0,
+            "class": "Combined",
+            "height": 36,
+            "width": 111,
+            "position": {
+                "column_min": 54,
+                "row_min": 5,
+                "column_max": 165,
+                "row_max": 41
+            },
+            "text_content": "Search in mail"
+        },
+        {
+            "id": 2,
+            "class": "Text",
+            "height": 37,
+            "width": 200,
+            "position": {
+                "column_min": 61,
+                "row_min": 143,
+                "column_max": 261,
+                "row_max": 180
+            },
+            "text_content": "Tap a sender image to select\nthat conversation."
+        },
+        {
+            "id": 3,
+            "class": "Text",
+            "height": 16,
+            "width": 57,
+            "position": {
+                "column_min": 312,
+                "row_min": 154,
+                "column_max": 369,
+                "row_max": 170
+            },
+            "text_content": "Dismiss"
+        },
+        {
+            "id": 7,
+            "class": "Text",
+            "height": 43,
+            "width": 274,
+            "position": {
+                "column_min": 62,
+                "row_min": 230,
+                "column_max": 336,
+                "row_max": 273
+            },
+            "text_content": "Try notifications for only your high\npriority emails"
+        },
+        {
+            "id": 8,
+            "class": "Text",
+            "height": 41,
+            "width": 301,
+            "position": {
+                "column_min": 61,
+                "row_min": 280,
+                "column_max": 362,
+                "row_max": 321
+            },
+            "text_content": "You can change your preference in Settings at any time"
+        },
+        {
+            "id": 9,
+            "class": "Text",
+            "height": 71,
+            "width": 328,
+            "position": {
+                "column_min": 61,
+                "row_min": 415,
+                "column_max": 389,
+                "row_max": 486
+            },
+            "text_content": "Google\n\u5b89\u5168\u63d0\u9192\n\u5728 Android\u8bbe\u5907\u4e0a\u6709\u65b0\u7684\u767b\u5f55\u6d3b\u52a8 qinche..\nMar 17"
+        },
+        {
+            "id": 12,
+            "class": "Combined",
+            "height": 90,
+            "width": 274,
+            "position": {
+                "column_min": 61,
+                "row_min": 600,
+                "column_max": 335,
+                "row_max": 690
+            },
+            "text_content": "Notion Export\n\u4f60\u7684 Notion \u5bfc\u51fa\u5df2\u51c6\u5907\u5c31\u7eea\n\u4f60\u7684 Notion \u5bfc\u51fa\u5df2\u51c6\u5907\u5c31\u7eea \u70b9\u51fb\u6b64\u5904\u4e0b.",
+            "children": [
+                11,
+                13
+            ]
+        }
+    ],
+    "img_shape": [
+        800,
+        389,
+        3
+    ]
+}
