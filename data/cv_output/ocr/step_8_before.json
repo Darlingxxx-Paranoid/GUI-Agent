@@ -1,0 +1,79 @@
+{
+    "img_shape": [
+        2220,
+        1080,
+        3
+    ],
+    "texts": [
+        {
+            "id": 0,
+            "content": "From",
+            "column_min": 0,
+            "row_min": 242,
+            "column_max": 111,
+            "row_max": 290,
+            "width": 111,
+            "height": 48
+        },
+        {
+            "id": 1,
+            "content": "qinchenjiang17@gmail.com",
+            "column_min": 159,
+            "row_min": 228,
+            "column_max": 751,
+            "row_max": 293,
+            "width": 592,
+            "height": 65
+        },
+        {
+            "id": 2,
+            "content": "221240051@smail.nju.edu.cn",
+            "column_min": 279,
+            "row_min": 395,
+            "column_max": 854,
+            "row_max": 446,
+            "width": 575,
+            "height": 51
+        },
+        {
+            "id": 3,
+            "content": "To",
+            "column_min": 0,
+            "row_min": 402,
+            "column_max": 53,
+            "row_max": 454,
+            "width": 53,
+            "height": 52
+        },
+        {
+            "id": 4,
+            "content": "Hi,",
+            "column_min": 150,
+            "row_min": 542,
+            "column_max": 223,
+            "row_max": 600,
+            "width": 73,
+            "height": 58
+        },
+        {
+            "id": 5,
+            "content": "Add recipient",
+            "column_min": 149,
+            "row_min": 666,
+            "column_max": 450,
+            "row_max": 727,
+            "width": 301,
+            "height": 61
+        },
+        {
+            "id": 6,
+            "content": "Hi,",
+            "column_min": 149,
+            "row_min": 740,
+            "column_max": 205,
+            "row_max": 786,
+            "width": 56,
+            "height": 46
+        }
+    ]
+}

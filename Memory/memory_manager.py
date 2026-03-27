@@ -101,12 +101,20 @@ class MemoryManager:
             logger.debug("未找到匹配经验, 最高相似度=%.3f", best_score)
             return None
 
-    def save_experience(self, task_description: str, action_sequence: List[Dict], success: bool):
+    def save_experience(
+        self,
+        task_description: str,
+        action_sequence: List[Dict],
+        success: bool,
+        metadata: Optional[Dict[str, Any]] = None,
+    ):
         """将当前Task的执行经验沉淀到长期记忆"""
         record = ExperienceRecord(
             task_description=task_description,
             action_sequence=action_sequence,
             success=success,
+            metadata=metadata or {},
+            schema_version=2,
         )
         self.experience_store.add(record)
         logger.info("经验已沉淀: success=%s, actions=%d", success, len(action_sequence))

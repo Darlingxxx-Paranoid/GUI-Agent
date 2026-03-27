@@ -1,0 +1,183 @@
+{
+    "compos": [
+        {
+            "id": 3,
+            "class": "Compo",
+            "height": 12,
+            "width": 17,
+            "position": {
+                "column_min": 15,
+                "row_min": 165,
+                "column_max": 32,
+                "row_max": 177
+            }
+        },
+        {
+            "id": 9,
+            "class": "Compo",
+            "height": 38,
+            "width": 28,
+            "position": {
+                "column_min": 105,
+                "row_min": 705,
+                "column_max": 133,
+                "row_max": 743
+            }
+        },
+        {
+            "id": 10,
+            "class": "Compo",
+            "height": 36,
+            "width": 146,
+            "position": {
+                "column_min": 137,
+                "row_min": 711,
+                "column_max": 283,
+                "row_max": 747
+            }
+        },
+        {
+            "id": 13,
+            "class": "Combined",
+            "height": 11,
+            "width": 29,
+            "position": {
+                "column_min": 15,
+                "row_min": 720,
+                "column_max": 44,
+                "row_max": 731
+            }
+        },
+        {
+            "id": 11,
+            "class": "Compo",
+            "height": 16,
+            "width": 16,
+            "position": {
+                "column_min": 70,
+                "row_min": 719,
+                "column_max": 86,
+                "row_max": 735
+            }
+        },
+        {
+            "id": 12,
+            "class": "Compo",
+            "height": 14,
+            "width": 20,
+            "position": {
+                "column_min": 344,
+                "row_min": 719,
+                "column_max": 364,
+                "row_max": 733
+            }
+        },
+        {
+            "id": 2,
+            "class": "Compo",
+            "height": 21,
+            "width": 3,
+            "position": {
+                "column_min": 70,
+                "row_min": 160,
+                "column_max": 73,
+                "row_max": 181
+            }
+        },
+        {
+            "id": 4,
+            "class": "Compo",
+            "height": 8,
+            "width": 12,
+            "position": {
+                "column_min": 354,
+                "row_min": 167,
+                "column_max": 366,
+                "row_max": 175
+            }
+        },
+        {
+            "id": 5,
+            "class": "Text",
+            "height": 28,
+            "width": 70,
+            "position": {
+                "column_min": 0,
+                "row_min": 201,
+                "column_max": 70,
+                "row_max": 229
+            },
+            "text_content": "Subject"
+        },
+        {
+            "id": 6,
+            "class": "Text",
+            "height": 28,
+            "width": 134,
+            "position": {
+                "column_min": 0,
+                "row_min": 261,
+                "column_max": 134,
+                "row_max": 289
+            },
+            "text_content": "Compose email"
+        },
+        {
+            "id": 0,
+            "class": "Combined",
+            "height": 64,
+            "width": 365,
+            "position": {
+                "column_min": 0,
+                "row_min": 45,
+                "column_max": 365,
+                "row_max": 109
+            },
+            "text_content": "From qinchenjiang17@gmaill.com"
+        },
+        {
+            "id": 1,
+            "class": "Combined",
+            "height": 58,
+            "width": 263,
+            "position": {
+                "column_min": 0,
+                "row_min": 108,
+                "column_max": 263,
+                "row_max": 166
+            },
+            "text_content": "To"
+        },
+        {
+            "id": 7,
+            "class": "Combined",
+            "height": 108,
+            "width": 381,
+            "position": {
+                "column_min": 3,
+                "row_min": 515,
+                "column_max": 384,
+                "row_max": 623
+            },
+            "text_content": "\u81ea\u3002\nGIF\n2 W 3 \u00e9\n6 y"
+        },
+        {
+            "id": 8,
+            "class": "Combined",
+            "height": 87,
+            "width": 353,
+            "position": {
+                "column_min": 16,
+                "row_min": 605,
+                "column_max": 369,
+                "row_max": 692
+            },
+            "text_content": "a"
+        }
+    ],
+    "img_shape": [
+        800,
+        389,
+        3
+    ]
+}

@@ -1,0 +1,125 @@
+{
+  "subgoal": "Tap the message body area to move focus away from the To field (so we can access the Subject field next).",
+  "acceptance_criteria": "The To field (recipient chip) is no longer focused and the cursor/focus moves to the compose area (subject/body becomes accessible).",
+  "old_screenshot_path": "/Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/screenshots/step_5_before.png",
+  "new_screenshot_path": "/Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/screenshots/step_5_after.png",
+  "constraint_evidence": {
+    "old_package": "com.google.android.gm",
+    "new_package": "com.google.android.gm",
+    "old_activity": "com.google.android.gm/.ComposeActivityGmail",
+    "new_activity": "com.google.android.gm/.ComposeActivityGmail",
+    "expected_activity": "",
+    "expected_activity_matched": false,
+    "require_ui_change": true,
+    "ui_changed": true,
+    "widget_should_exist": [],
+    "missing_widget_should_exist": [],
+    "widget_should_vanish": [],
+    "present_widget_should_vanish": [],
+    "support_hits": [
+      "focus:keyboard_visible"
+    ],
+    "support_score": 0.8,
+    "min_support_score": 0.5,
+    "state_reasons": [
+      "source_state=form 未明显退出"
+    ],
+    "action_context": {
+      "action_type": "tap",
+      "widget_id": 19,
+      "target_widget_text": "",
+      "target_resource_id": "com.google.android.gm:id/compose",
+      "target_class_name": "android.widget.ScrollView",
+      "target_content_desc": "",
+      "target_bounds": [
+        0,
+        242,
+        1080,
+        1398
+      ],
+      "text_preview": "",
+      "description": "点击 'com.google.android.gm:id/compose'"
+    },
+    "input_validation": null,
+    "focus_validation": {
+      "applicable": true,
+      "ok": true,
+      "decisive_success": false,
+      "status": "keyboard_visible",
+      "old_focus": false,
+      "new_focus": false,
+      "old_keyboard": true,
+      "new_keyboard": true,
+      "reason": ""
+    },
+    "hard_violations": []
+  },
+  "llm_result": {
+    "success": false,
+    "reason": "Still on Gmail compose screen with keyboard visible and one editable widget focused; the UI continues to show the To/recipient area (chip group and 'Add recipient') without any clear indication that focus moved into the subject/body compose area. No semantic focus shift away from the To field is evident.",
+    "before_summary": {
+      "page_type": "gmail_compose",
+      "key_elements": [
+        "Navigate up",
+        "Send",
+        "Attach",
+        "More options",
+        "From",
+        "To/recipient chips",
+        "compose scroll area"
+      ],
+      "interaction_state": [
+        "keyboard_visible",
+        "one_editable_focused"
+      ],
+      "entities": [
+        "codex.test@example.com",
+        "qinchenjiang17@gmail.com"
+      ]
+    },
+    "after_summary": {
+      "page_type": "gmail_compose",
+      "key_elements": [
+        "Navigate up",
+        "Send",
+        "Attach",
+        "More options",
+        "From",
+        "To/recipient chips",
+        "Add recipient",
+        "compose scroll area"
+      ],
+      "interaction_state": [
+        "keyboard_visible",
+        "one_editable_focused"
+      ],
+      "entities": [
+        "codex.test@example.com",
+        "qinchenjiang17@gmail.com"
+      ]
+    },
+    "delta_summary": {
+      "notable_changes": [
+        "Minor reflow/redisplay of To area text (e.g., 'Add recipient' appears as separate text), but no clear transition to subject/body focus"
+      ],
+      "direction": "unclear"
+    },
+    "evidence_used": {
+      "hard_violations": [],
+      "supporting_hits": [
+        "focus:keyboard_visible"
+      ],
+      "suspicious_signals": [
+        "state_reasons: source_state=form 未明显退出",
+        "Focused editable widget count unchanged (1) with no indication focus moved from To to body/subject"
+      ]
+    }
+  },
+  "raw_response": "```json\n{\n  \"success\": false,\n  \"reason\": \"Still on Gmail compose screen with keyboard visible and one editable widget focused; the UI continues to show the To/recipient area (chip group and 'Add recipient') without any clear indication that focus moved into the subject/body compose area. No semantic focus shift away from the To field is evident.\",\n  \"before_summary\": {\n    \"page_type\": \"gmail_compose\",\n    \"key_elements\": [\"Navigate up\", \"Send\", \"Attach\", \"More options\", \"From\", \"To/recipient chips\", \"compose scroll area\"],\n    \"interaction_state\": [\"keyboard_visible\", \"one_editable_focused\"],\n    \"entities\": [\"codex.test@example.com\", \"qinchenjiang17@gmail.com\"]\n  },\n  \"after_summary\": {\n    \"page_type\": \"gmail_compose\",\n    \"key_elements\": [\"Navigate up\", \"Send\", \"Attach\", \"More options\", \"From\", \"To/recipient chips\", \"Add recipient\", \"compose scroll area\"],\n    \"interaction_state\": [\"keyboard_visible\", \"one_editable_focused\"],\n    \"entities\": [\"codex.test@example.com\", \"qinchenjiang17@gmail.com\"]\n  },\n  \"delta_summary\": {\n    \"notable_changes\": [\"Minor reflow/redisplay of To area text (e.g., 'Add recipient' appears as separate text), but no clear transition to subject/body focus\"],\n    \"direction\": \"unclear\"\n  },\n  \"evidence_used\": {\n    \"hard_violations\": [],\n    \"supporting_hits\": [\"focus:keyboard_visible\"],\n    \"suspicious_signals\": [\"state_reasons: source_state=form 未明显退出\", \"Focused editable widget count unchanged (1) with no indication focus moved from To to body/subject\"]\n  }\n}\n```",
+  "final": {
+    "success": false,
+    "reason": "Still on Gmail compose screen with keyboard visible and one editable widget focused; the UI continues to show the To/recipient area (chip group and 'Add recipient') without any clear indication that focus moved into the subject/body compose area. No semantic focus shift away from the To field is evident.",
+    "constraint_passed": true,
+    "semantic_passed": false
+  }
+}

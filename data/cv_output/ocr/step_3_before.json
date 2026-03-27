@@ -1,0 +1,109 @@
+{
+    "img_shape": [
+        2220,
+        1080,
+        3
+    ],
+    "texts": [
+        {
+            "id": 0,
+            "content": "From qinchenjiang17@gmaill.com",
+            "column_min": 0,
+            "row_min": 237,
+            "column_max": 748,
+            "row_max": 303,
+            "width": 748,
+            "height": 66
+        },
+        {
+            "id": 1,
+            "content": "To",
+            "column_min": 0,
+            "row_min": 404,
+            "column_max": 68,
+            "row_max": 461,
+            "width": 68,
+            "height": 57
+        },
+        {
+            "id": 2,
+            "content": "Subject",
+            "column_min": 0,
+            "row_min": 558,
+            "column_max": 197,
+            "row_max": 637,
+            "width": 197,
+            "height": 79
+        },
+        {
+            "id": 3,
+            "content": "Compose email",
+            "column_min": 0,
+            "row_min": 727,
+            "column_max": 373,
+            "row_max": 804,
+            "width": 373,
+            "height": 77
+        },
+        {
+            "id": 4,
+            "content": "自。",
+            "column_min": 478,
+            "row_min": 1479,
+            "column_max": 719,
+            "row_max": 1569,
+            "width": 241,
+            "height": 90
+        },
+        {
+            "id": 5,
+            "content": "GIF",
+            "column_min": 313,
+            "row_min": 1495,
+            "column_max": 393,
+            "row_max": 1545,
+            "width": 80,
+            "height": 50
+        },
+        {
+            "id": 6,
+            "content": "2 W 3 é",
+            "column_min": 94,
+            "row_min": 1617,
+            "column_max": 288,
+            "row_max": 1708,
+            "width": 194,
+            "height": 91
+        },
+        {
+            "id": 7,
+            "content": "6 y",
+            "column_min": 546,
+            "row_min": 1630,
+            "column_max": 624,
+            "row_max": 1731,
+            "width": 78,
+            "height": 101
+        },
+        {
+            "id": 8,
+            "content": "a",
+            "column_min": 46,
+            "row_min": 1805,
+            "column_max": 98,
+            "row_max": 1866,
+            "width": 52,
+            "height": 61
+        },
+        {
+            "id": 9,
+            "content": "P123",
+            "column_min": 0,
+            "row_min": 2109,
+            "column_max": 86,
+            "row_max": 2163,
+            "width": 86,
+            "height": 54
+        }
+    ]
+}

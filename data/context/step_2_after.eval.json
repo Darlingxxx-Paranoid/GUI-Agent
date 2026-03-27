@@ -1,0 +1,152 @@
+{
+  "subgoal": "Enter the recipient email address in the To field",
+  "acceptance_criteria": "The To field shows a recipient chip for codex.test@example.com (separate from subject/body), and autocomplete suggestions may appear below",
+  "old_screenshot_path": "/Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/screenshots/step_2_before.png",
+  "new_screenshot_path": "/Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/screenshots/step_2_after.png",
+  "constraint_evidence": {
+    "old_package": "com.google.android.gm",
+    "new_package": "com.google.android.gm",
+    "old_activity": "com.google.android.gm/.ComposeActivityGmail",
+    "new_activity": "com.google.android.gm/.ComposeActivityGmail",
+    "expected_activity": "",
+    "expected_activity_matched": false,
+    "require_ui_change": true,
+    "ui_changed": true,
+    "widget_should_exist": [],
+    "missing_widget_should_exist": [],
+    "widget_should_vanish": [],
+    "present_widget_should_vanish": [],
+    "support_hits": [
+      "text:codex.test@example.com",
+      "widget:codex.test@example.comCodex Ph"
+    ],
+    "support_score": 2.0,
+    "min_support_score": 0.5,
+    "state_reasons": [
+      "target_state=form 命中: editable_count=1, focused_editable=1, keyboard_visible=True",
+      "source_state=form 未明显退出"
+    ],
+    "action_context": {
+      "action_type": "input",
+      "widget_id": 9,
+      "target_widget_text": "codex.test@example.comCodex Phase1 Input Testcodex.test@example.comcodex.test@example.comLine one. Line two.",
+      "target_resource_id": "",
+      "target_class_name": "android.widget.EditText",
+      "target_content_desc": "",
+      "target_bounds": [
+        198,
+        408,
+        948,
+        540
+      ],
+      "text_preview": "codex.test@example.com",
+      "description": "在 'codex.test@example.comCodex Phase1 Input Testcodex.test@example.comcodex.test@example.comLine one. Line two.' 中输入 'codex.test@example.com'"
+    },
+    "input_validation": {
+      "ok": true,
+      "mode": "target_stable",
+      "strict_target": true,
+      "target_scope_found": true,
+      "required_hits": 1,
+      "fragments": [
+        "codex.test@example.com",
+        "codex",
+        "test",
+        "example"
+      ],
+      "old_hits": [
+        "codex.test@example.com",
+        "codex",
+        "test",
+        "example"
+      ],
+      "new_hits": [],
+      "effective_new_hits": [],
+      "old_target_hits": [
+        "codex.test@example.com",
+        "codex",
+        "test",
+        "example"
+      ],
+      "all_target_hits": [
+        "codex.test@example.com",
+        "codex",
+        "test",
+        "example"
+      ],
+      "new_target_hits": [],
+      "target_old_texts": [
+        "codex.test@example.comCodex Phase1 Input Testcodex.test@example.comcodex.test@example.comLine one. Line two."
+      ],
+      "target_new_texts": [
+        "codex.test@example.comCodex Phase1 Input Testcodex.test@example.comcodex.test@example.comLine one. Line two.codex.test@example.com"
+      ],
+      "reason": ""
+    },
+    "focus_validation": null,
+    "hard_violations": []
+  },
+  "llm_result": {
+    "success": false,
+    "reason": "The compose screen remained in the same state and the focused editable field’s text only had the email appended to an existing long string; there is no clear To-field recipient chip created for codex.test@example.com as required.",
+    "before_summary": {
+      "page_type": "gmail_compose",
+      "key_elements": [
+        "Send",
+        "From",
+        "To",
+        "peoplekit_autocomplete_chip_group",
+        "autocomplete_results_list"
+      ],
+      "interaction_state": [
+        "keyboard_visible",
+        "input_focused"
+      ],
+      "entities": [
+        "qinchenjiang17@gmail.com",
+        "codex.test@example.com (present in focused field text)"
+      ]
+    },
+    "after_summary": {
+      "page_type": "gmail_compose",
+      "key_elements": [
+        "Send",
+        "From",
+        "To",
+        "peoplekit_autocomplete_chip_group",
+        "autocomplete_results_list"
+      ],
+      "interaction_state": [
+        "keyboard_visible",
+        "input_focused"
+      ],
+      "entities": [
+        "qinchenjiang17@gmail.com",
+        "codex.test@example.com (appended in focused field text)"
+      ]
+    },
+    "delta_summary": {
+      "notable_changes": [
+        "Focused editable text gained an additional trailing 'codex.test@example.com' but no distinct recipient chip is evidenced"
+      ],
+      "direction": "unclear"
+    },
+    "evidence_used": {
+      "hard_violations": [],
+      "supporting_hits": [
+        "text:codex.test@example.com",
+        "widget:codex.test@example.comCodex Ph"
+      ],
+      "suspicious_signals": [
+        "To field content appears as a single long text blob rather than a separate recipient chip for codex.test@example.com"
+      ]
+    }
+  },
+  "raw_response": "```json\n{\n  \"success\": false,\n  \"reason\": \"The compose screen remained in the same state and the focused editable field’s text only had the email appended to an existing long string; there is no clear To-field recipient chip created for codex.test@example.com as required.\",\n  \"before_summary\": {\n    \"page_type\": \"gmail_compose\",\n    \"key_elements\": [\"Send\", \"From\", \"To\", \"peoplekit_autocomplete_chip_group\", \"autocomplete_results_list\"],\n    \"interaction_state\": [\"keyboard_visible\", \"input_focused\"],\n    \"entities\": [\"qinchenjiang17@gmail.com\", \"codex.test@example.com (present in focused field text)\"]\n  },\n  \"after_summary\": {\n    \"page_type\": \"gmail_compose\",\n    \"key_elements\": [\"Send\", \"From\", \"To\", \"peoplekit_autocomplete_chip_group\", \"autocomplete_results_list\"],\n    \"interaction_state\": [\"keyboard_visible\", \"input_focused\"],\n    \"entities\": [\"qinchenjiang17@gmail.com\", \"codex.test@example.com (appended in focused field text)\"]\n  },\n  \"delta_summary\": {\n    \"notable_changes\": [\"Focused editable text gained an additional trailing 'codex.test@example.com' but no distinct recipient chip is evidenced\"],\n    \"direction\": \"unclear\"\n  },\n  \"evidence_used\": {\n    \"hard_violations\": [],\n    \"supporting_hits\": [\"text:codex.test@example.com\", \"widget:codex.test@example.comCodex Ph\"],\n    \"suspicious_signals\": [\"To field content appears as a single long text blob rather than a separate recipient chip for codex.test@example.com\"]\n  }\n}\n```",
+  "final": {
+    "success": false,
+    "reason": "The compose screen remained in the same state and the focused editable field’s text only had the email appended to an existing long string; there is no clear To-field recipient chip created for codex.test@example.com as required.",
+    "constraint_passed": true,
+    "semantic_passed": false
+  }
+}

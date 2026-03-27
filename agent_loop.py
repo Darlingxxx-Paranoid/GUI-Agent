@@ -166,6 +166,7 @@ class AgentLoop:
             dump_path = self.executor.dump_ui(f"step_{step}.xml")
             activity = self.executor.get_current_activity()
             package = self.executor.get_current_package()
+            keyboard_visible = self.executor.get_keyboard_visible()
 
             ui_state = self.perception.perceive(
                 screenshot_path=screenshot_path,
@@ -173,6 +174,7 @@ class AgentLoop:
                 screen_size=screen_size,
                 activity_name=activity,
                 package_name=package,
+                keyboard_visible=keyboard_visible,
             )
 
         # ========================================
@@ -232,7 +234,7 @@ class AgentLoop:
         if dry_run:
             logger.info("[DRY RUN] 跳过实际执行: %s", action.description)
         else:
-            self._execute_action(action)
+            self._execute_action(action, ui_state)
 
         # 记录动作
         self.oracle_runtime.record_action(action)
@@ -256,6 +258,7 @@ class AgentLoop:
             new_dump = self.executor.dump_ui(f"step_{step}_after.xml")
             new_activity = self.executor.get_current_activity()
             new_package = self.executor.get_current_package()
+            new_keyboard_visible = self.executor.get_keyboard_visible()
 
             new_state = self.perception.perceive(
                 screenshot_path=new_screenshot,
@@ -263,6 +266,7 @@ class AgentLoop:
                 screen_size=screen_size,
                 activity_name=new_activity,
                 package_name=new_package,
+                keyboard_visible=new_keyboard_visible,
             )
 
             # 事中 Oracle 执行后检查
@@ -291,6 +295,7 @@ class AgentLoop:
             constraints=constraints,
             old_state=ui_state,
             new_state=new_state,
+            action=action,
         )
 
         # ========================================
@@ -304,6 +309,13 @@ class AgentLoop:
                 "subgoal": subgoal.description,
                 "action": action.to_dict(),
                 "result": "success",
+                "from_experience": bool(subgoal.from_experience),
+                "acceptance_criteria": subgoal.acceptance_criteria,
+                "expected_transition": subgoal.expected_transition,
+                "eval_reason": eval_result.reason,
+                "activity_after": getattr(new_state, "activity_name", ""),
+                "package_after": getattr(new_state, "package_name", ""),
+                "keyboard_visible_after": bool(getattr(new_state, "keyboard_visible", False)),
             })
         else:
             logger.warning("✗ 子目标失败: '%s', 原因: %s", subgoal.description, eval_result.reason)
@@ -321,6 +333,13 @@ class AgentLoop:
                 "action": action.to_dict(),
                 "result": f"failed: {eval_result.reason}",
                 "replan_decision": decision.action,
+                "from_experience": bool(subgoal.from_experience),
+                "acceptance_criteria": subgoal.acceptance_criteria,
+                "expected_transition": subgoal.expected_transition,
+                "eval_reason": eval_result.reason,
+                "activity_after": getattr(new_state, "activity_name", ""),
+                "package_after": getattr(new_state, "package_name", ""),
+                "keyboard_visible_after": bool(getattr(new_state, "keyboard_visible", False)),
             })
 
             if decision.action == "back" and not dry_run:
@@ -336,16 +355,19 @@ class AgentLoop:
 
         return {"task_completed": False}
 
-    def _execute_action(self, action):
+    def _execute_action(self, action, current_state=None):
         """根据 Action 类型执行对应的 ADB 命令"""
         if action.action_type == "tap":
             self.executor.tap(action.x, action.y)
 
         elif action.action_type == "input":
-            # 先点击聚焦
-            self.executor.tap(action.x, action.y)
-            import time as _time
-            _time.sleep(0.5)
+            # 仅在未就绪时才预点击，避免打断已聚焦输入域
+            if not self._is_input_target_ready(action, current_state):
+                self.executor.tap(action.x, action.y)
+                import time as _time
+                _time.sleep(0.5)
+            else:
+                logger.info("输入目标已聚焦且键盘可见，跳过预点击")
             self.executor.input_text(action.text)
 
         elif action.action_type == "swipe":
@@ -366,3 +388,37 @@ class AgentLoop:
         else:
             logger.warning("未知动作类型: %s, 尝试作为 tap 执行", action.action_type)
             self.executor.tap(action.x, action.y)
+
+    def _is_input_target_ready(self, action, ui_state) -> bool:
+        """判断目标输入域是否已可直接输入。"""
+        if ui_state is None:
+            return False
+        if not getattr(ui_state, "keyboard_visible", False):
+            return False
+
+        widgets = getattr(ui_state, "widgets", [])
+        target_bounds = tuple(getattr(action, "target_bounds", ()) or (0, 0, 0, 0))
+
+        for widget in widgets:
+            same_target = False
+            if action.target_resource_id and action.target_resource_id == getattr(widget, "resource_id", ""):
+                same_target = True
+            elif action.widget_id is not None and action.widget_id == getattr(widget, "widget_id", None):
+                same_target = True
+            elif target_bounds != (0, 0, 0, 0) and self._bounds_overlap(target_bounds, getattr(widget, "bounds", (0, 0, 0, 0))):
+                same_target = True
+
+            if same_target and (getattr(widget, "focused", False) or getattr(widget, "editable", False)):
+                return True
+
+        return any(
+            getattr(widget, "focused", False) and (getattr(widget, "editable", False) or getattr(widget, "focusable", False))
+            for widget in widgets
+        )
+
+    def _bounds_overlap(self, box_a: tuple, box_b: tuple) -> bool:
+        if not box_a or not box_b or len(box_a) != 4 or len(box_b) != 4:
+            return False
+        ax1, ay1, ax2, ay2 = box_a
+        bx1, by1, bx2, by2 = box_b
+        return not (ax2 < bx1 or bx2 < ax1 or ay2 < by1 or by2 < ay1)

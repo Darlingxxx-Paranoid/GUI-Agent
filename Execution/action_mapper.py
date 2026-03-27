@@ -25,6 +25,11 @@ class Action:
     y2: int = 0              # 滑动终点 y
     text: str = ""            # 输入文本
     widget_id: Optional[int] = None  # 对应的控件 ID
+    target_widget_text: str = ""
+    target_resource_id: str = ""
+    target_class_name: str = ""
+    target_content_desc: str = ""
+    target_bounds: tuple = (0, 0, 0, 0)
     description: str = ""     # 动作描述
 
     def to_dict(self) -> dict:
@@ -35,7 +40,13 @@ class Action:
             "x2": self.x2,
             "y2": self.y2,
             "text": self.text,
+            "input_text": self.text,
             "widget_id": self.widget_id,
+            "target_widget_text": self.target_widget_text,
+            "target_resource_id": self.target_resource_id,
+            "target_class_name": self.target_class_name,
+            "target_content_desc": self.target_content_desc,
+            "target_bounds": list(self.target_bounds),
             "description": self.description,
         }
 
@@ -70,12 +81,14 @@ class ActionMapper:
         if subgoal.target_widget_id is not None:
             widget = ui_state.find_widget_by_id(subgoal.target_widget_id)
             if widget:
+                widget = self._refine_widget_for_subgoal(subgoal, ui_state, widget)
                 return self._create_action_from_widget(subgoal, widget)
 
         # 尝试通过文本匹配控件
         if subgoal.target_widget_text:
             widget = ui_state.find_widget_by_text(subgoal.target_widget_text)
             if widget:
+                widget = self._refine_widget_for_subgoal(subgoal, ui_state, widget)
                 logger.info("通过文本匹配到控件: id=%d, text='%s'", widget.widget_id, widget.text)
                 return self._create_action_from_widget(subgoal, widget)
 
@@ -93,6 +106,11 @@ class ActionMapper:
                 x=cx, y=cy,
                 text=subgoal.input_text,
                 widget_id=widget.widget_id,
+                target_widget_text=widget.text,
+                target_resource_id=widget.resource_id,
+                target_class_name=widget.class_name,
+                target_content_desc=widget.content_desc,
+                target_bounds=widget.bounds,
                 description=f"在 '{widget.text or widget.resource_id}' 中输入 '{subgoal.input_text}'",
             )
         elif action_type in ("scroll_up", "swipe_up"):
@@ -101,6 +119,11 @@ class ActionMapper:
                 x=cx, y=cy + 200,
                 x2=cx, y2=cy - 200,
                 widget_id=widget.widget_id,
+                target_widget_text=widget.text,
+                target_resource_id=widget.resource_id,
+                target_class_name=widget.class_name,
+                target_content_desc=widget.content_desc,
+                target_bounds=widget.bounds,
                 description=f"在 '{widget.text or widget.resource_id}' 上向上滑动",
             )
         elif action_type in ("scroll_down", "swipe_down"):
@@ -109,6 +132,11 @@ class ActionMapper:
                 x=cx, y=cy - 200,
                 x2=cx, y2=cy + 200,
                 widget_id=widget.widget_id,
+                target_widget_text=widget.text,
+                target_resource_id=widget.resource_id,
+                target_class_name=widget.class_name,
+                target_content_desc=widget.content_desc,
+                target_bounds=widget.bounds,
                 description=f"在 '{widget.text or widget.resource_id}' 上向下滑动",
             )
         else:
@@ -116,6 +144,11 @@ class ActionMapper:
                 action_type="tap",
                 x=cx, y=cy,
                 widget_id=widget.widget_id,
+                target_widget_text=widget.text,
+                target_resource_id=widget.resource_id,
+                target_class_name=widget.class_name,
+                target_content_desc=widget.content_desc,
+                target_bounds=widget.bounds,
                 description=f"点击 '{widget.text or widget.resource_id}'",
             )
 
@@ -169,6 +202,7 @@ class ActionMapper:
                     action_type=action_type,
                     input_text=input_text,
                 )
+                widget = self._refine_widget_for_subgoal(sub, ui_state, widget)
                 return self._create_action_from_widget(sub, widget)
 
         # 使用屏幕中心作为兜底
@@ -177,5 +211,77 @@ class ActionMapper:
             x=ui_state.screen_width // 2,
             y=ui_state.screen_height // 2,
             text=input_text,
+            target_widget_text=subgoal.target_widget_text,
             description=data.get("reasoning", "LLM映射结果"),
         )
+
+    def _refine_widget_for_subgoal(
+        self,
+        subgoal: SubGoal,
+        ui_state: UIState,
+        widget: WidgetInfo,
+    ) -> WidgetInfo:
+        """针对输入/聚焦子目标，避免点到标签文本而非实际输入域。"""
+        action = (subgoal.action_type or "").lower()
+        desc = (subgoal.description or "").lower()
+        is_focus_like = action in ("input", "tap") and (
+            action == "input"
+            or "focus" in desc
+            or "输入" in desc
+            or "聚焦" in desc
+        )
+        if not is_focus_like:
+            return widget
+
+        if getattr(widget, "editable", False) or getattr(widget, "focused", False):
+            return widget
+
+        candidate = self._find_nearby_editable_widget(widget, ui_state)
+        if candidate and candidate.widget_id != widget.widget_id:
+            logger.info(
+                "聚焦型子目标重定向控件: %s -> %s",
+                widget.widget_id,
+                candidate.widget_id,
+            )
+            return candidate
+        return widget
+
+    def _find_nearby_editable_widget(
+        self,
+        anchor: WidgetInfo,
+        ui_state: UIState,
+    ) -> Optional[WidgetInfo]:
+        """查找与锚点同一行附近的可编辑控件。"""
+        candidates = [
+            w for w in ui_state.widgets
+            if getattr(w, "enabled", True)
+            and (getattr(w, "editable", False) or getattr(w, "focusable", False))
+        ]
+        if not candidates:
+            return None
+
+        best = None
+        best_score = float("-inf")
+        for w in candidates:
+            y_overlap = self._y_overlap_ratio(anchor.bounds, w.bounds)
+            if y_overlap < 0.2:
+                continue
+
+            dx = abs(anchor.center[0] - w.center[0])
+            dy = abs(anchor.center[1] - w.center[1])
+            left_penalty = 250 if w.center[0] + 20 < anchor.center[0] else 0
+            score = y_overlap * 1000 - (dx + dy + left_penalty)
+            if score > best_score:
+                best = w
+                best_score = score
+
+        return best
+
+    def _y_overlap_ratio(self, box_a: tuple, box_b: tuple) -> float:
+        ay1, ay2 = box_a[1], box_a[3]
+        by1, by2 = box_b[1], box_b[3]
+        overlap = max(0, min(ay2, by2) - max(ay1, by1))
+        if overlap <= 0:
+            return 0.0
+        min_height = max(1, min(ay2 - ay1, by2 - by1))
+        return overlap / min_height

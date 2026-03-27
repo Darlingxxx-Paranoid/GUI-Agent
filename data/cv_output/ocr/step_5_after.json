@@ -1,0 +1,119 @@
+{
+    "img_shape": [
+        2220,
+        1080,
+        3
+    ],
+    "texts": [
+        {
+            "id": 0,
+            "content": "From qinchenjiang17@gmail.com",
+            "column_min": 0,
+            "row_min": 232,
+            "column_max": 753,
+            "row_max": 292,
+            "width": 753,
+            "height": 60
+        },
+        {
+            "id": 1,
+            "content": "To",
+            "column_min": 0,
+            "row_min": 389,
+            "column_max": 59,
+            "row_max": 450,
+            "width": 59,
+            "height": 61
+        },
+        {
+            "id": 2,
+            "content": "example.comCodex Phase1 Input Test",
+            "column_min": 150,
+            "row_min": 394,
+            "column_max": 985,
+            "row_max": 482,
+            "width": 835,
+            "height": 88
+        },
+        {
+            "id": 3,
+            "content": "Add recipient",
+            "column_min": 155,
+            "row_min": 538,
+            "column_max": 451,
+            "row_max": 596,
+            "width": 296,
+            "height": 58
+        },
+        {
+            "id": 4,
+            "content": "codex.test@example.comCodex Phase1lput Test",
+            "column_min": 153,
+            "row_min": 602,
+            "column_max": 997,
+            "row_max": 671,
+            "width": 844,
+            "height": 69
+        },
+        {
+            "id": 5,
+            "content": "Test",
+            "column_min": 452,
+            "row_min": 1501,
+            "column_max": 575,
+            "row_max": 1568,
+            "width": 123,
+            "height": 67
+        },
+        {
+            "id": 6,
+            "content": "2 W",
+            "column_min": 81,
+            "row_min": 1624,
+            "column_max": 166,
+            "row_max": 1710,
+            "width": 85,
+            "height": 86
+        },
+        {
+            "id": 7,
+            "content": "6 y",
+            "column_min": 544,
+            "row_min": 1635,
+            "column_max": 619,
+            "row_max": 1731,
+            "width": 75,
+            "height": 96
+        },
+        {
+            "id": 8,
+            "content": "a",
+            "column_min": 34,
+            "row_min": 1804,
+            "column_max": 86,
+            "row_max": 1865,
+            "width": 52,
+            "height": 61
+        },
+        {
+            "id": 9,
+            "content": "123",
+            "column_min": 0,
+            "row_min": 2112,
+            "column_max": 75,
+            "row_max": 2163,
+            "width": 75,
+            "height": 51
+        },
+        {
+            "id": 10,
+            "content": "→I",
+            "column_min": 979,
+            "row_min": 2129,
+            "column_max": 1049,
+            "row_max": 2189,
+            "width": 70,
+            "height": 60
+        }
+    ]
+}

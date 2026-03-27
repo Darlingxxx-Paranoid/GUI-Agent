@@ -33,6 +33,13 @@ class WidgetInfo:
     content_desc: str = ""           # Dump content-desc
     clickable: bool = False
     scrollable: bool = False
+    enabled: bool = True
+    focusable: bool = False
+    focused: bool = False
+    editable: bool = False
+    checkable: bool = False
+    checked: bool = False
+    selected: bool = False
     cv_confidence: float = 0.0       # CV 检测置信度
 
     def to_dict(self) -> dict:
@@ -47,6 +54,13 @@ class WidgetInfo:
             "content_desc": self.content_desc,
             "clickable": self.clickable,
             "scrollable": self.scrollable,
+            "enabled": self.enabled,
+            "focusable": self.focusable,
+            "focused": self.focused,
+            "editable": self.editable,
+            "checkable": self.checkable,
+            "checked": self.checked,
+            "selected": self.selected,
         }
 
     def get_description(self) -> str:
@@ -64,6 +78,16 @@ class WidgetInfo:
             parts.append("clickable")
         if self.scrollable:
             parts.append("scrollable")
+        if self.focusable:
+            parts.append("focusable")
+        if self.focused:
+            parts.append("focused")
+        if self.editable:
+            parts.append("editable")
+        if self.checkable:
+            parts.append("checkable")
+        if not self.enabled:
+            parts.append("disabled")
         parts.append(f"position={self.center}")
         return " ".join(parts)
 
@@ -79,16 +103,22 @@ class UIState:
     package_name: str = ""                   # 当前包名
     screen_width: int = 0
     screen_height: int = 0
+    keyboard_visible: bool = False
     screenshot_path: str = ""                # 对应截图路径
     raw_cv_elements: List[Dict] = field(default_factory=list)  # CV 原始检测结果
 
     def to_prompt_text(self) -> str:
         """生成供 LLM 使用的状态描述文本"""
+        editable_count = sum(1 for w in self.widgets if w.editable)
+        focused_editable_count = sum(1 for w in self.widgets if w.editable and w.focused)
         lines = [
             f"Current Activity: {self.activity_name or 'unknown'}",
             f"Package: {self.package_name or 'unknown'}",
             f"Screen: {self.screen_width}x{self.screen_height}",
+            f"Keyboard Visible: {self.keyboard_visible}",
             f"Widgets Count: {len(self.widgets)}",
+            f"Editable Widgets: {editable_count}",
+            f"Focused Editable Widgets: {focused_editable_count}",
             "--- Widgets List ---",
         ]
         for w in self.widgets:
@@ -97,10 +127,33 @@ class UIState:
 
     def find_widget_by_text(self, text: str) -> Optional[WidgetInfo]:
         """根据文本内容查找控件"""
+        query = (text or "").strip().lower()
+        if not query:
+            return None
+
+        candidates = []
         for w in self.widgets:
-            if text in w.text or text in w.content_desc:
-                return w
-        return None
+            text_hit = query in (w.text or "").lower()
+            desc_hit = query in (w.content_desc or "").lower()
+            if not (text_hit or desc_hit):
+                continue
+            score = 0
+            if text_hit:
+                score += 2
+            if desc_hit:
+                score += 1
+            if w.editable:
+                score += 2
+            if w.focused:
+                score += 2
+            if w.focusable:
+                score += 1
+            candidates.append((score, w))
+
+        if not candidates:
+            return None
+        candidates.sort(key=lambda item: item[0], reverse=True)
+        return candidates[0][1]
 
     def find_widget_by_id(self, widget_id: int) -> Optional[WidgetInfo]:
         """根据 widget_id 查找控件"""
@@ -137,6 +190,7 @@ class ContextBuilder:
         resize_ratio: float = 1.0,
         activity_name: str = "",
         package_name: str = "",
+        keyboard_visible: bool = False,
     ) -> UIState:
         """
         融合 CV 检测结果和 Dump 控件，构建 UIState
@@ -147,6 +201,7 @@ class ContextBuilder:
         :param resize_ratio: CV 检测的缩放比例
         :param activity_name: 当前 Activity 名
         :param package_name: 当前应用包名
+        :param keyboard_visible: 当前软键盘是否可见
         :return: 构建的 UIState
         """
         logger.info(
@@ -176,6 +231,7 @@ class ContextBuilder:
             package_name=package_name,
             screen_width=screen_w,
             screen_height=screen_h,
+            keyboard_visible=keyboard_visible,
             screenshot_path=screenshot_path,
             raw_cv_elements=cv_elements,
         )
@@ -252,6 +308,7 @@ class ContextBuilder:
                 center=(cx, cy),
                 category=cv_elem.get("class", ""),
                 text=cv_elem.get("text_content", ""),
+                editable=self._infer_cv_editable(cv_elem),
             )
 
             # 如果匹配成功，融合 Dump 信息
@@ -261,6 +318,13 @@ class ContextBuilder:
                 widget.class_name = best_dump.class_name
                 widget.clickable = best_dump.clickable
                 widget.scrollable = best_dump.scrollable
+                widget.enabled = best_dump.enabled
+                widget.focusable = best_dump.focusable
+                widget.focused = best_dump.focused
+                widget.editable = best_dump.is_editable
+                widget.checkable = best_dump.checkable
+                widget.checked = best_dump.checked
+                widget.selected = best_dump.selected
                 widget.content_desc = best_dump.content_desc
                 # 优先使用 Dump 文本（更准确）
                 if best_dump.text:
@@ -286,6 +350,13 @@ class ContextBuilder:
                     content_desc=dump_elem.content_desc,
                     clickable=dump_elem.clickable,
                     scrollable=dump_elem.scrollable,
+                    enabled=dump_elem.enabled,
+                    focusable=dump_elem.focusable,
+                    focused=dump_elem.focused,
+                    editable=dump_elem.is_editable,
+                    checkable=dump_elem.checkable,
+                    checked=dump_elem.checked,
+                    selected=dump_elem.selected,
                 )
                 widgets.append(widget)
 
@@ -317,6 +388,9 @@ class ContextBuilder:
                 and not w.resource_id
                 and not w.clickable
                 and not w.scrollable
+                and not w.editable
+                and not w.focusable
+                and not w.checkable
                 and w.category in ("", "Block")
             ):
                 continue
@@ -328,3 +402,8 @@ class ContextBuilder:
             len(widgets), len(filtered), len(widgets) - len(filtered),
         )
         return filtered
+
+    def _infer_cv_editable(self, cv_elem: Dict[str, Any]) -> bool:
+        """当 Dump 未匹配时，从 CV 类别做弱推断，避免丢失输入域语义。"""
+        category = (cv_elem.get("class", "") or "").lower()
+        return "edit" in category or "input" in category or "text field" in category

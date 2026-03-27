@@ -1,0 +1,139 @@
+{
+    "img_shape": [
+        2220,
+        1080,
+        3
+    ],
+    "texts": [
+        {
+            "id": 0,
+            "content": "V .",
+            "column_min": 867,
+            "row_min": 68,
+            "column_max": 1062,
+            "row_max": 128,
+            "width": 195,
+            "height": 60
+        },
+        {
+            "id": 1,
+            "content": "From qinchenjiang17@gmail.com",
+            "column_min": 0,
+            "row_min": 225,
+            "column_max": 751,
+            "row_max": 292,
+            "width": 751,
+            "height": 67
+        },
+        {
+            "id": 2,
+            "content": "To",
+            "column_min": 0,
+            "row_min": 389,
+            "column_max": 59,
+            "row_max": 442,
+            "width": 59,
+            "height": 53
+        },
+        {
+            "id": 3,
+            "content": "codex.test@example.com",
+            "column_min": 158,
+            "row_min": 397,
+            "column_max": 718,
+            "row_max": 459,
+            "width": 560,
+            "height": 62
+        },
+        {
+            "id": 4,
+            "content": "Add recipient",
+            "column_min": 156,
+            "row_min": 535,
+            "column_max": 448,
+            "row_max": 590,
+            "width": 292,
+            "height": 55
+        },
+        {
+            "id": 5,
+            "content": "codex.test@example.com",
+            "column_min": 156,
+            "row_min": 604,
+            "column_max": 583,
+            "row_max": 648,
+            "width": 427,
+            "height": 44
+        },
+        {
+            "id": 6,
+            "content": "GIF",
+            "column_min": 307,
+            "row_min": 1506,
+            "column_max": 389,
+            "row_max": 1557,
+            "width": 82,
+            "height": 51
+        },
+        {
+            "id": 7,
+            "content": "2 W",
+            "column_min": 83,
+            "row_min": 1628,
+            "column_max": 167,
+            "row_max": 1715,
+            "width": 84,
+            "height": 87
+        },
+        {
+            "id": 8,
+            "content": "6 y",
+            "column_min": 543,
+            "row_min": 1638,
+            "column_max": 621,
+            "row_max": 1738,
+            "width": 78,
+            "height": 100
+        },
+        {
+            "id": 9,
+            "content": "ki",
+            "column_min": 806,
+            "row_min": 1787,
+            "column_max": 1022,
+            "row_max": 1901,
+            "width": 216,
+            "height": 114
+        },
+        {
+            "id": 10,
+            "content": "a",
+            "column_min": 39,
+            "row_min": 1810,
+            "column_max": 90,
+            "row_max": 1871,
+            "width": 51,
+            "height": 61
+        },
+        {
+            "id": 11,
+            "content": "123",
+            "column_min": 0,
+            "row_min": 2114,
+            "column_max": 80,
+            "row_max": 2164,
+            "width": 80,
+            "height": 50
+        },
+        {
+            "id": 12,
+            "content": "→I",
+            "column_min": 959,
+            "row_min": 2125,
+            "column_max": 1053,
+            "row_max": 2197,
+            "width": 94,
+            "height": 72
+        }
+    ]
+}

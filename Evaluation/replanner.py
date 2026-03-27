@@ -96,16 +96,82 @@ class Replanner:
         任务结束时沉淀经验
         将正确的动作序列转化为长期记忆
         """
-        actions = self.memory.short_term.action_log
-        if success and actions:
+        history = self.memory.short_term.history
+        semantic_steps = self._build_semantic_steps(history)
+        if success and semantic_steps:
             self.memory.save_experience(
                 task_description=task_description,
-                action_sequence=[a for a in actions],
+                action_sequence=semantic_steps,
                 success=True,
+                metadata={
+                    "source": "replanner.save_task_experience",
+                    "semantic_steps_count": len(semantic_steps),
+                },
             )
-            logger.info("任务经验已沉淀: %d 个动作", len(actions))
+            logger.info("任务经验已沉淀: %d 个语义步骤", len(semantic_steps))
         elif not success:
             logger.info("任务失败, 不沉淀经验")
+
+    def _build_semantic_steps(self, history: list) -> list:
+        """从短期历史构建可复用的语义步骤。"""
+        semantic_steps = []
+        for step in history:
+            if step.get("result") != "success":
+                continue
+            action = step.get("action") or {}
+            action_type = action.get("action_type", "")
+            if not action_type:
+                continue
+
+            target_anchor = {
+                "resource_id": action.get("target_resource_id", "") or "",
+                "widget_text": action.get("target_widget_text", "") or "",
+                "content_desc": action.get("target_content_desc", "") or "",
+                "class_name": action.get("target_class_name", "") or "",
+                "bounds": list(action.get("target_bounds", [0, 0, 0, 0])),
+            }
+            target_field = self._infer_target_field(target_anchor)
+
+            semantic_steps.append(
+                {
+                    "description": step.get("subgoal", "") or action.get("description", ""),
+                    "action_type": action_type,
+                    "input_text": action.get("input_text") or action.get("text", ""),
+                    "target_widget_id": action.get("widget_id"),
+                    "target_widget_text": target_anchor["widget_text"],
+                    "target_anchor": target_anchor,
+                    "target_field": target_field,
+                    "acceptance_criteria": step.get("acceptance_criteria", ""),
+                    "expected_transition": step.get("expected_transition", "partial_refresh"),
+                    "postcondition": {
+                        "reason": step.get("eval_reason", ""),
+                        "activity_after": step.get("activity_after", ""),
+                        "package_after": step.get("package_after", ""),
+                        "keyboard_visible_after": bool(step.get("keyboard_visible_after", False)),
+                    },
+                }
+            )
+
+        return semantic_steps
+
+    def _infer_target_field(self, target_anchor: dict) -> str:
+        """从锚点提取可迁移字段标识。"""
+        candidates = [
+            target_anchor.get("resource_id", ""),
+            target_anchor.get("widget_text", ""),
+            target_anchor.get("content_desc", ""),
+            target_anchor.get("class_name", ""),
+        ]
+        for value in candidates:
+            value = (value or "").strip()
+            if not value:
+                continue
+            if "/" in value:
+                value = value.split("/")[-1]
+            if len(value) > 64:
+                value = value[:64]
+            return value.lower()
+        return ""
 
     def _analyze_with_llm(
         self,

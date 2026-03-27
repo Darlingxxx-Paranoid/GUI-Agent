@@ -17,21 +17,29 @@ class ExperienceRecord:
     def __init__(
         self,
         task_description: str,
-        action_sequence: List[Dict[str, Any]],
         success: bool,
+        action_sequence: Optional[List[Dict[str, Any]]] = None,
         timestamp: float = None,
         metadata: Dict[str, Any] = None,
+        semantic_steps: Optional[List[Dict[str, Any]]] = None,
+        schema_version: int = 1,
     ):
         self.task_description = task_description
-        self.action_sequence = action_sequence
+        self.semantic_steps = semantic_steps if semantic_steps is not None else (action_sequence or [])
+        # 向后兼容：旧逻辑仍通过 action_sequence 访问
+        self.action_sequence = self.semantic_steps
         self.success = success
         self.timestamp = timestamp or time.time()
         self.metadata = metadata or {}
+        self.schema_version = schema_version
 
     def to_dict(self) -> dict:
         return {
             "task_description": self.task_description,
-            "action_sequence": self.action_sequence,
+            "schema_version": self.schema_version,
+            "semantic_steps": self.semantic_steps,
+            # 保留旧字段，便于旧版本读取
+            "action_sequence": self.semantic_steps,
             "success": self.success,
             "timestamp": self.timestamp,
             "metadata": self.metadata,
@@ -39,12 +47,18 @@ class ExperienceRecord:
 
     @classmethod
     def from_dict(cls, data: dict) -> "ExperienceRecord":
+        semantic_steps = data.get("semantic_steps")
+        if semantic_steps is None:
+            semantic_steps = data.get("action_sequence", [])
+
         return cls(
             task_description=data["task_description"],
-            action_sequence=data.get("action_sequence", []),
+            action_sequence=semantic_steps,
             success=data.get("success", False),
             timestamp=data.get("timestamp", 0),
             metadata=data.get("metadata", {}),
+            semantic_steps=semantic_steps,
+            schema_version=int(data.get("schema_version", 1) or 1),
         )
 
 

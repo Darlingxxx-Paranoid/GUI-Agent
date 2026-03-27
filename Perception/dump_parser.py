@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 
 class UIElement:
     """解析后的单个UI控件"""
+    _EDITABLE_CLASS_HINTS = ("edittext", "autocompletetextview", "textinputedittext")
 
     def __init__(
         self,
@@ -24,6 +25,9 @@ class UIElement:
         scrollable: bool = False,
         enabled: bool = True,
         focusable: bool = False,
+        editable: bool = False,
+        focused: bool = False,
+        checkable: bool = False,
         checked: bool = False,
         selected: bool = False,
         package: str = "",
@@ -38,6 +42,9 @@ class UIElement:
         self.scrollable = scrollable
         self.enabled = enabled
         self.focusable = focusable
+        self.editable = editable
+        self.focused = focused
+        self.checkable = checkable
         self.checked = checked
         self.selected = selected
         self.package = package
@@ -65,7 +72,15 @@ class UIElement:
     @property
     def is_interactive(self) -> bool:
         """判断控件是否可交互"""
-        return self.clickable or self.scrollable or self.focusable
+        return self.clickable or self.scrollable or self.focusable or self.checkable
+
+    @property
+    def is_editable(self) -> bool:
+        """判断控件是否为输入类组件"""
+        class_name = (self.class_name or "").lower()
+        if self.editable:
+            return True
+        return any(hint in class_name for hint in self._EDITABLE_CLASS_HINTS)
 
     def to_dict(self) -> dict:
         return {
@@ -78,6 +93,12 @@ class UIElement:
             "clickable": self.clickable,
             "scrollable": self.scrollable,
             "enabled": self.enabled,
+            "focusable": self.focusable,
+            "focused": self.focused,
+            "checkable": self.checkable,
+            "checked": self.checked,
+            "selected": self.selected,
+            "editable": self.is_editable,
         }
 
     def __repr__(self) -> str:
@@ -162,6 +183,9 @@ class DumpParser:
             scrollable=attrib.get("scrollable", "false") == "true",
             enabled=attrib.get("enabled", "true") == "true",
             focusable=attrib.get("focusable", "false") == "true",
+            editable=attrib.get("editable", "false") == "true",
+            focused=attrib.get("focused", "false") == "true",
+            checkable=attrib.get("checkable", "false") == "true",
             checked=attrib.get("checked", "false") == "true",
             selected=attrib.get("selected", "false") == "true",
             package=attrib.get("package", ""),

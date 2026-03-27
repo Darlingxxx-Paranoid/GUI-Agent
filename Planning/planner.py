@@ -71,37 +71,68 @@ class Planner:
         experience = self.memory.search_experience(task)
         if experience:
             logger.info("命中长期记忆经验, 将复用历史动作链路")
-            return self._plan_from_experience(experience)
+            replay_plan = self._plan_from_experience(experience)
+            if replay_plan is not None:
+                return replay_plan
 
         # 第二步：通过 LLM 动态规划
         return self._plan_with_llm(task, ui_state)
 
-    def _plan_from_experience(self, experience) -> PlanResult:
+    def _plan_from_experience(self, experience) -> Optional[PlanResult]:
         """从历史经验中复用动作"""
         if not experience.action_sequence:
             logger.warning("经验记录中动作序列为空, 回退到 LLM 规划")
-            return PlanResult(
-                subgoal=SubGoal(description="经验为空，需要LLM重新规划"),
-                reasoning="经验记录中无动作序列",
-            )
+            return None
 
-        # 取第一个未执行的动作
-        action = experience.action_sequence[0]
+        progress_idx = self._experience_progress_index()
+        if progress_idx >= len(experience.action_sequence):
+            logger.info(
+                "经验动作已回放完毕(progress=%d, total=%d), 回退 LLM 动态规划",
+                progress_idx,
+                len(experience.action_sequence),
+            )
+            return None
+
+        action = experience.action_sequence[progress_idx]
+        target_anchor = action.get("target_anchor", {}) or {}
+        target_widget_text = (
+            action.get("target_widget_text", "")
+            or target_anchor.get("widget_text", "")
+            or target_anchor.get("content_desc", "")
+            or target_anchor.get("resource_id", "")
+            or action.get("target_content_desc", "")
+            or action.get("target_resource_id", "")
+        )
         subgoal = SubGoal(
             description=action.get("description", "来自经验的动作"),
-            target_widget_text=action.get("target_widget_text", ""),
+            target_widget_text=target_widget_text,
+            target_widget_id=action.get("target_widget_id", action.get("widget_id")),
             action_type=action.get("action_type", "tap"),
             input_text=action.get("input_text", ""),
             acceptance_criteria=action.get("acceptance_criteria", ""),
             expected_transition=action.get("expected_transition", "partial_refresh"),
             from_experience=True,
         )
-        logger.info("从经验复用子目标: '%s'", subgoal.description)
+        logger.info(
+            "从经验复用子目标(progress=%d/%d): '%s'",
+            progress_idx + 1,
+            len(experience.action_sequence),
+            subgoal.description,
+        )
 
         return PlanResult(
             subgoal=subgoal,
-            reasoning="复用长期记忆中的成功经验",
+            reasoning=f"复用长期记忆中的成功经验, progress={progress_idx + 1}",
         )
+
+    def _experience_progress_index(self) -> int:
+        """根据当前任务内已成功复用步数计算经验回放位置。"""
+        progress = 0
+        for step in self.memory.short_term.history:
+            result = (step.get("result") or "").lower()
+            if step.get("from_experience") and result.startswith("success"):
+                progress += 1
+        return progress
 
     def _plan_with_llm(self, task: str, ui_state: UIState) -> PlanResult:
         """通过 LLM 生成子目标"""

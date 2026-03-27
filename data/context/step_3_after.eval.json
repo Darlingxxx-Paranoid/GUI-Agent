@@ -1,0 +1,78 @@
+{
+  "subgoal": "Press Enter to commit the recipient address and create a To-field chip for codex.test@example.com",
+  "acceptance_criteria": "A recipient chip for codex.test@example.com appears in the To field (separate from the editable text), and the cursor moves out of the address text entry area or to the next field.",
+  "old_screenshot_path": "/Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/screenshots/step_3_before.png",
+  "new_screenshot_path": "/Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/screenshots/step_3_after.png",
+  "constraint_evidence": {
+    "old_package": "com.google.android.gm",
+    "new_package": "com.google.android.gm",
+    "old_activity": "com.google.android.gm/.ComposeActivityGmail",
+    "new_activity": "com.google.android.gm/.ComposeActivityGmail",
+    "expected_activity": "",
+    "expected_activity_matched": false,
+    "require_ui_change": true,
+    "ui_changed": false,
+    "widget_should_exist": [],
+    "missing_widget_should_exist": [],
+    "widget_should_vanish": [],
+    "present_widget_should_vanish": [],
+    "support_hits": [
+      "widget:codex.test@example.comCodex Ph"
+    ],
+    "support_score": 1.5,
+    "min_support_score": 0.5,
+    "state_reasons": [
+      "target_state=form 命中: editable_count=1, focused_editable=0, keyboard_visible=True",
+      "source_state=form 未明显退出"
+    ],
+    "action_context": {
+      "action_type": "input",
+      "widget_id": 9,
+      "target_widget_text": "codex.test@example.comCodex Phase1 Input Testcodex.test@example.comcodex.test@example.comLine one. Line two.codex.test@example.com",
+      "target_resource_id": "",
+      "target_class_name": "android.widget.EditText",
+      "target_content_desc": "",
+      "target_bounds": [
+        198,
+        408,
+        948,
+        540
+      ],
+      "text_preview": "\n",
+      "description": "在 'codex.test@example.comCodex Phase1 Input Testcodex.test@example.comcodex.test@example.comLine one. Line two.codex.test@example.com' 中输入 '\n'"
+    },
+    "input_validation": {
+      "ok": false,
+      "mode": "target_only",
+      "strict_target": true,
+      "target_scope_found": true,
+      "required_hits": 1,
+      "fragments": [],
+      "old_hits": [],
+      "new_hits": [],
+      "effective_new_hits": [],
+      "old_target_hits": [],
+      "all_target_hits": [],
+      "new_target_hits": [],
+      "target_old_texts": [
+        "codex.test@example.comCodex Phase1 Input Testcodex.test@example.comcodex.test@example.comLine one. Line two.codex.test@example.com"
+      ],
+      "target_new_texts": [
+        "codex.test@example.comCodex Phase1 Input Testcodex.test@example.comcodex.test@example.comLine one. Line two.codex.test@example.com"
+      ],
+      "reason": "输入结果未命中目标控件: 需要至少 1 个新片段, 目标区域新增=[], 全局新增(已忽略)=[]"
+    },
+    "focus_validation": null,
+    "hard_violations": [
+      "输入结果未命中目标控件: 需要至少 1 个新片段, 目标区域新增=[], 全局新增(已忽略)=[]"
+    ]
+  },
+  "llm_result": null,
+  "raw_response": null,
+  "final": {
+    "success": false,
+    "reason": "输入结果未命中目标控件: 需要至少 1 个新片段, 目标区域新增=[], 全局新增(已忽略)=[]",
+    "constraint_passed": false,
+    "semantic_passed": true
+  }
+}

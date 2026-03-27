@@ -35,4 +35,5 @@ Notes:
 1. Generate only the immediate next single subgoal, do not plan multiple steps ahead
 2. target_widget_id should be selected from the widget list in the UI state, use the number in brackets
 3. If the task is already completed, set is_task_complete to true
+4. If UI state shows `Keyboard Visible: True` and the relevant editable widget is already focused, prefer `action_type=input` directly instead of another focus tap
 """

@@ -4,8 +4,9 @@
 """
 import json
 import logging
+import re
 from dataclasses import dataclass, field
-from typing import List
+from typing import List, Optional
 
 from Perception.context_builder import UIState
 from Planning.planner import SubGoal
@@ -78,7 +79,96 @@ class OraclePre:
                 semantic_criteria=subgoal.acceptance_criteria,
             )
 
+        fast_constraints = self._build_fast_constraints(subgoal, ui_state)
+        if fast_constraints is not None:
+            logger.info("使用快速约束路径: action=%s", subgoal.action_type)
+            return fast_constraints
+
         return self._generate_with_llm(subgoal, ui_state)
+
+    def _build_fast_constraints(self, subgoal: SubGoal, ui_state: UIState) -> Optional[PreConstraints]:
+        """
+        通用快速路径：当 Planner 已提供可用语义时，直接构建约束，减少额外 LLM 调用。
+        """
+        action_type = (subgoal.action_type or "").strip().lower()
+        if action_type not in {"tap", "input", "swipe", "scroll_up", "scroll_down", "back", "enter", "long_press"}:
+            return None
+
+        semantic = (subgoal.acceptance_criteria or subgoal.description or "").strip()
+        if not semantic:
+            return None
+
+        transition = (subgoal.expected_transition or "").strip() or self._default_transition(action_type)
+        target_state = "form" if action_type == "input" else "unknown"
+        source_state = self._infer_source_state(ui_state)
+        must_stay_in_app = transition != "external_app"
+        expected_package = ui_state.package_name if must_stay_in_app else ""
+
+        supporting_widgets: List[str] = []
+        widget_hint = (subgoal.target_widget_text or "").strip()
+        if widget_hint:
+            supporting_widgets.append(widget_hint[:30])
+
+        return PreConstraints(
+            source_state_type=source_state,
+            target_state_type=target_state,
+            transition_type=transition,
+            allowed_transition_types=[transition],
+            transition_description=f"fast_path_by_action:{action_type}",
+            must_stay_in_app=must_stay_in_app,
+            expected_package=expected_package,
+            forbidden_packages=[],
+            expected_activity="",
+            require_ui_change=action_type not in {"noop"},
+            trigger_may_disappear=True,
+            widget_should_exist=[],
+            widget_should_vanish=[],
+            supporting_texts=self._extract_supporting_texts(subgoal.input_text),
+            supporting_widgets=supporting_widgets,
+            min_support_score=0.5,
+            semantic_criteria=semantic,
+        )
+
+    def _default_transition(self, action_type: str) -> str:
+        if action_type == "back":
+            return "new_page"
+        if action_type in {"swipe", "scroll_up", "scroll_down"}:
+            return "partial_refresh"
+        if action_type == "input":
+            return "partial_refresh"
+        return "partial_refresh"
+
+    def _infer_source_state(self, ui_state: UIState) -> str:
+        editable_count = sum(1 for w in ui_state.widgets if getattr(w, "editable", False))
+        scrollable_count = sum(1 for w in ui_state.widgets if getattr(w, "scrollable", False))
+        if editable_count >= 1:
+            return "form"
+        if scrollable_count >= 1:
+            return "list"
+        return "unknown"
+
+    def _extract_supporting_texts(self, input_text: str) -> List[str]:
+        text = (input_text or "").strip()
+        if not text:
+            return []
+
+        candidates: List[str] = []
+        lines = [line.strip() for line in text.replace("\r", "\n").split("\n") if line.strip()]
+        for line in lines[:2]:
+            candidates.append(line[:30])
+
+        for email in re.findall(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", text):
+            candidates.append(email)
+
+        deduped: List[str] = []
+        seen = set()
+        for value in candidates:
+            key = value.lower()
+            if not value or key in seen:
+                continue
+            deduped.append(value)
+            seen.add(key)
+        return deduped[:3]
 
     def _generate_with_llm(self, subgoal: SubGoal, ui_state: UIState) -> PreConstraints:
         """通过 LLM 生成约束"""
