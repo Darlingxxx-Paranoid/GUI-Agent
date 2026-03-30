@@ -45,6 +45,7 @@ class AgentConfig:
         # Agent 运行参数
         # ========================
         self.max_steps: int = 30  # 单个 Task 最大步数
+        self.max_task_seconds: int = 0  # 单个 Task 最大时长(秒)，0 表示不限制
         self.max_retries_per_subgoal: int = 3  # 单个子目标最大重试次数
         self.dead_loop_threshold: int = 3  # 死循环检测: 连续相同动作次数
         self.dead_end_threshold: int = 3  # 死胡同检测: 连续失败次数

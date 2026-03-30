@@ -80,6 +80,15 @@ class Replanner:
                 back_steps=1,
             )
 
+        quick_decision = self._quick_decision_from_eval(eval_result)
+        if quick_decision is not None:
+            logger.info(
+                "采用机器决策路径: action=%s, reason=%s",
+                quick_decision.action,
+                quick_decision.reason,
+            )
+            return quick_decision
+
         # 使用 LLM 分析失败原因
         return self._analyze_with_llm(subgoal_description, eval_result, ui_state)
 
@@ -216,6 +225,43 @@ class Replanner:
         except json.JSONDecodeError:
             logger.warning("失败分析 JSON 解析失败, 默认重试")
             return ReplanDecision(action="retry", reason="JSON解析失败, 默认重试")
+
+    def _quick_decision_from_eval(self, eval_result: EvalResult) -> Optional[ReplanDecision]:
+        """
+        优先复用 Post-Oracle 的结构化结论，避免每次失败都触发额外 LLM 推理。
+        Oracle 核心是验证变化；当变化证据已明确时应快速决策。
+        """
+        suggestion = str(getattr(eval_result, "suggested_next_action", "") or "").strip().lower()
+        decision = str(getattr(eval_result, "decision", "") or "").strip().lower()
+        reason = str(getattr(eval_result, "reason", "") or "").strip()
+        reason_low = reason.lower()
+
+        if suggestion in {"backtrack", "back"}:
+            return ReplanDecision(action="back", reason=f"follow_post_oracle: {reason}", back_steps=1)
+        if suggestion in {"replan"}:
+            return ReplanDecision(action="replan", reason=f"follow_post_oracle: {reason}")
+        if suggestion in {"retry", "observe_again"}:
+            return ReplanDecision(action="retry", reason=f"follow_post_oracle: {reason}")
+        if suggestion in {"abort"}:
+            return ReplanDecision(action="abort", reason=f"follow_post_oracle: {reason}")
+
+        no_change_markers = (
+            "no meaningful ui change",
+            "no meaningful state transition",
+            "no_action_attributed_change",
+            "local region unchanged",
+            "screenshot diff score is 0.0",
+            "target_region_unchanged",
+        )
+        if decision == "fail" and any(marker in reason_low for marker in no_change_markers):
+            if self.consecutive_failures >= 2:
+                return ReplanDecision(action="replan", reason=f"no_change_repeated: {reason}")
+            return ReplanDecision(action="retry", reason=f"no_change_once: {reason}")
+
+        if decision == "uncertain":
+            return ReplanDecision(action="retry", reason=f"oracle_uncertain: {reason}")
+
+        return None
 
     def reset(self):
         """重置状态"""

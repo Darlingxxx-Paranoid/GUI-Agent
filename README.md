@@ -1,64 +1,178 @@
 # GUI Agent 🤖
 
-基于 Oracle 反馈驱动的智能 GUI 代理。该代理通过 ReAct（Reason + Act）架构，结合 LLM 视觉分析、事前/事中约束检查以及多层级的重规划策略，实现对 Android 物理机或模拟器的自动化自然语言指令控制。
+基于 Oracle 反馈驱动的 Android GUI 自动化代理。系统采用 ReAct 单步闭环，在每一步执行中完成：感知 -> 规划 -> 执行 -> 评估 -> 重规划。
 
-## 一、环境准备
+## 1. 环境准备
 
-1. **Python 环境**: 建议使用 `Python 3.10+`
-2. **虚拟环境**: 项目下建议使用虚拟环境（如当前已存在的 `myvenv`）
-3. **依赖安装**:
-   ```bash
-   pip install -r requirements.txt
-   ```
-   *注意：必须安装并配置 `openai` 库以及相应的 API Key 才能进行规划操作。*
-4. **ADB 连接**: 确保 `adb` 已经安装在系统环境变量中，并且设备已通过 USB 调试或模拟器桥接连接。可以通过 `adb devices` 验证。
+1. Python：建议 `3.10+`（项目当前也可在 `3.9` 运行）
+2. 虚拟环境：建议使用项目内 `myvenv`
+3. 安装依赖：
 
-## 二、配置说明
+```bash
+pip install -r requirements.txt
+```
 
-在项目根目录下，通常存在一个配置项源（例如环境变量或配置文件），运行前请确保相关配置（尤其是 `llm_api_base`、`llm_api_key` 和 `llm_model`）已正确设置。
+4. ADB 连接：确保可通过 `adb devices` 看到设备（真机或模拟器）
 
-## 三、启动方式与命令行参数
+## 2. 启动方式
 
-项目的核心入口是 `main.py`。你可以通过命令行快速下发自然语言任务，并控制代理的运行细节。
+基础运行：
 
-### 常用运行示例
+```bash
+python main.py --task "打开设置，连接WiFi"
+```
 
-- **执行基础任务** (默认连接第一台 ADB 设备)
-  ```bash
-  python main.py --task "打开微信，搜索张三并发送你好"
-  ```
+指定设备与最大步数：
 
-- **指定设备和最大步数**
-  ```bash
-  python main.py --task "打开设置，连接WiFi" --serial emulator-5554 --max-steps 50
-  ```
+```bash
+python main.py --task "打开设置，连接WiFi" --serial emulator-5554 --max-steps 50
+```
 
-- **安全模拟验证 (Dry Run 模式开发调试必现)**
-  *不实际向手机发送任何物理 ADB 点击指令，系统会基于空界面进行流程测试和 LLM API 连通性测试。*
-  ```bash
-  python main.py --task "测试任务" --dry-run --log-level DEBUG
-  ```
+Dry-run（不下发真实 ADB 动作）：
 
-### 全部参数说明
+```bash
+python main.py --task "测试任务" --dry-run --log-level DEBUG
+```
 
-| 参数简写 | 参数全称 | 必填 | 默认值 | 说明 |
-| :--- | :--- | :---: | :--- | :--- |
-| `-t` | `--task` | **是** | 无 | **任务描述**，需要 Agent 执行的自然语言指令。 |
-| `-s` | `--serial` | 否 | `""` (空) | **ADB 设备序列号**。当有多台设备连接时使用，若为空则默认使用第一台设备。 |
-| | `--dry-run` | 否 | `False` | **干跑模式**。开启后不实际执行 ADB 命令，仅验证推理规划流程。 |
-| | `--log-level` | 否 | `INFO` | **日志输出级别**。可选值：`DEBUG`, `INFO`, `WARNING`, `ERROR`。 |
-| | `--log-file` | 否 | 日志目录 | **日志输出文件路径**。默认会写入到 `./data/logs/agent.log`，通过此参数可重定向到其他文件。 |
-| | `--max-steps`| 否 | `30` | **单个任务最大执行步数**。限制防止无限死循环，超过此步数未成功则任务中止。 |
+参数：
 
-## 四、核心流程简介
+* `--task/-t`：任务描述（必填）
+* `--serial/-s`：设备序列号
+* `--dry-run`：流程联调
+* `--log-level`：`DEBUG|INFO|WARNING|ERROR`
+* `--log-file`：日志输出路径
+* `--max-steps`：单任务最大步数
 
-运行 `main.py` 后，流程将进入 `AgentLoop` (定义于 `agent_loop.py`)：
-1. **Perception**: 利用 ADB Dump 和本地视觉/文本引擎，解析当前屏幕。
-2. **Planning**: LLM 根据屏幕内容，输出子目标与需要进行的动作。
-3. **Oracle Constraints**: 对输出动作生成约束（预期页面跳变、文本出现）。
-4. **Safety Interceptor**: 拦截删除、支付等高风险子目标，拉起人工审批确认交互。
-5. **Execution**: 解析物理坐标并发送物理指令（`tap`, `swipe`, `input`, 等）。
-6. **Evaluation & Replan**: 比对操作发生后的屏幕状态，如果不符预期且多次死循环则启动回溯或重规划。
+## 3. 整体架构
 
----
-*提示：如遇到 API 请求 400 错误，请检查 `utils/llm_client.py` 中的 `max_completion_tokens` 与您当前选择的大模型版本是否兼容。*
+入口：`main.py` -> `agent_loop.py:AgentLoop`
+
+单步链路：
+
+1. `Perception`：解析当前 UI（dump + 可选 CV/OCR）
+2. `Planner`：生成下一步 `SubGoal`
+3. `Pre Oracle`：生成 `PreConstraints`
+4. `SafetyInterceptor`：高风险拦截
+5. `ActionMapper`：`SubGoal -> Action`
+6. `Running Oracle`：执行前/后检查
+7. `ActionExecutor`：ADB 执行动作
+8. `Evaluator (Post Oracle)`：变化证据评估与语义兜底
+9. `Replanner`：失败恢复（back/replan/abort）
+10. `Memory`：任务成功后沉淀经验
+
+## 4. 模块职责
+
+### 4.1 Perception
+
+关键文件：
+
+* `Perception/perception_manager.py`
+* `Perception/dump_parser.py`
+* `Perception/context_builder.py`
+
+职责：
+
+* 构建统一 `UIState`（widgets、activity/package、keyboard 等）
+* 产出 `data/context/*.json` 供复盘
+
+### 4.2 Planning
+
+关键文件：
+
+* `Planning/planner.py`
+* `Planning/oracle_pre.py`
+
+职责：
+
+* 按当前状态生成单步 `SubGoal`
+* 生成结构化 `PreConstraints` 供运行时与后评估复用
+
+### 4.3 Execution
+
+关键文件：
+
+* `Execution/action_mapper.py`
+* `Execution/action_executor.py`
+* `Execution/oracle_runtime.py`
+
+职责：
+
+* 子目标动作化、ADB 执行
+* 事中防死循环和边界守门
+
+### 4.4 Evaluation + Replan
+
+关键文件：
+
+* `Evaluation/evaluator.py`
+* `Evaluation/replanner.py`
+
+职责：
+
+* 先机器化证据匹配，再在不确定时调用 LLM
+* 失败时决定 back/replan/abort
+
+### 4.5 Memory
+
+关键文件：
+
+* `Memory/memory_manager.py`
+* `Memory/experience_store.py`
+
+职责：
+
+* 保存短期轨迹与长期成功经验
+
+## 5. Oracle 设计（当前实现）
+
+系统保持三段 Oracle：
+
+1. **Pre Oracle**：定义变化验证计划（`action_anchor/success_evidence_plan/boundary_constraints/semantic_goal`）
+2. **Running Oracle**：执行前后做硬边界守门与软告警
+3. **Post Oracle**：基于 `delta_facts` 做证据匹配和决策（`success/fail/uncertain`）
+
+核心原则：
+
+* Oracle 关注“变化是否发生”，而不是“场景属于哪一类”。
+
+## 6. 本次关键更新（2026-03）
+
+### [本次改动] Oracle 主链路
+
+* 边界判定从“包名变化即硬失败”升级为“包关系 + 严重度”联合判定
+* 新增 `package_mismatch_severity` 与 `related_package_tokens`
+* 相关包漂移默认 soft，不强制回退
+
+### [本次改动] Post Oracle 机器决策
+
+* 引入 `delta_facts` + `signal match` 的机器化评估层
+* 仅在 `uncertain` 时才走 LLM 语义补充
+* 支持 `observe_again`（自动再观测一次）
+
+### [本次改动] 证据稳定性
+
+* 快路径 `region_changed` 从锚点依赖转为 local/global 变化优先
+* 降低锚点不可用导致的误判
+
+### [本次改动] 执行层稳定性
+
+* 修复无目标 `swipe` 退化为 `tap`
+* 输入/聚焦场景加入可编辑控件重定向
+* 增加 adaptive back（首次 back 无变化则自动补一次）
+
+## 7. 回归结果（本次迭代）
+
+通用任务矩阵（设置/时钟/Chrome）回归：4/4 成功。
+
+观测指标：
+
+* `runtime_hard = 0`
+* `hard_boundary = 0`
+* `semantic_fails = 0`
+
+说明：完整说明见 `报告.md`。
+
+## 8. 注意事项
+
+* 经验复用机制当前仍可能在跨场景下产生链路污染（本次未重构）
+* 若遇 API 400，可检查 `utils/llm_client.py` 的 token 参数与模型兼容性

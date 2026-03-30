@@ -1,0 +1,58 @@
+{
+  "run_dir": "data/benchmarks/oracle-v3-general-core-iter3-20260330-194059",
+  "label": "oracle-v3-general-core-iter3",
+  "serial": "emulator-5554",
+  "max_steps": 12,
+  "max_task_seconds": 240,
+  "dry_run": false,
+  "disable_cv": true,
+  "success_count": 1,
+  "total_count": 3,
+  "success_rate": 0.333,
+  "runtime_hard_total": 0,
+  "hard_boundary_total": 0,
+  "focus_shortcut_total": 0,
+  "uncertain_observe_total": 0,
+  "timeout_skipped_count": 2,
+  "results": [
+    {
+      "task_id": "SystemBrightnessMax",
+      "task": "Turn brightness to the max value.",
+      "success": true,
+      "duration_sec": 145.49,
+      "log_file": "data/benchmarks/oracle-v3-general-core-iter3-20260330-194059/SystemBrightnessMax.log",
+      "runtime_hard_count": 0,
+      "hard_boundary_count": 0,
+      "focus_shortcut_count": 0,
+      "uncertain_observe_count": 0,
+      "error": "",
+      "failure_summary": ""
+    },
+    {
+      "task_id": "SystemBrightnessMin",
+      "task": "Turn brightness to the min value.",
+      "success": false,
+      "duration_sec": 243.47,
+      "log_file": "data/benchmarks/oracle-v3-general-core-iter3-20260330-194059/SystemBrightnessMin.log",
+      "runtime_hard_count": 0,
+      "hard_boundary_count": 0,
+      "focus_shortcut_count": 0,
+      "uncertain_observe_count": 0,
+      "error": "",
+      "failure_summary": "任务超时: 243.5s >= 240s, stage=loop_boundary，跳过该任务"
+    },
+    {
+      "task_id": "SystemCopyToClipboard_OracleV3",
+      "task": "Copy the following text to the clipboard: ORACLE_CHANGE_VERIFY_20260330",
+      "success": false,
+      "duration_sec": 251.25,
+      "log_file": "data/benchmarks/oracle-v3-general-core-iter3-20260330-194059/SystemCopyToClipboard_OracleV3.log",
+      "runtime_hard_count": 0,
+      "hard_boundary_count": 0,
+      "focus_shortcut_count": 0,
+      "uncertain_observe_count": 0,
+      "error": "",
+      "failure_summary": "任务超时: 251.2s >= 240s, stage=step_7_planning，跳过该任务"
+    }
+  ]
+}

@@ -32,6 +32,7 @@ class PerceptionManager:
         self.context_builder = ContextBuilder()
 
         self.cv_output_dir = cv_output_dir
+        self.prefer_dump_first = True
         os.makedirs(cv_output_dir, exist_ok=True)
         self.context_output_dir = os.path.join(os.path.dirname(cv_output_dir), "context")
         os.makedirs(self.context_output_dir, exist_ok=True)
@@ -70,21 +71,26 @@ class PerceptionManager:
         else:
             logger.warning("未提供 Dump 文件或文件不存在, 将仅使用 CV 数据")
 
-        # ---- CV 检测 ----
+        # ---- CV+OCR 联合检测 ----
+        # 默认先使用 Dump；当 Dump 信息不足时，触发 CV+OCR 联合感知补充视觉证据。
         cv_elements = []
         resize_ratio = 1.0
-        run_cv = self._should_run_cv(dump_elements)
+        run_cv = self._should_trigger_cv_with_ocr(dump_elements)
         if run_cv:
             try:
                 img_res_path, resize_ratio, cv_compos = self.widget_detector.detect(
                     img_path=screenshot_path, debug=False
                 )
                 cv_elements = cv_compos
-                logger.info("CV 检测完成: 检测到 %d 个元素, resize_ratio=%.3f", len(cv_elements), resize_ratio)
+                logger.info(
+                    "CV+OCR 联合检测完成: 检测到 %d 个元素, resize_ratio=%.3f",
+                    len(cv_elements),
+                    resize_ratio,
+                )
             except Exception as e:
-                logger.error("CV 检测失败: %s, 将仅使用 Dump 数据", e)
+                logger.error("CV+OCR 联合检测失败: %s, 将仅使用 Dump 数据", e)
         else:
-            logger.info("Dump 信息已足够丰富，跳过 CV 检测以降低时延")
+            logger.info("Dump 信息已足够丰富，按默认策略跳过 CV+OCR 联合检测")
 
         # ---- 融合构建 UIState ----
         ui_state = self.context_builder.build(
@@ -102,9 +108,9 @@ class PerceptionManager:
         logger.info("环境感知完成: 最终控件数=%d", len(ui_state.widgets))
         return ui_state
 
-    def _should_run_cv(self, dump_elements: list) -> bool:
+    def _should_trigger_cv_with_ocr(self, dump_elements: list) -> bool:
         """
-        在 Dump 语义信息充分时跳过 CV，减少 OCR/UIED 计算开销。
+        默认先用 Dump；仅在 Dump 语义不充分时触发 CV+OCR 联合检测。
         """
         if not dump_elements:
             return True
@@ -123,7 +129,16 @@ class PerceptionManager:
             return False
         if interactive >= 18 and text_nodes >= 6:
             return False
+        # 快捷设置/系统面板常见为中等规模树；满足基本交互与文本覆盖时可直接使用 Dump。
+        if total_nodes >= 20 and (interactive >= 6 or text_nodes >= 6):
+            return False
+        if total_nodes >= 14 and interactive >= 6 and text_nodes >= 4:
+            return False
         return True
+
+    # 兼容旧调用（例如 benchmark 中的 monkey patch）。
+    def _should_run_cv(self, dump_elements: list) -> bool:
+        return self._should_trigger_cv_with_ocr(dump_elements)
 
     def _save_context(self, ui_state: UIState, dump_path: Optional[str] = None) -> None:
         screenshot_basename = os.path.basename(ui_state.screenshot_path or "")

@@ -1,0 +1,395 @@
+2026-03-30 19:14:25 | INFO    | utils.llm_client               | LLMClient 初始化完成: model=gpt-5.2, api_base=https://api.poixe.com/v1
+2026-03-30 19:14:25 | DEBUG   | Perception.dump_parser         | DumpParser 初始化完成
+2026-03-30 19:14:25 | DEBUG   | Perception.context_builder     | ContextBuilder 初始化完成
+2026-03-30 19:14:25 | INFO    | Perception.perception_manager  | PerceptionManager 初始化完成, CV 输出目录: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/cv_output
+2026-03-30 19:14:25 | DEBUG   | Memory.memory_manager          | 短期记忆已初始化
+2026-03-30 19:14:25 | INFO    | Memory.experience_store        | 经验库文件不存在，将创建新文件: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/memory/long_term.json
+2026-03-30 19:14:25 | INFO    | Memory.memory_manager          | 记忆管理器初始化完成, 经验库路径: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/memory/long_term.json
+2026-03-30 19:14:25 | INFO    | Planning.planner               | Planner 初始化完成
+2026-03-30 19:14:25 | INFO    | Planning.oracle_pre            | OraclePre 初始化完成
+2026-03-30 19:14:25 | INFO    | Planning.safety_interceptor    | SafetyInterceptor 初始化完成, 高风险关键词: 0 个
+2026-03-30 19:14:25 | INFO    | Execution.action_executor      | ActionExecutor 初始化完成, serial='emulator-5554', adb='/Users/bytedance/Library/Android/sdk/platform-tools/adb'
+2026-03-30 19:14:25 | INFO    | Execution.action_mapper        | ActionMapper 初始化完成
+2026-03-30 19:14:25 | INFO    | Execution.oracle_runtime       | OracleRuntime 初始化完成: dead_loop_threshold=3, screen_var_threshold=10.0
+2026-03-30 19:14:25 | INFO    | Evaluation.evaluator           | Evaluator 初始化完成
+2026-03-30 19:14:25 | INFO    | Evaluation.replanner           | Replanner 初始化完成, 死胡同阈值=3
+2026-03-30 19:14:25 | INFO    | agent_loop                     | AgentLoop 初始化完成, 最大步数=14
+2026-03-30 19:14:25 | INFO    | agent_loop                     | ============================================================
+2026-03-30 19:14:25 | INFO    | agent_loop                     | 开始执行任务: 'Pause the stopwatch.'
+2026-03-30 19:14:25 | INFO    | agent_loop                     | ============================================================
+2026-03-30 19:14:25 | INFO    | Memory.memory_manager          | 短期记忆已清空
+2026-03-30 19:14:25 | DEBUG   | Execution.oracle_runtime       | 事中 Oracle 历史已重置
+2026-03-30 19:14:25 | DEBUG   | Evaluation.replanner           | Replanner 状态已重置
+2026-03-30 19:14:25 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell wm size
+2026-03-30 19:14:25 | INFO    | Execution.action_executor      | 设备屏幕分辨率: (1080, 2220)
+2026-03-30 19:14:25 | INFO    | agent_loop                     | ========================================
+2026-03-30 19:14:25 | INFO    | agent_loop                     | 第 1 步 (最大 14)
+2026-03-30 19:14:25 | INFO    | agent_loop                     | ========================================
+2026-03-30 19:14:25 | INFO    | agent_loop                     | [Step 1] 阶段1: 环境感知
+2026-03-30 19:14:25 | INFO    | Execution.action_executor      | 截屏: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/screenshots/step_1_before.png
+2026-03-30 19:14:25 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell screencap -p /sdcard/step_1_before.png
+2026-03-30 19:14:26 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 pull /sdcard/step_1_before.png /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/screenshots/step_1_before.png
+2026-03-30 19:14:26 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell rm /sdcard/step_1_before.png
+2026-03-30 19:14:26 | INFO    | Execution.action_executor      | Dump UI: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/dumps/step_1.xml
+2026-03-30 19:14:26 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell rm -f /sdcard/window_dump.xml
+2026-03-30 19:14:26 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell timeout 7 uiautomator dump /sdcard/window_dump.xml
+2026-03-30 19:14:33 | WARNING | Execution.action_executor      | ADB 命令返回非零: 124, stderr: 
+2026-03-30 19:14:33 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell ls -l /sdcard/window_dump.xml
+2026-03-30 19:14:33 | WARNING | Execution.action_executor      | ADB 命令返回非零: 1, stderr: ls: /sdcard/window_dump.xml: No such file or directory
+2026-03-30 19:14:33 | WARNING | Execution.action_executor      | uiautomator dump 未生成文件，尝试重试: 1/2 (fast_normal)
+2026-03-30 19:14:33 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell uiautomator dump --compressed /sdcard/window_dump.xml
+2026-03-30 19:14:44 | WARNING | Execution.action_executor      | uiautomator dump 连续失败: could not get idle state，跳过本轮 dump
+2026-03-30 19:14:44 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell dumpsys activity activities
+2026-03-30 19:14:44 | DEBUG   | Execution.action_executor      | 当前 Activity: com.google.android.apps.nexuslauncher/.NexusLauncherActivity
+2026-03-30 19:14:44 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell dumpsys window windows
+2026-03-30 19:14:44 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell dumpsys activity activities
+2026-03-30 19:14:44 | DEBUG   | Execution.action_executor      | 当前 Activity: com.google.android.apps.nexuslauncher/.NexusLauncherActivity
+2026-03-30 19:14:44 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell dumpsys input_method
+2026-03-30 19:14:45 | DEBUG   | Execution.action_executor      | 软键盘状态(mInputShown): False
+2026-03-30 19:14:45 | INFO    | Perception.perception_manager  | 开始环境感知: screenshot=/Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/screenshots/step_1_before.png, dump=
+2026-03-30 19:14:45 | WARNING | Perception.perception_manager  | 未提供 Dump 文件或文件不存在, 将仅使用 CV 数据
+2026-03-30 19:14:46 | INFO    | Perception.uied.detect_text.ocr | OCRDetector initialized successfully
+2026-03-30 19:14:55 | DEBUG   | Perception.uied.detect_text.ocr | PaddleOCR page keys: ['input_path', 'page_index', 'doc_preprocessor_res', 'dt_polys', 'model_settings', 'text_det_params', 'text_type', 'text_rec_score_thresh', 'return_word_box', 'rec_texts', 'rec_scores', 'rec_polys', 'vis_fonts', 'textline_orientation_angles', 'rec_boxes']
+2026-03-30 19:14:55 | DEBUG   | Perception.uied.detect_text.ocr | PaddleOCR counts: rec_texts=4, rec_scores=4, rec_polys=4
+2026-03-30 19:14:55 | DEBUG   | Perception.uied.detect_text.ocr | PaddleOCR converted count: 4
+2026-03-30 19:14:55 | DEBUG   | Perception.uied.detect_text.text_detection | After convert: 4
+2026-03-30 19:14:55 | DEBUG   | Perception.uied.detect_text.text_detection | After merge: 4
+2026-03-30 19:14:55 | DEBUG   | Perception.uied.detect_text.text_detection | After filter: 2
+2026-03-30 19:14:55 | DEBUG   | Perception.uied.detect_text.text_detection | After sentence merge: 2
+2026-03-30 19:14:55 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[0]: '😊😄'
+2026-03-30 19:14:55 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[1]: 'a'
+2026-03-30 19:14:55 | INFO    | Perception.uied.detect_text.text_detection | Text detection completed in 9.993s, text_count=2
+2026-03-30 19:14:55 | INFO    | Perception.perception_manager  | CV 检测完成: 检测到 12 个元素, resize_ratio=0.360
+2026-03-30 19:14:55 | INFO    | Perception.context_builder     | 开始构建 UIState: CV元素=12, Dump控件=0
+2026-03-30 19:14:55 | DEBUG   | Perception.context_builder     | 上下文瘦身: 12 -> 12 控件 (过滤了 0 个冗余控件)
+2026-03-30 19:14:55 | INFO    | Perception.context_builder     | UIState 构建完成: 最终控件数=12 (CV原始=12, Dump原始=0)
+2026-03-30 19:14:55 | INFO    | Perception.perception_manager  | 已保存合并控件列表: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/context/step_1_before.json
+2026-03-30 19:14:55 | INFO    | Perception.perception_manager  | 环境感知完成: 最终控件数=12
+2026-03-30 19:14:55 | INFO    | agent_loop                     | [Step 1] 阶段2: 认知规划
+2026-03-30 19:14:55 | INFO    | Planning.planner               | 开始规划, 任务: 'Pause the stopwatch.'
+2026-03-30 19:14:55 | DEBUG   | Memory.memory_manager          | 未找到匹配经验, 最高相似度=0.000
+2026-03-30 19:14:55 | DEBUG   | Planning.planner               | 发送规划请求到 LLM
+2026-03-30 19:14:55 | DEBUG   | utils.llm_client               | 发送 LLM 请求: model=gpt-5.2, prompt_len=3205, timeout=18s
+2026-03-30 19:15:00 | DEBUG   | utils.llm_client               | LLM 响应: len=450
+2026-03-30 19:15:00 | INFO    | Planning.planner               | LLM 规划完成: subgoal='Tap the Clock app icon to open it', action=tap, complete=False
+2026-03-30 19:15:00 | INFO    | agent_loop                     | 子目标: 'Tap the Clock app icon to open it' (action=tap)
+2026-03-30 19:15:00 | INFO    | Planning.oracle_pre            | 生成事前约束: subgoal='Tap the Clock app icon to open it'
+2026-03-30 19:15:00 | INFO    | Planning.oracle_pre            | 使用快速约束路径: action=tap
+2026-03-30 19:15:00 | INFO    | agent_loop                     | 事前约束已生成
+2026-03-30 19:15:00 | INFO    | agent_loop                     | [Step 1] 阶段3: 安全检查
+2026-03-30 19:15:00 | DEBUG   | Planning.safety_interceptor    | 安全检查通过: 'Tap the Clock app icon to open it'
+2026-03-30 19:15:00 | INFO    | agent_loop                     | [Step 1] 阶段4: 动作映射
+2026-03-30 19:15:00 | INFO    | Execution.action_mapper        | 映射动作: subgoal='Tap the Clock app icon to open it'
+2026-03-30 19:15:00 | INFO    | Execution.action_mapper        | launcher 打开应用未命中文字控件，使用包名兜底启动: app=clock package=com.google.android.deskclock
+2026-03-30 19:15:00 | INFO    | agent_loop                     | 映射动作: launch_app at (0, 0)
+2026-03-30 19:15:00 | DEBUG   | Execution.oracle_runtime       | 执行前检查通过: launch_app at (0, 0)
+2026-03-30 19:15:00 | INFO    | agent_loop                     | [Step 1] 阶段5: 执行动作
+2026-03-30 19:15:00 | INFO    | Execution.action_executor      | 启动应用: com.google.android.deskclock
+2026-03-30 19:15:00 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell monkey -p com.google.android.deskclock -c android.intent.category.LAUNCHER 1
+2026-03-30 19:15:03 | INFO    | agent_loop                     | [Step 1] 阶段6: 执行后感知 + 事中检查
+2026-03-30 19:15:03 | INFO    | Execution.action_executor      | 截屏: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/screenshots/step_1_after.png
+2026-03-30 19:15:03 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell screencap -p /sdcard/step_1_after.png
+2026-03-30 19:15:03 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 pull /sdcard/step_1_after.png /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/screenshots/step_1_after.png
+2026-03-30 19:15:03 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell rm /sdcard/step_1_after.png
+2026-03-30 19:15:03 | INFO    | Execution.action_executor      | Dump UI: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/dumps/step_1_after.xml
+2026-03-30 19:15:03 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell rm -f /sdcard/window_dump.xml
+2026-03-30 19:15:04 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell timeout 7 uiautomator dump /sdcard/window_dump.xml
+2026-03-30 19:15:11 | WARNING | Execution.action_executor      | ADB 命令返回非零: 124, stderr: 
+2026-03-30 19:15:11 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell ls -l /sdcard/window_dump.xml
+2026-03-30 19:15:11 | WARNING | Execution.action_executor      | ADB 命令返回非零: 1, stderr: ls: /sdcard/window_dump.xml: No such file or directory
+2026-03-30 19:15:11 | WARNING | Execution.action_executor      | uiautomator dump 未生成文件，尝试重试: 1/2 (fast_normal)
+2026-03-30 19:15:11 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell uiautomator dump --compressed /sdcard/window_dump.xml
+2026-03-30 19:15:22 | WARNING | Execution.action_executor      | uiautomator dump 连续失败: could not get idle state，跳过本轮 dump
+2026-03-30 19:15:22 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell dumpsys activity activities
+2026-03-30 19:15:22 | DEBUG   | Execution.action_executor      | 当前 Activity: com.google.android.deskclock/com.android.deskclock.DeskClock
+2026-03-30 19:15:22 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell dumpsys window windows
+2026-03-30 19:15:22 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell dumpsys activity activities
+2026-03-30 19:15:23 | DEBUG   | Execution.action_executor      | 当前 Activity: com.google.android.deskclock/com.android.deskclock.DeskClock
+2026-03-30 19:15:23 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell dumpsys input_method
+2026-03-30 19:15:23 | DEBUG   | Execution.action_executor      | 软键盘状态(mInputShown): False
+2026-03-30 19:15:23 | INFO    | Perception.perception_manager  | 开始环境感知: screenshot=/Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/screenshots/step_1_after.png, dump=
+2026-03-30 19:15:23 | WARNING | Perception.perception_manager  | 未提供 Dump 文件或文件不存在, 将仅使用 CV 数据
+2026-03-30 19:15:31 | DEBUG   | Perception.uied.detect_text.ocr | PaddleOCR page keys: ['input_path', 'page_index', 'doc_preprocessor_res', 'dt_polys', 'model_settings', 'text_det_params', 'text_type', 'text_rec_score_thresh', 'return_word_box', 'rec_texts', 'rec_scores', 'rec_polys', 'vis_fonts', 'textline_orientation_angles', 'rec_boxes']
+2026-03-30 19:15:31 | DEBUG   | Perception.uied.detect_text.ocr | PaddleOCR counts: rec_texts=10, rec_scores=10, rec_polys=10
+2026-03-30 19:15:31 | DEBUG   | Perception.uied.detect_text.ocr | PaddleOCR converted count: 10
+2026-03-30 19:15:31 | DEBUG   | Perception.uied.detect_text.text_detection | After convert: 10
+2026-03-30 19:15:31 | DEBUG   | Perception.uied.detect_text.text_detection | After merge: 9
+2026-03-30 19:15:31 | DEBUG   | Perception.uied.detect_text.text_detection | After filter: 7
+2026-03-30 19:15:31 | DEBUG   | Perception.uied.detect_text.text_detection | After sentence merge: 7
+2026-03-30 19:15:31 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[0]: 'Stopwatch'
+2026-03-30 19:15:31 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[1]: '12:58 05'
+2026-03-30 19:15:31 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[2]: 'Clock'
+2026-03-30 19:15:31 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[3]: 'Timer'
+2026-03-30 19:15:31 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[4]: 'Stopwatch'
+2026-03-30 19:15:31 | INFO    | Perception.uied.detect_text.text_detection | Text detection completed in 8.525s, text_count=7
+2026-03-30 19:15:32 | INFO    | Perception.perception_manager  | CV 检测完成: 检测到 11 个元素, resize_ratio=0.360
+2026-03-30 19:15:32 | INFO    | Perception.context_builder     | 开始构建 UIState: CV元素=11, Dump控件=0
+2026-03-30 19:15:32 | DEBUG   | Perception.context_builder     | 上下文瘦身: 11 -> 11 控件 (过滤了 0 个冗余控件)
+2026-03-30 19:15:32 | INFO    | Perception.context_builder     | UIState 构建完成: 最终控件数=11 (CV原始=11, Dump原始=0)
+2026-03-30 19:15:32 | INFO    | Perception.perception_manager  | 已保存合并控件列表: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/context/step_1_after.json
+2026-03-30 19:15:32 | INFO    | Perception.perception_manager  | 环境感知完成: 最终控件数=11
+2026-03-30 19:15:32 | DEBUG   | Execution.oracle_runtime       | 事中检查通过
+2026-03-30 19:15:32 | INFO    | agent_loop                     | [Step 1] 阶段7: 事后评估
+2026-03-30 19:15:32 | INFO    | Evaluation.evaluator           | 开始事后评估: 'Tap the Clock app icon to open it'
+2026-03-30 19:15:32 | INFO    | agent_loop                     | ✓ 子目标完成: 'Tap the Clock app icon to open it'
+2026-03-30 19:15:32 | DEBUG   | Evaluation.replanner           | 子目标成功, 重置连续失败计数
+2026-03-30 19:15:32 | DEBUG   | Memory.memory_manager          | 短期记忆新增步骤 #1
+2026-03-30 19:15:32 | INFO    | agent_loop                     | ========================================
+2026-03-30 19:15:32 | INFO    | agent_loop                     | 第 2 步 (最大 14)
+2026-03-30 19:15:32 | INFO    | agent_loop                     | ========================================
+2026-03-30 19:15:32 | INFO    | agent_loop                     | [Step 2] 阶段1: 环境感知
+2026-03-30 19:15:32 | INFO    | Execution.action_executor      | 截屏: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/screenshots/step_2_before.png
+2026-03-30 19:15:32 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell screencap -p /sdcard/step_2_before.png
+2026-03-30 19:15:32 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 pull /sdcard/step_2_before.png /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/screenshots/step_2_before.png
+2026-03-30 19:15:32 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell rm /sdcard/step_2_before.png
+2026-03-30 19:15:32 | INFO    | Execution.action_executor      | Dump UI: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/dumps/step_2.xml
+2026-03-30 19:15:32 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell rm -f /sdcard/window_dump.xml
+2026-03-30 19:15:32 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell timeout 7 uiautomator dump /sdcard/window_dump.xml
+2026-03-30 19:15:40 | WARNING | Execution.action_executor      | ADB 命令返回非零: 124, stderr: 
+2026-03-30 19:15:40 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell ls -l /sdcard/window_dump.xml
+2026-03-30 19:15:40 | WARNING | Execution.action_executor      | ADB 命令返回非零: 1, stderr: ls: /sdcard/window_dump.xml: No such file or directory
+2026-03-30 19:15:40 | WARNING | Execution.action_executor      | uiautomator dump 未生成文件，尝试重试: 1/2 (fast_normal)
+2026-03-30 19:15:40 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell uiautomator dump --compressed /sdcard/window_dump.xml
+2026-03-30 19:15:51 | WARNING | Execution.action_executor      | uiautomator dump 连续失败: could not get idle state，跳过本轮 dump
+2026-03-30 19:15:51 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell dumpsys activity activities
+2026-03-30 19:15:51 | DEBUG   | Execution.action_executor      | 当前 Activity: com.google.android.deskclock/com.android.deskclock.DeskClock
+2026-03-30 19:15:51 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell dumpsys window windows
+2026-03-30 19:15:51 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell dumpsys activity activities
+2026-03-30 19:15:51 | DEBUG   | Execution.action_executor      | 当前 Activity: com.google.android.deskclock/com.android.deskclock.DeskClock
+2026-03-30 19:15:51 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell dumpsys input_method
+2026-03-30 19:15:52 | DEBUG   | Execution.action_executor      | 软键盘状态(mInputShown): False
+2026-03-30 19:15:52 | INFO    | Perception.perception_manager  | 开始环境感知: screenshot=/Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/screenshots/step_2_before.png, dump=
+2026-03-30 19:15:52 | WARNING | Perception.perception_manager  | 未提供 Dump 文件或文件不存在, 将仅使用 CV 数据
+2026-03-30 19:16:00 | DEBUG   | Perception.uied.detect_text.ocr | PaddleOCR page keys: ['input_path', 'page_index', 'doc_preprocessor_res', 'dt_polys', 'model_settings', 'text_det_params', 'text_type', 'text_rec_score_thresh', 'return_word_box', 'rec_texts', 'rec_scores', 'rec_polys', 'vis_fonts', 'textline_orientation_angles', 'rec_boxes']
+2026-03-30 19:16:00 | DEBUG   | Perception.uied.detect_text.ocr | PaddleOCR counts: rec_texts=10, rec_scores=10, rec_polys=10
+2026-03-30 19:16:00 | DEBUG   | Perception.uied.detect_text.ocr | PaddleOCR converted count: 10
+2026-03-30 19:16:00 | DEBUG   | Perception.uied.detect_text.text_detection | After convert: 10
+2026-03-30 19:16:00 | DEBUG   | Perception.uied.detect_text.text_detection | After merge: 9
+2026-03-30 19:16:00 | DEBUG   | Perception.uied.detect_text.text_detection | After filter: 7
+2026-03-30 19:16:00 | DEBUG   | Perception.uied.detect_text.text_detection | After sentence merge: 7
+2026-03-30 19:16:00 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[0]: 'Stopwatch'
+2026-03-30 19:16:00 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[1]: '13:26 87'
+2026-03-30 19:16:00 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[2]: 'Clock'
+2026-03-30 19:16:00 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[3]: 'Timer'
+2026-03-30 19:16:00 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[4]: 'Stopwatch'
+2026-03-30 19:16:00 | INFO    | Perception.uied.detect_text.text_detection | Text detection completed in 8.531s, text_count=7
+2026-03-30 19:16:00 | INFO    | Perception.perception_manager  | CV 检测完成: 检测到 11 个元素, resize_ratio=0.360
+2026-03-30 19:16:00 | INFO    | Perception.context_builder     | 开始构建 UIState: CV元素=11, Dump控件=0
+2026-03-30 19:16:00 | DEBUG   | Perception.context_builder     | 上下文瘦身: 11 -> 11 控件 (过滤了 0 个冗余控件)
+2026-03-30 19:16:00 | INFO    | Perception.context_builder     | UIState 构建完成: 最终控件数=11 (CV原始=11, Dump原始=0)
+2026-03-30 19:16:00 | INFO    | Perception.perception_manager  | 已保存合并控件列表: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/context/step_2_before.json
+2026-03-30 19:16:00 | INFO    | Perception.perception_manager  | 环境感知完成: 最终控件数=11
+2026-03-30 19:16:00 | INFO    | agent_loop                     | [Step 2] 阶段2: 认知规划
+2026-03-30 19:16:00 | INFO    | Planning.planner               | 开始规划, 任务: 'Pause the stopwatch.'
+2026-03-30 19:16:00 | DEBUG   | Memory.memory_manager          | 未找到匹配经验, 最高相似度=0.000
+2026-03-30 19:16:00 | DEBUG   | Planning.planner               | 发送规划请求到 LLM
+2026-03-30 19:16:00 | DEBUG   | utils.llm_client               | 发送 LLM 请求: model=gpt-5.2, prompt_len=3245, timeout=18s
+2026-03-30 19:16:04 | DEBUG   | utils.llm_client               | LLM 响应: len=514
+2026-03-30 19:16:04 | INFO    | Planning.planner               | LLM 规划完成: subgoal='Tap the Pause button to pause the running stopwatch', action=tap, complete=False
+2026-03-30 19:16:04 | INFO    | agent_loop                     | 子目标: 'Tap the Pause button to pause the running stopwatch' (action=tap)
+2026-03-30 19:16:04 | INFO    | Planning.oracle_pre            | 生成事前约束: subgoal='Tap the Pause button to pause the running stopwatch'
+2026-03-30 19:16:04 | INFO    | Planning.oracle_pre            | 使用快速约束路径: action=tap
+2026-03-30 19:16:04 | INFO    | agent_loop                     | 事前约束已生成
+2026-03-30 19:16:04 | INFO    | agent_loop                     | [Step 2] 阶段3: 安全检查
+2026-03-30 19:16:04 | DEBUG   | Planning.safety_interceptor    | 安全检查通过: 'Tap the Pause button to pause the running stopwatch'
+2026-03-30 19:16:04 | INFO    | agent_loop                     | [Step 2] 阶段4: 动作映射
+2026-03-30 19:16:04 | INFO    | Execution.action_mapper        | 映射动作: subgoal='Tap the Pause button to pause the running stopwatch'
+2026-03-30 19:16:04 | INFO    | agent_loop                     | 映射动作: tap at (320, 2010)
+2026-03-30 19:16:04 | DEBUG   | Execution.oracle_runtime       | 执行前检查通过: tap at (320, 2010)
+2026-03-30 19:16:04 | INFO    | agent_loop                     | [Step 2] 阶段5: 执行动作
+2026-03-30 19:16:04 | INFO    | Execution.action_executor      | 执行点击: (320, 2010)
+2026-03-30 19:16:04 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell input tap 320 2010
+2026-03-30 19:16:07 | INFO    | agent_loop                     | [Step 2] 阶段6: 执行后感知 + 事中检查
+2026-03-30 19:16:07 | INFO    | Execution.action_executor      | 截屏: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/screenshots/step_2_after.png
+2026-03-30 19:16:07 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell screencap -p /sdcard/step_2_after.png
+2026-03-30 19:16:08 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 pull /sdcard/step_2_after.png /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/screenshots/step_2_after.png
+2026-03-30 19:16:08 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell rm /sdcard/step_2_after.png
+2026-03-30 19:16:08 | INFO    | Execution.action_executor      | Dump UI: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/dumps/step_2_after.xml
+2026-03-30 19:16:08 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell rm -f /sdcard/window_dump.xml
+2026-03-30 19:16:08 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell timeout 7 uiautomator dump /sdcard/window_dump.xml
+2026-03-30 19:16:15 | WARNING | Execution.action_executor      | ADB 命令返回非零: 124, stderr: 
+2026-03-30 19:16:15 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell ls -l /sdcard/window_dump.xml
+2026-03-30 19:16:15 | WARNING | Execution.action_executor      | ADB 命令返回非零: 1, stderr: ls: /sdcard/window_dump.xml: No such file or directory
+2026-03-30 19:16:15 | WARNING | Execution.action_executor      | uiautomator dump 未生成文件，尝试重试: 1/2 (fast_normal)
+2026-03-30 19:16:16 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell uiautomator dump --compressed /sdcard/window_dump.xml
+2026-03-30 19:16:27 | WARNING | Execution.action_executor      | uiautomator dump 连续失败: could not get idle state，跳过本轮 dump
+2026-03-30 19:16:27 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell dumpsys activity activities
+2026-03-30 19:16:27 | DEBUG   | Execution.action_executor      | 当前 Activity: com.google.android.deskclock/com.android.deskclock.DeskClock
+2026-03-30 19:16:27 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell dumpsys window windows
+2026-03-30 19:16:27 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell dumpsys activity activities
+2026-03-30 19:16:27 | DEBUG   | Execution.action_executor      | 当前 Activity: com.google.android.deskclock/com.android.deskclock.DeskClock
+2026-03-30 19:16:27 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell dumpsys input_method
+2026-03-30 19:16:27 | DEBUG   | Execution.action_executor      | 软键盘状态(mInputShown): False
+2026-03-30 19:16:27 | INFO    | Perception.perception_manager  | 开始环境感知: screenshot=/Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/screenshots/step_2_after.png, dump=
+2026-03-30 19:16:27 | WARNING | Perception.perception_manager  | 未提供 Dump 文件或文件不存在, 将仅使用 CV 数据
+2026-03-30 19:16:36 | DEBUG   | Perception.uied.detect_text.ocr | PaddleOCR page keys: ['input_path', 'page_index', 'doc_preprocessor_res', 'dt_polys', 'model_settings', 'text_det_params', 'text_type', 'text_rec_score_thresh', 'return_word_box', 'rec_texts', 'rec_scores', 'rec_polys', 'vis_fonts', 'textline_orientation_angles', 'rec_boxes']
+2026-03-30 19:16:36 | DEBUG   | Perception.uied.detect_text.ocr | PaddleOCR counts: rec_texts=5, rec_scores=5, rec_polys=5
+2026-03-30 19:16:36 | DEBUG   | Perception.uied.detect_text.ocr | PaddleOCR converted count: 5
+2026-03-30 19:16:36 | DEBUG   | Perception.uied.detect_text.text_detection | After convert: 5
+2026-03-30 19:16:36 | DEBUG   | Perception.uied.detect_text.text_detection | After merge: 4
+2026-03-30 19:16:36 | DEBUG   | Perception.uied.detect_text.text_detection | After filter: 4
+2026-03-30 19:16:36 | DEBUG   | Perception.uied.detect_text.text_detection | After sentence merge: 4
+2026-03-30 19:16:36 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[0]: 'Mon,Mar30'
+2026-03-30 19:16:36 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[1]: '7:15 PM'
+2026-03-30 19:16:36 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[2]: 'lOck'
+2026-03-30 19:16:36 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[3]: '+'
+2026-03-30 19:16:36 | INFO    | Perception.uied.detect_text.text_detection | Text detection completed in 8.150s, text_count=4
+2026-03-30 19:16:36 | INFO    | Perception.perception_manager  | CV 检测完成: 检测到 14 个元素, resize_ratio=0.360
+2026-03-30 19:16:36 | INFO    | Perception.context_builder     | 开始构建 UIState: CV元素=14, Dump控件=0
+2026-03-30 19:16:36 | DEBUG   | Perception.context_builder     | 上下文瘦身: 14 -> 14 控件 (过滤了 0 个冗余控件)
+2026-03-30 19:16:36 | INFO    | Perception.context_builder     | UIState 构建完成: 最终控件数=14 (CV原始=14, Dump原始=0)
+2026-03-30 19:16:36 | INFO    | Perception.perception_manager  | 已保存合并控件列表: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/context/step_2_after.json
+2026-03-30 19:16:36 | INFO    | Perception.perception_manager  | 环境感知完成: 最终控件数=14
+2026-03-30 19:16:36 | DEBUG   | Execution.oracle_runtime       | 事中检查通过
+2026-03-30 19:16:36 | INFO    | agent_loop                     | [Step 2] 阶段7: 事后评估
+2026-03-30 19:16:36 | INFO    | Evaluation.evaluator           | 开始事后评估: 'Tap the Pause button to pause the running stopwatch'
+2026-03-30 19:16:36 | DEBUG   | utils.llm_client               | 发送 LLM 请求: model=gpt-5.2, prompt_len=11981, timeout=10s
+2026-03-30 19:16:46 | DEBUG   | utils.llm_client               | LLM 响应: len=1773
+2026-03-30 19:16:46 | INFO    | Evaluation.evaluator           | 语义确认未通过: Although the UI changed meaningfully, the local region around the tapped control did not change and the stopwatch time/control state (Pause->Resume and time stopping) is not evidenced. The stopwatch/time texts vanished, suggesting a possible navigation or recomposition rather than a confirmed pause action.
+2026-03-30 19:16:46 | INFO    | agent_loop                     | 评估结果不确定，等待并再次观测
+2026-03-30 19:16:48 | INFO    | Execution.action_executor      | 截屏: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/screenshots/step_2_after2.png
+2026-03-30 19:16:48 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell screencap -p /sdcard/step_2_after2.png
+2026-03-30 19:16:48 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 pull /sdcard/step_2_after2.png /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/screenshots/step_2_after2.png
+2026-03-30 19:16:48 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell rm /sdcard/step_2_after2.png
+2026-03-30 19:16:48 | INFO    | Execution.action_executor      | Dump UI: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/dumps/step_2_after2.xml
+2026-03-30 19:16:48 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell rm -f /sdcard/window_dump.xml
+2026-03-30 19:16:48 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell timeout 7 uiautomator dump /sdcard/window_dump.xml
+2026-03-30 19:16:55 | WARNING | Execution.action_executor      | ADB 命令返回非零: 124, stderr: 
+2026-03-30 19:16:55 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell ls -l /sdcard/window_dump.xml
+2026-03-30 19:16:56 | WARNING | Execution.action_executor      | ADB 命令返回非零: 1, stderr: ls: /sdcard/window_dump.xml: No such file or directory
+2026-03-30 19:16:56 | WARNING | Execution.action_executor      | uiautomator dump 未生成文件，尝试重试: 1/2 (fast_normal)
+2026-03-30 19:16:56 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell uiautomator dump --compressed /sdcard/window_dump.xml
+2026-03-30 19:17:07 | WARNING | Execution.action_executor      | uiautomator dump 连续失败: could not get idle state，跳过本轮 dump
+2026-03-30 19:17:07 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell dumpsys activity activities
+2026-03-30 19:17:07 | DEBUG   | Execution.action_executor      | 当前 Activity: com.google.android.deskclock/com.android.deskclock.DeskClock
+2026-03-30 19:17:07 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell dumpsys window windows
+2026-03-30 19:17:07 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell dumpsys activity activities
+2026-03-30 19:17:07 | DEBUG   | Execution.action_executor      | 当前 Activity: com.google.android.deskclock/com.android.deskclock.DeskClock
+2026-03-30 19:17:07 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell dumpsys input_method
+2026-03-30 19:17:08 | DEBUG   | Execution.action_executor      | 软键盘状态(mInputShown): False
+2026-03-30 19:17:08 | INFO    | Perception.perception_manager  | 开始环境感知: screenshot=/Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/screenshots/step_2_after2.png, dump=
+2026-03-30 19:17:08 | WARNING | Perception.perception_manager  | 未提供 Dump 文件或文件不存在, 将仅使用 CV 数据
+2026-03-30 19:17:16 | DEBUG   | Perception.uied.detect_text.ocr | PaddleOCR page keys: ['input_path', 'page_index', 'doc_preprocessor_res', 'dt_polys', 'model_settings', 'text_det_params', 'text_type', 'text_rec_score_thresh', 'return_word_box', 'rec_texts', 'rec_scores', 'rec_polys', 'vis_fonts', 'textline_orientation_angles', 'rec_boxes']
+2026-03-30 19:17:16 | DEBUG   | Perception.uied.detect_text.ocr | PaddleOCR counts: rec_texts=5, rec_scores=5, rec_polys=5
+2026-03-30 19:17:16 | DEBUG   | Perception.uied.detect_text.ocr | PaddleOCR converted count: 5
+2026-03-30 19:17:16 | DEBUG   | Perception.uied.detect_text.text_detection | After convert: 5
+2026-03-30 19:17:16 | DEBUG   | Perception.uied.detect_text.text_detection | After merge: 4
+2026-03-30 19:17:16 | DEBUG   | Perception.uied.detect_text.text_detection | After filter: 4
+2026-03-30 19:17:16 | DEBUG   | Perception.uied.detect_text.text_detection | After sentence merge: 4
+2026-03-30 19:17:16 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[0]: 'Mon,Mar30'
+2026-03-30 19:17:16 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[1]: '7:16 PM'
+2026-03-30 19:17:16 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[2]: 'lock'
+2026-03-30 19:17:16 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[3]: '+'
+2026-03-30 19:17:16 | INFO    | Perception.uied.detect_text.text_detection | Text detection completed in 8.242s, text_count=4
+2026-03-30 19:17:16 | INFO    | Perception.perception_manager  | CV 检测完成: 检测到 14 个元素, resize_ratio=0.360
+2026-03-30 19:17:16 | INFO    | Perception.context_builder     | 开始构建 UIState: CV元素=14, Dump控件=0
+2026-03-30 19:17:16 | DEBUG   | Perception.context_builder     | 上下文瘦身: 14 -> 14 控件 (过滤了 0 个冗余控件)
+2026-03-30 19:17:16 | INFO    | Perception.context_builder     | UIState 构建完成: 最终控件数=14 (CV原始=14, Dump原始=0)
+2026-03-30 19:17:16 | INFO    | Perception.perception_manager  | 已保存合并控件列表: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/context/step_2_after2.json
+2026-03-30 19:17:16 | INFO    | Perception.perception_manager  | 环境感知完成: 最终控件数=14
+2026-03-30 19:17:16 | INFO    | Evaluation.evaluator           | 开始事后评估: 'Tap the Pause button to pause the running stopwatch'
+2026-03-30 19:17:16 | DEBUG   | utils.llm_client               | 发送 LLM 请求: model=gpt-5.2, prompt_len=11977, timeout=10s
+2026-03-30 19:17:26 | DEBUG   | utils.llm_client               | LLM 响应: len=1740
+2026-03-30 19:17:26 | INFO    | Evaluation.evaluator           | 语义确认未通过: Although the UI changed meaningfully, there is no direct evidence that the stopwatch was paused: the local target region is reported unchanged and the stopwatch time text disappeared rather than showing a stopped time and a Resume/Start control. The after-state looks like a different layout (possibly another tab/screen), so pause success cannot be confirmed.
+2026-03-30 19:17:26 | WARNING | agent_loop                     | ✗ 子目标失败: 'Tap the Pause button to pause the running stopwatch', 原因: Although the UI changed meaningfully, there is no direct evidence that the stopwatch was paused: the local target region is reported unchanged and the stopwatch time text disappeared rather than showing a stopped time and a Resume/Start control. The after-state looks like a different layout (possibly another tab/screen), so pause success cannot be confirmed.
+2026-03-30 19:17:26 | INFO    | Evaluation.replanner           | 处理失败: subgoal='Tap the Pause button to pause the running stopwatch', reason='Although the UI changed meaningfully, there is no direct evidence that the stopwatch was paused: the local target region is reported unchanged and the stopwatch time text disappeared rather than showing a stopped time and a Resume/Start control. The after-state looks like a different layout (possibly another tab/screen), so pause success cannot be confirmed.', 连续失败次数=1
+2026-03-30 19:17:26 | INFO    | Memory.memory_manager          | 记录失败原因: [Tap the Pause button to pause the running stopwatch] Although the UI changed meaningfully, there is no direct evidence that the stopwatch was paused: the local target region is reported unchanged and the stopwatch time text disappeared rather than showing a stopped time and a Resume/Start control. The after-state looks like a different layout (possibly another tab/screen), so pause success cannot be confirmed.
+2026-03-30 19:17:26 | INFO    | Evaluation.replanner           | 采用机器决策路径: action=retry, reason=follow_post_oracle: Although the UI changed meaningfully, there is no direct evidence that the stopwatch was paused: the local target region is reported unchanged and the stopwatch time text disappeared rather than showing a stopped time and a Resume/Start control. The after-state looks like a different layout (possibly another tab/screen), so pause success cannot be confirmed.
+2026-03-30 19:17:26 | DEBUG   | Memory.memory_manager          | 短期记忆新增步骤 #2
+2026-03-30 19:17:26 | INFO    | agent_loop                     | ========================================
+2026-03-30 19:17:26 | INFO    | agent_loop                     | 第 3 步 (最大 14)
+2026-03-30 19:17:26 | INFO    | agent_loop                     | ========================================
+2026-03-30 19:17:26 | INFO    | agent_loop                     | [Step 3] 阶段1: 环境感知
+2026-03-30 19:17:26 | INFO    | Execution.action_executor      | 截屏: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/screenshots/step_3_before.png
+2026-03-30 19:17:26 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell screencap -p /sdcard/step_3_before.png
+2026-03-30 19:17:26 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 pull /sdcard/step_3_before.png /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/screenshots/step_3_before.png
+2026-03-30 19:17:26 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell rm /sdcard/step_3_before.png
+2026-03-30 19:17:26 | INFO    | Execution.action_executor      | Dump UI: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/dumps/step_3.xml
+2026-03-30 19:17:26 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell rm -f /sdcard/window_dump.xml
+2026-03-30 19:17:27 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell timeout 7 uiautomator dump /sdcard/window_dump.xml
+2026-03-30 19:17:34 | WARNING | Execution.action_executor      | ADB 命令返回非零: 124, stderr: 
+2026-03-30 19:17:34 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell ls -l /sdcard/window_dump.xml
+2026-03-30 19:17:34 | WARNING | Execution.action_executor      | ADB 命令返回非零: 1, stderr: ls: /sdcard/window_dump.xml: No such file or directory
+2026-03-30 19:17:34 | WARNING | Execution.action_executor      | uiautomator dump 未生成文件，尝试重试: 1/2 (fast_normal)
+2026-03-30 19:17:34 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell uiautomator dump --compressed /sdcard/window_dump.xml
+2026-03-30 19:17:45 | WARNING | Execution.action_executor      | uiautomator dump 连续失败: could not get idle state，跳过本轮 dump
+2026-03-30 19:17:45 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell dumpsys activity activities
+2026-03-30 19:17:45 | DEBUG   | Execution.action_executor      | 当前 Activity: com.google.android.deskclock/com.android.deskclock.DeskClock
+2026-03-30 19:17:45 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell dumpsys window windows
+2026-03-30 19:17:45 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell dumpsys activity activities
+2026-03-30 19:17:46 | DEBUG   | Execution.action_executor      | 当前 Activity: com.google.android.deskclock/com.android.deskclock.DeskClock
+2026-03-30 19:17:46 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell dumpsys input_method
+2026-03-30 19:17:46 | DEBUG   | Execution.action_executor      | 软键盘状态(mInputShown): False
+2026-03-30 19:17:46 | INFO    | Perception.perception_manager  | 开始环境感知: screenshot=/Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/screenshots/step_3_before.png, dump=
+2026-03-30 19:17:46 | WARNING | Perception.perception_manager  | 未提供 Dump 文件或文件不存在, 将仅使用 CV 数据
+2026-03-30 19:17:54 | DEBUG   | Perception.uied.detect_text.ocr | PaddleOCR page keys: ['input_path', 'page_index', 'doc_preprocessor_res', 'dt_polys', 'model_settings', 'text_det_params', 'text_type', 'text_rec_score_thresh', 'return_word_box', 'rec_texts', 'rec_scores', 'rec_polys', 'vis_fonts', 'textline_orientation_angles', 'rec_boxes']
+2026-03-30 19:17:54 | DEBUG   | Perception.uied.detect_text.ocr | PaddleOCR counts: rec_texts=5, rec_scores=5, rec_polys=5
+2026-03-30 19:17:54 | DEBUG   | Perception.uied.detect_text.ocr | PaddleOCR converted count: 5
+2026-03-30 19:17:54 | DEBUG   | Perception.uied.detect_text.text_detection | After convert: 5
+2026-03-30 19:17:54 | DEBUG   | Perception.uied.detect_text.text_detection | After merge: 4
+2026-03-30 19:17:54 | DEBUG   | Perception.uied.detect_text.text_detection | After filter: 4
+2026-03-30 19:17:54 | DEBUG   | Perception.uied.detect_text.text_detection | After sentence merge: 4
+2026-03-30 19:17:54 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[0]: 'Mon,Mar30'
+2026-03-30 19:17:54 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[1]: '7:16 PM'
+2026-03-30 19:17:54 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[2]: 'lock'
+2026-03-30 19:17:54 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[3]: '+'
+2026-03-30 19:17:54 | INFO    | Perception.uied.detect_text.text_detection | Text detection completed in 8.341s, text_count=4
+2026-03-30 19:17:54 | INFO    | Perception.perception_manager  | CV 检测完成: 检测到 14 个元素, resize_ratio=0.360
+2026-03-30 19:17:54 | INFO    | Perception.context_builder     | 开始构建 UIState: CV元素=14, Dump控件=0
+2026-03-30 19:17:54 | DEBUG   | Perception.context_builder     | 上下文瘦身: 14 -> 14 控件 (过滤了 0 个冗余控件)
+2026-03-30 19:17:54 | INFO    | Perception.context_builder     | UIState 构建完成: 最终控件数=14 (CV原始=14, Dump原始=0)
+2026-03-30 19:17:54 | INFO    | Perception.perception_manager  | 已保存合并控件列表: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/context/step_3_before.json
+2026-03-30 19:17:54 | INFO    | Perception.perception_manager  | 环境感知完成: 最终控件数=14
+2026-03-30 19:17:54 | INFO    | agent_loop                     | [Step 3] 阶段2: 认知规划
+2026-03-30 19:17:54 | INFO    | Planning.planner               | 开始规划, 任务: 'Pause the stopwatch.'
+2026-03-30 19:17:54 | DEBUG   | Memory.memory_manager          | 未找到匹配经验, 最高相似度=0.000
+2026-03-30 19:17:54 | DEBUG   | Planning.planner               | 发送规划请求到 LLM
+2026-03-30 19:17:54 | ERROR   | Planning.planner               | LLM 规划失败: 任务时限已到，取消 LLM 调用
+2026-03-30 19:17:54 | WARNING | agent_loop                     | 规划结果动作类型无效，跳过当前步骤并等待下一轮规划: planner_invalid_action: description='LLM规划失败，需要重试'
+2026-03-30 19:17:54 | INFO    | Memory.memory_manager          | 记录失败原因: planner_invalid_action: description='LLM规划失败，需要重试'
+2026-03-30 19:17:54 | DEBUG   | Memory.memory_manager          | 短期记忆新增步骤 #3
+2026-03-30 19:17:54 | INFO    | agent_loop                     | ========================================
+2026-03-30 19:17:54 | INFO    | agent_loop                     | 第 4 步 (最大 14)
+2026-03-30 19:17:54 | INFO    | agent_loop                     | ========================================
+2026-03-30 19:17:54 | INFO    | agent_loop                     | [Step 4] 阶段1: 环境感知
+2026-03-30 19:17:54 | INFO    | Execution.action_executor      | 截屏: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/screenshots/step_4_before.png
+2026-03-30 19:17:54 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell screencap -p /sdcard/step_4_before.png
+2026-03-30 19:17:55 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 pull /sdcard/step_4_before.png /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/screenshots/step_4_before.png
+2026-03-30 19:17:55 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell rm /sdcard/step_4_before.png
+2026-03-30 19:17:55 | INFO    | Execution.action_executor      | Dump UI: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/dumps/step_4.xml
+2026-03-30 19:17:55 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell rm -f /sdcard/window_dump.xml
+2026-03-30 19:17:55 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell timeout 7 uiautomator dump /sdcard/window_dump.xml
+2026-03-30 19:18:02 | WARNING | Execution.action_executor      | ADB 命令返回非零: 124, stderr: 
+2026-03-30 19:18:02 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell ls -l /sdcard/window_dump.xml
+2026-03-30 19:18:02 | WARNING | Execution.action_executor      | ADB 命令返回非零: 1, stderr: ls: /sdcard/window_dump.xml: No such file or directory
+2026-03-30 19:18:02 | WARNING | Execution.action_executor      | uiautomator dump 未生成文件，尝试重试: 1/2 (fast_normal)
+2026-03-30 19:18:03 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell uiautomator dump --compressed /sdcard/window_dump.xml
+2026-03-30 19:18:14 | WARNING | Execution.action_executor      | uiautomator dump 连续失败: could not get idle state，跳过本轮 dump
+2026-03-30 19:18:14 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell dumpsys activity activities
+2026-03-30 19:18:14 | DEBUG   | Execution.action_executor      | 当前 Activity: com.google.android.deskclock/com.android.deskclock.DeskClock
+2026-03-30 19:18:14 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell dumpsys window windows
+2026-03-30 19:18:14 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell dumpsys activity activities
+2026-03-30 19:18:14 | DEBUG   | Execution.action_executor      | 当前 Activity: com.google.android.deskclock/com.android.deskclock.DeskClock
+2026-03-30 19:18:14 | DEBUG   | Execution.action_executor      | 执行 ADB 命令: /Users/bytedance/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell dumpsys input_method
+2026-03-30 19:18:14 | DEBUG   | Execution.action_executor      | 软键盘状态(mInputShown): False
+2026-03-30 19:18:14 | INFO    | Perception.perception_manager  | 开始环境感知: screenshot=/Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/screenshots/step_4_before.png, dump=
+2026-03-30 19:18:14 | WARNING | Perception.perception_manager  | 未提供 Dump 文件或文件不存在, 将仅使用 CV 数据
+2026-03-30 19:18:23 | DEBUG   | Perception.uied.detect_text.ocr | PaddleOCR page keys: ['input_path', 'page_index', 'doc_preprocessor_res', 'dt_polys', 'model_settings', 'text_det_params', 'text_type', 'text_rec_score_thresh', 'return_word_box', 'rec_texts', 'rec_scores', 'rec_polys', 'vis_fonts', 'textline_orientation_angles', 'rec_boxes']
+2026-03-30 19:18:23 | DEBUG   | Perception.uied.detect_text.ocr | PaddleOCR counts: rec_texts=6, rec_scores=6, rec_polys=6
+2026-03-30 19:18:23 | DEBUG   | Perception.uied.detect_text.ocr | PaddleOCR converted count: 6
+2026-03-30 19:18:23 | DEBUG   | Perception.uied.detect_text.text_detection | After convert: 5
+2026-03-30 19:18:23 | DEBUG   | Perception.uied.detect_text.text_detection | After merge: 4
+2026-03-30 19:18:23 | DEBUG   | Perception.uied.detect_text.text_detection | After filter: 3
+2026-03-30 19:18:23 | DEBUG   | Perception.uied.detect_text.text_detection | After sentence merge: 3
+2026-03-30 19:18:23 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[0]: 'Mon,Mar30'
+2026-03-30 19:18:23 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[1]: ': LI'
+2026-03-30 19:18:23 | DEBUG   | Perception.uied.detect_text.text_detection | Final text[2]: 'PM'
+2026-03-30 19:18:23 | INFO    | Perception.uied.detect_text.text_detection | Text detection completed in 8.386s, text_count=3
+2026-03-30 19:18:23 | INFO    | Perception.perception_manager  | CV 检测完成: 检测到 18 个元素, resize_ratio=0.360
+2026-03-30 19:18:23 | INFO    | Perception.context_builder     | 开始构建 UIState: CV元素=18, Dump控件=0
+2026-03-30 19:18:23 | DEBUG   | Perception.context_builder     | 上下文瘦身: 18 -> 18 控件 (过滤了 0 个冗余控件)
+2026-03-30 19:18:23 | INFO    | Perception.context_builder     | UIState 构建完成: 最终控件数=18 (CV原始=18, Dump原始=0)
+2026-03-30 19:18:23 | INFO    | Perception.perception_manager  | 已保存合并控件列表: /Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/context/step_4_before.json
+2026-03-30 19:18:23 | INFO    | Perception.perception_manager  | 环境感知完成: 最终控件数=18
+2026-03-30 19:18:23 | WARNING | agent_loop                     | 任务超时: 237.5s >= 210s, stage=step_4_planning，跳过该任务
+2026-03-30 19:18:23 | WARNING | agent_loop                     | ❌ 任务未完成: 'Pause the stopwatch.' (步数=4/14)

@@ -1,26 +1,26 @@
 {
-  "activity_name": "com.google.android.gm/.ComposeActivityGmail",
-  "package_name": "com.google.android.gm",
+  "activity_name": "com.google.android.gms/.auth.uiflows.minutemaid.MinuteMaidActivity",
+  "package_name": "com.google.android.gms",
   "screen_width": 1080,
   "screen_height": 2220,
-  "keyboard_visible": true,
+  "keyboard_visible": false,
   "editable_widgets_count": 1,
   "focused_widgets_count": 1,
   "screenshot_path": "/Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/screenshots/step_5_before.png",
   "dump_path": "/Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/dumps/step_5.xml",
-  "widgets_count": 29,
+  "widgets_count": 24,
   "widgets": [
     {
       "id": 0,
       "bounds": [
-        585,
-        124,
-        643,
-        180
+        305,
+        516,
+        341,
+        552
       ],
       "center": [
-        614,
-        152
+        323,
+        534
       ],
       "category": "Compo",
       "text": "",
@@ -41,14 +41,14 @@
     {
       "id": 1,
       "bounds": [
-        52,
-        130,
-        97,
-        177
+        799,
+        521,
+        838,
+        552
       ],
       "center": [
-        74,
-        153
+        818,
+        536
       ],
       "category": "Compo",
       "text": "",
@@ -69,14 +69,14 @@
     {
       "id": 2,
       "bounds": [
-        718,
-        138,
-        774,
-        172
+        851,
+        516,
+        954,
+        552
       ],
       "center": [
-        746,
-        155
+        902,
+        534
       ],
       "category": "Compo",
       "text": "",
@@ -97,14 +97,14 @@
     {
       "id": 3,
       "bounds": [
-        849,
-        130,
-        907,
-        180
+        160,
+        649,
+        230,
+        682
       ],
       "center": [
-        878,
-        155
+        195,
+        665
       ],
       "category": "Compo",
       "text": "",
@@ -125,16 +125,16 @@
     {
       "id": 4,
       "bounds": [
-        291,
-        1956,
-        369,
-        2061
+        402,
+        649,
+        516,
+        682
       ],
       "center": [
-        330,
-        2008
+        459,
+        665
       ],
-      "category": "Compo",
+      "category": "Combined",
       "text": "",
       "resource_id": "",
       "class": "",
@@ -153,16 +153,16 @@
     {
       "id": 5,
       "bounds": [
-        380,
-        1973,
-        785,
-        2072
+        530,
+        649,
+        638,
+        693
       ],
       "center": [
-        582,
-        2022
+        584,
+        671
       ],
-      "category": "Compo",
+      "category": "Combined",
       "text": "",
       "resource_id": "",
       "class": "",
@@ -181,26 +181,26 @@
     {
       "id": 6,
       "bounds": [
-        41,
-        1998,
-        122,
-        2028
+        63,
+        790,
+        1012,
+        993
       ],
       "center": [
-        81,
-        2013
+        537,
+        891
       ],
       "category": "Combined",
       "text": "",
-      "resource_id": "",
-      "class": "",
+      "resource_id": "identifierId",
+      "class": "android.widget.EditText",
       "content_desc": "",
-      "clickable": false,
+      "clickable": true,
       "scrollable": false,
       "enabled": true,
-      "focusable": false,
-      "focused": false,
-      "editable": false,
+      "focusable": true,
+      "focused": true,
+      "editable": true,
       "checkable": false,
       "checked": false,
       "selected": false,
@@ -209,24 +209,24 @@
     {
       "id": 7,
       "bounds": [
-        194,
-        1995,
-        238,
-        2039
+        790,
+        2003,
+        1010,
+        2106
       ],
       "center": [
-        216,
-        2017
+        900,
+        2054
       ],
       "category": "Compo",
-      "text": "",
+      "text": "NEXT",
       "resource_id": "",
-      "class": "",
+      "class": "android.widget.Button",
       "content_desc": "",
-      "clickable": false,
+      "clickable": true,
       "scrollable": false,
       "enabled": true,
-      "focusable": false,
+      "focusable": true,
       "focused": false,
       "editable": false,
       "checkable": false,
@@ -237,16 +237,16 @@
     {
       "id": 8,
       "bounds": [
-        954,
-        1995,
-        1010,
-        2034
+        122,
+        516,
+        166,
+        552
       ],
       "center": [
-        982,
-        2014
+        144,
+        534
       ],
-      "category": "Compo",
+      "category": "Combined",
       "text": "",
       "resource_id": "",
       "class": "",
@@ -265,16 +265,16 @@
     {
       "id": 9,
       "bounds": [
-        999,
-        130,
-        1012,
-        177
+        172,
+        516,
+        241,
+        552
       ],
       "center": [
-        1005,
-        153
+        206,
+        534
       ],
-      "category": "Compo",
+      "category": "Combined",
       "text": "",
       "resource_id": "",
       "class": "",
@@ -293,19 +293,19 @@
     {
       "id": 10,
       "bounds": [
-        44,
-        299,
-        982,
-        480
+        707,
+        527,
+        727,
+        552
       ],
       "center": [
-        513,
-        389
+        717,
+        539
       ],
-      "category": "Combined",
-      "text": "example.comCodex Phase1 Input Test",
-      "resource_id": "com.google.android.gm:id/compose_from_field",
-      "class": "android.widget.LinearLayout",
+      "category": "Compo",
+      "text": "",
+      "resource_id": "",
+      "class": "",
       "content_desc": "",
       "clickable": false,
       "scrollable": false,
@@ -321,24 +321,24 @@
     {
       "id": 11,
       "bounds": [
-        41,
-        444,
-        1015,
-        677
+        732,
+        516,
+        788,
+        552
       ],
       "center": [
-        528,
-        560
+        760,
+        534
       ],
       "category": "Combined",
-      "text": "Add recipient\ncodex.test@example.comCodex Phase1 lnput Test",
+      "text": "",
       "resource_id": "",
-      "class": "android.widget.RelativeLayout",
+      "class": "",
       "content_desc": "",
-      "clickable": true,
+      "clickable": false,
       "scrollable": false,
       "enabled": true,
-      "focusable": true,
+      "focusable": false,
       "focused": false,
       "editable": false,
       "checkable": false,
@@ -349,17 +349,17 @@
     {
       "id": 12,
       "bounds": [
-        8,
-        1431,
-        1065,
-        1728
+        424,
+        127,
+        654,
+        216
       ],
       "center": [
-        536,
-        1579
+        539,
+        171
       ],
-      "category": "Combined",
-      "text": "Test\n2 W 3 e\n6 y",
+      "category": "Text",
+      "text": "Google",
       "resource_id": "",
       "class": "",
       "content_desc": "",
@@ -377,17 +377,17 @@
     {
       "id": 13,
       "bounds": [
-        33,
-        1678,
-        1023,
-        1920
+        430,
+        219,
+        657,
+        341
       ],
       "center": [
-        528,
-        1799
+        543,
+        280
       ],
       "category": "Combined",
-      "text": "a",
+      "text": "Sign in",
       "resource_id": "",
       "class": "",
       "content_desc": "",
@@ -405,24 +405,24 @@
     {
       "id": 14,
       "bounds": [
-        0,
-        77,
-        154,
-        231
+        63,
+        360,
+        1023,
+        488
       ],
       "center": [
-        77,
-        154
+        543,
+        424
       ],
-      "category": "",
-      "text": "",
+      "category": "Text",
+      "text": "Use your Google Account. The account will be\nadded to this device and available to other",
       "resource_id": "",
-      "class": "android.widget.ImageButton",
-      "content_desc": "Navigate up",
-      "clickable": true,
+      "class": "",
+      "content_desc": "",
+      "clickable": false,
       "scrollable": false,
       "enabled": true,
-      "focusable": true,
+      "focusable": false,
       "focused": false,
       "editable": false,
       "checkable": false,
@@ -433,24 +433,24 @@
     {
       "id": 15,
       "bounds": [
-        552,
-        88,
-        684,
-        220
+        399,
+        502,
+        688,
+        563
       ],
       "center": [
-        618,
-        154
+        543,
+        532
       ],
-      "category": "",
-      "text": "",
-      "resource_id": "com.google.android.gm:id/smart_draft_app_bar",
-      "class": "android.widget.Button",
-      "content_desc": "Help me write",
-      "clickable": true,
+      "category": "Text",
+      "text": "Google apps.",
+      "resource_id": "",
+      "class": "",
+      "content_desc": "",
+      "clickable": false,
       "scrollable": false,
       "enabled": true,
-      "focusable": true,
+      "focusable": false,
       "focused": false,
       "editable": false,
       "checkable": false,
@@ -461,24 +461,24 @@
     {
       "id": 16,
       "bounds": [
-        684,
-        88,
-        816,
-        220
+        138,
+        521,
+        951,
+        632
       ],
       "center": [
-        750,
-        154
+        544,
+        576
       ],
-      "category": "",
-      "text": "",
-      "resource_id": "com.google.android.gm:id/add_attachment",
-      "class": "android.widget.Button",
-      "content_desc": "Attach",
-      "clickable": true,
+      "category": "Combined",
+      "text": "Use your Google Account. The account will be added to this device and available to other Google apps.",
+      "resource_id": "",
+      "class": "android.widget.TextView",
+      "content_desc": "",
+      "clickable": false,
       "scrollable": false,
       "enabled": true,
-      "focusable": true,
+      "focusable": false,
       "focused": false,
       "editable": false,
       "checkable": false,
@@ -489,24 +489,24 @@
     {
       "id": 17,
       "bounds": [
-        816,
-        88,
-        948,
-        220
+        27,
+        976,
+        299,
+        1035
       ],
       "center": [
-        882,
-        154
+        163,
+        1005
       ],
-      "category": "",
-      "text": "",
-      "resource_id": "com.google.android.gm:id/send",
-      "class": "android.widget.Button",
-      "content_desc": "Send",
-      "clickable": true,
+      "category": "Text",
+      "text": "Forgot email?",
+      "resource_id": "",
+      "class": "",
+      "content_desc": "",
+      "clickable": false,
       "scrollable": false,
       "enabled": true,
-      "focusable": true,
+      "focusable": false,
       "focused": false,
       "editable": false,
       "checkable": false,
@@ -517,20 +517,20 @@
     {
       "id": 18,
       "bounds": [
-        948,
-        88,
-        1080,
-        220
+        30,
+        1237,
+        338,
+        1290
       ],
       "center": [
-        1014,
-        154
+        184,
+        1263
       ],
-      "category": "",
-      "text": "",
+      "category": "Text",
+      "text": "Create account",
       "resource_id": "",
-      "class": "android.widget.ImageView",
-      "content_desc": "More options",
+      "class": "android.widget.Button",
+      "content_desc": "",
       "clickable": true,
       "scrollable": false,
       "enabled": true,
@@ -546,18 +546,18 @@
       "id": 19,
       "bounds": [
         0,
-        242,
+        66,
         1080,
-        1398
+        1958
       ],
       "center": [
         540,
-        820
+        1012
       ],
       "category": "",
-      "text": "",
-      "resource_id": "com.google.android.gm:id/compose",
-      "class": "android.widget.ScrollView",
+      "text": "Sign in Use your Google Account. The account will be added to this device and available to other Google apps.Learn more about using your account",
+      "resource_id": "",
+      "class": "android.webkit.WebView",
       "content_desc": "",
       "clickable": false,
       "scrollable": false,
@@ -573,46 +573,18 @@
     {
       "id": 20,
       "bounds": [
-        44,
-        242,
-        198,
-        396
+        440,
+        330,
+        640,
+        415
       ],
       "center": [
-        121,
-        319
+        540,
+        372
       ],
       "category": "",
-      "text": "From",
-      "resource_id": "com.google.android.gm:id/from_label",
-      "class": "android.widget.TextView",
-      "content_desc": "From",
-      "clickable": true,
-      "scrollable": false,
-      "enabled": true,
-      "focusable": true,
-      "focused": false,
-      "editable": false,
-      "checkable": false,
-      "checked": false,
-      "selected": false,
-      "cv_confidence": 0.0
-    },
-    {
-      "id": 21,
-      "bounds": [
-        198,
-        286,
-        1080,
-        352
-      ],
-      "center": [
-        639,
-        319
-      ],
-      "category": "",
-      "text": "qinchenjiang17@gmail.com",
-      "resource_id": "com.google.android.gm:id/from_account_name",
+      "text": "Sign in",
+      "resource_id": "",
       "class": "android.widget.TextView",
       "content_desc": "",
       "clickable": false,
@@ -627,23 +599,51 @@
       "cv_confidence": 0.0
     },
     {
-      "id": 22,
+      "id": 21,
       "bounds": [
-        0,
-        408,
-        1080,
-        540
+        151,
+        635,
+        929,
+        701
       ],
       "center": [
         540,
-        474
+        668
       ],
       "category": "",
-      "text": "",
-      "resource_id": "com.google.android.gm:id/peoplekit_autocomplete_chip_group",
-      "class": "android.view.ViewGroup",
+      "text": "Learn more about using your account",
+      "resource_id": "learnMore",
+      "class": "android.widget.Button",
       "content_desc": "",
       "clickable": true,
+      "scrollable": false,
+      "enabled": true,
+      "focusable": true,
+      "focused": false,
+      "editable": false,
+      "checkable": false,
+      "checked": false,
+      "selected": false,
+      "cv_confidence": 0.0
+    },
+    {
+      "id": 22,
+      "bounds": [
+        132,
+        954,
+        602,
+        998
+      ],
+      "center": [
+        367,
+        976
+      ],
+      "category": "",
+      "text": "Enter an email or phone number",
+      "resource_id": "",
+      "class": "android.widget.TextView",
+      "content_desc": "",
+      "clickable": false,
       "scrollable": false,
       "enabled": true,
       "focusable": false,
@@ -657,164 +657,24 @@
     {
       "id": 23,
       "bounds": [
-        198,
-        408,
-        948,
-        540
+        55,
+        1017,
+        319,
+        1078
       ],
       "center": [
-        573,
-        474
+        187,
+        1047
       ],
       "category": "",
-      "text": "codex.test@example.comCodex Phase1 Input Test",
+      "text": "Forgot email?",
       "resource_id": "",
-      "class": "android.widget.EditText",
+      "class": "android.widget.Button",
       "content_desc": "",
       "clickable": true,
       "scrollable": false,
       "enabled": true,
       "focusable": true,
-      "focused": true,
-      "editable": true,
-      "checkable": false,
-      "checked": false,
-      "selected": false,
-      "cv_confidence": 0.0
-    },
-    {
-      "id": 24,
-      "bounds": [
-        0,
-        540,
-        1080,
-        1387
-      ],
-      "center": [
-        540,
-        963
-      ],
-      "category": "",
-      "text": "",
-      "resource_id": "com.google.android.gm:id/peoplekit_autocomplete_results_recyclerview",
-      "class": "android.support.v7.widget.RecyclerView",
-      "content_desc": "",
-      "clickable": false,
-      "scrollable": false,
-      "enabled": true,
-      "focusable": true,
-      "focused": false,
-      "editable": false,
-      "checkable": false,
-      "checked": false,
-      "selected": false,
-      "cv_confidence": 0.0
-    },
-    {
-      "id": 25,
-      "bounds": [
-        198,
-        565,
-        465,
-        631
-      ],
-      "center": [
-        331,
-        598
-      ],
-      "category": "",
-      "text": "Add recipient",
-      "resource_id": "com.google.android.gm:id/peoplekit_listview_contact_name",
-      "class": "android.widget.TextView",
-      "content_desc": "",
-      "clickable": false,
-      "scrollable": false,
-      "enabled": true,
-      "focusable": false,
-      "focused": false,
-      "editable": false,
-      "checkable": false,
-      "checked": false,
-      "selected": false,
-      "cv_confidence": 0.0
-    },
-    {
-      "id": 26,
-      "bounds": [
-        198,
-        631,
-        966,
-        681
-      ],
-      "center": [
-        582,
-        656
-      ],
-      "category": "",
-      "text": "codex.test@example.comCodex Phase1 Input Test",
-      "resource_id": "com.google.android.gm:id/peoplekit_listview_contact_method",
-      "class": "android.widget.TextView",
-      "content_desc": "",
-      "clickable": false,
-      "scrollable": false,
-      "enabled": true,
-      "focusable": false,
-      "focused": false,
-      "editable": false,
-      "checkable": false,
-      "checked": false,
-      "selected": false,
-      "cv_confidence": 0.0
-    },
-    {
-      "id": 27,
-      "bounds": [
-        0,
-        397,
-        114,
-        1398
-      ],
-      "center": [
-        57,
-        897
-      ],
-      "category": "",
-      "text": "To",
-      "resource_id": "com.google.android.gm:id/to_prefix_text",
-      "class": "android.widget.TextView",
-      "content_desc": "",
-      "clickable": false,
-      "scrollable": false,
-      "enabled": true,
-      "focusable": false,
-      "focused": false,
-      "editable": false,
-      "checkable": false,
-      "checked": false,
-      "selected": false,
-      "cv_confidence": 0.0
-    },
-    {
-      "id": 28,
-      "bounds": [
-        926,
-        397,
-        1080,
-        551
-      ],
-      "center": [
-        1003,
-        474
-      ],
-      "category": "",
-      "text": "",
-      "resource_id": "com.google.android.gm:id/add_cc_bcc",
-      "class": "android.widget.ImageView",
-      "content_desc": "Add Cc/Bcc",
-      "clickable": true,
-      "scrollable": false,
-      "enabled": true,
-      "focusable": false,
       "focused": false,
       "editable": false,
       "checkable": false,

@@ -10,6 +10,14 @@ from os.path import join as p_join
 import logging
 
 logger = logging.getLogger(__name__)
+_OCR_DETECTOR = None
+
+
+def _get_ocr_detector() -> OCRDetector:
+    global _OCR_DETECTOR
+    if _OCR_DETECTOR is None:
+        _OCR_DETECTOR = OCRDetector()
+    return _OCR_DETECTOR
 
 
 def save_detection_json(file_path, texts, img_shape):
@@ -161,7 +169,7 @@ def text_detection(input_file, output_file, show=False):
         logger.error("Failed to read image: %s", input_file)
         raise FileNotFoundError(f"Cannot read image: {input_file}")
 
-    detector = OCRDetector()
+    detector = _get_ocr_detector()
     ocr_model = detector.get_model('ch_ppocr_mobile_v2.0_xx')
 
     raw = ocr_model.ocr(np.array(img))

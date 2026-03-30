@@ -7,133 +7,103 @@
     "texts": [
         {
             "id": 0,
-            "content": "V .",
-            "column_min": 867,
-            "row_min": 68,
-            "column_max": 1062,
-            "row_max": 128,
-            "width": 195,
-            "height": 60
-        },
-        {
-            "id": 1,
-            "content": "From qinchenjiang17@gmail.com",
-            "column_min": 0,
-            "row_min": 225,
-            "column_max": 751,
-            "row_max": 292,
-            "width": 751,
-            "height": 67
-        },
-        {
-            "id": 2,
-            "content": "To",
-            "column_min": 0,
-            "row_min": 389,
-            "column_max": 59,
-            "row_max": 442,
-            "width": 59,
-            "height": 53
-        },
-        {
-            "id": 3,
-            "content": "codex.test@example.com",
-            "column_min": 158,
-            "row_min": 397,
-            "column_max": 718,
-            "row_max": 459,
-            "width": 560,
-            "height": 62
-        },
-        {
-            "id": 4,
-            "content": "Add recipient",
-            "column_min": 156,
-            "row_min": 535,
-            "column_max": 448,
-            "row_max": 590,
-            "width": 292,
-            "height": 55
-        },
-        {
-            "id": 5,
-            "content": "codex.test@example.com",
-            "column_min": 156,
-            "row_min": 604,
-            "column_max": 583,
-            "row_max": 648,
-            "width": 427,
-            "height": 44
-        },
-        {
-            "id": 6,
-            "content": "GIF",
-            "column_min": 307,
-            "row_min": 1506,
-            "column_max": 389,
-            "row_max": 1557,
-            "width": 82,
-            "height": 51
-        },
-        {
-            "id": 7,
-            "content": "2 W",
-            "column_min": 83,
-            "row_min": 1628,
-            "column_max": 167,
-            "row_max": 1715,
-            "width": 84,
+            "content": "Google",
+            "column_min": 428,
+            "row_min": 128,
+            "column_max": 656,
+            "row_max": 215,
+            "width": 228,
             "height": 87
         },
         {
+            "id": 1,
+            "content": "Sign in",
+            "column_min": 432,
+            "row_min": 252,
+            "column_max": 659,
+            "row_max": 339,
+            "width": 227,
+            "height": 87
+        },
+        {
+            "id": 2,
+            "content": "Use your Google Account. The account will be",
+            "column_min": 67,
+            "row_min": 359,
+            "column_max": 1025,
+            "row_max": 421,
+            "width": 958,
+            "height": 62
+        },
+        {
+            "id": 3,
+            "content": "added to this device and available to other",
+            "column_min": 105,
+            "row_min": 430,
+            "column_max": 988,
+            "row_max": 486,
+            "width": 883,
+            "height": 56
+        },
+        {
+            "id": 4,
+            "content": "Google apps.",
+            "column_min": 402,
+            "row_min": 498,
+            "column_max": 691,
+            "row_max": 560,
+            "width": 289,
+            "height": 62
+        },
+        {
+            "id": 5,
+            "content": "Learn more about using your account",
+            "column_min": 141,
+            "row_min": 563,
+            "column_max": 955,
+            "row_max": 634,
+            "width": 814,
+            "height": 71
+        },
+        {
+            "id": 6,
+            "content": "Email or phone",
+            "column_min": 86,
+            "row_min": 774,
+            "column_max": 405,
+            "row_max": 842,
+            "width": 319,
+            "height": 68
+        },
+        {
+            "id": 7,
+            "content": "Forgot email?",
+            "column_min": 36,
+            "row_min": 913,
+            "column_max": 302,
+            "row_max": 972,
+            "width": 266,
+            "height": 59
+        },
+        {
             "id": 8,
-            "content": "6 y",
-            "column_min": 543,
-            "row_min": 1638,
-            "column_max": 621,
-            "row_max": 1738,
-            "width": 78,
-            "height": 100
+            "content": "Create account",
+            "column_min": 32,
+            "row_min": 1170,
+            "column_max": 340,
+            "row_max": 1224,
+            "width": 308,
+            "height": 54
         },
         {
             "id": 9,
-            "content": "ki",
-            "column_min": 806,
-            "row_min": 1787,
-            "column_max": 1022,
-            "row_max": 1901,
-            "width": 216,
-            "height": 114
-        },
-        {
-            "id": 10,
-            "content": "a",
-            "column_min": 39,
-            "row_min": 1810,
-            "column_max": 90,
-            "row_max": 1871,
-            "width": 51,
-            "height": 61
-        },
-        {
-            "id": 11,
-            "content": "123",
-            "column_min": 0,
-            "row_min": 2114,
-            "column_max": 80,
-            "row_max": 2164,
-            "width": 80,
-            "height": 50
-        },
-        {
-            "id": 12,
-            "content": "→I",
-            "column_min": 959,
-            "row_min": 2125,
-            "column_max": 1053,
-            "row_max": 2197,
-            "width": 94,
-            "height": 72
+            "content": "NEXT",
+            "column_min": 885,
+            "row_min": 2087,
+            "column_max": 1005,
+            "row_max": 2131,
+            "width": 120,
+            "height": 44
         }
     ]
 }

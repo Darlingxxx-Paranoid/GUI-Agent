@@ -5,31 +5,36 @@ Evaluator Prompt Template
 EVALUATOR_PROMPT = """
 You are the post-action evaluator of a GUI automation agent.
 
-Your job is to determine whether the executed action has successfully completed the subgoal,
-based on the UI state BEFORE and AFTER execution.
+Your job is to determine whether the executed action has completed the subgoal,
+based on a standardized evidence package extracted from UI state BEFORE and AFTER execution.
 
 Important evaluation principles:
 1. Judge success mainly by semantic state change, not by exact text matching.
-2. Compare the before/after UI and determine whether the interface moved in the expected direction.
+2. First interpret the delta facts objectively, then decide.
 3. Do not require the trigger widget to remain visible after the action; it may disappear normally.
-4. Consider structural and interaction changes, such as:
-   - entering a new page
-   - opening a dialog or menu
-   - switching into an input/edit/search/selection state
-   - refreshing content
-   - changing focus or interactive elements
-5. If the result clearly goes in the wrong direction (wrong page, no meaningful change, unexpected app jump, error-like page), then return success=false.
-6. Be conservative: do not mark success unless the after-state reasonably satisfies the acceptance criteria.
+4. Respect boundary constraints (app/package/activity/risk). Any strong violation should override other evidence.
+5. If evidence is insufficient or UI is in intermediate/loading state, output decision="uncertain".
+6. Be conservative: do not mark success unless there is direct evidence aligned with the semantic goal and evidence plan.
 
-You MUST first summarize the BEFORE and AFTER UI states into a compact semantic representation, then decide success based on that summary.
+You MUST first summarize the BEFORE and AFTER UI states into a compact semantic representation, then decide based on:
+- semantic goal
+- success evidence plan
+- delta facts
+- boundary/constraint evidence
 
 ## Subgoal
 {subgoal_description}
 
-## Acceptance Criteria
+## Semantic Goal
 {acceptance_criteria}
 
-## Constraint Evidence (may be noisy)
+## Success Evidence Plan (pre-execution)
+{success_evidence_plan}
+
+## Delta Facts (machine-extracted; treat as primary evidence)
+{delta_facts}
+
+## Constraint Evidence (may be noisy; secondary evidence)
 {constraint_evidence}
 
 ## UI State Summary Before Execution
@@ -41,8 +46,9 @@ You MUST first summarize the BEFORE and AFTER UI states into a compact semantic 
 Return JSON only:
 ```json
 {{
-    "success": true,
-    "reason": "Brief explanation focusing on semantic state transition and whether the subgoal was achieved",
+    "decision": "success/fail/uncertain",
+    "confidence": 0.0,
+    "reason": "Brief explanation focusing on evidence and semantic goal alignment",
     "before_summary": {{
         "page_type": "unknown",
         "key_elements": ["short tokens like 'Send', 'Subject', 'Search bar', 'Dialog'"],
@@ -59,11 +65,9 @@ Return JSON only:
         "notable_changes": ["what changed from before to after"],
         "direction": "moved_toward_goal/moved_away/no_change/unclear"
     }},
-    "evidence_used": {{
-        "hard_violations": [],
-        "supporting_hits": [],
-        "suspicious_signals": []
-    }}
+    "evidence_for": ["bullet facts supporting success"],
+    "evidence_against": ["bullet facts supporting failure"],
+    "boundary_violations": ["violations if any"]
 }}
 ```
 """

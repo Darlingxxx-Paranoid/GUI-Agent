@@ -5,10 +5,24 @@ GUI Agent 入口模块
 import argparse
 import logging
 import os
+import shutil
 import sys
 
 from config import AgentConfig
 from agent_loop import AgentLoop
+
+
+def clean_data_directory(data_dir: str):
+    """
+    清空 data 目录中的所有内容，避免跨次实验数据污染。
+    """
+    os.makedirs(data_dir, exist_ok=True)
+    for entry in os.listdir(data_dir):
+        path = os.path.join(data_dir, entry)
+        if os.path.isdir(path) and not os.path.islink(path):
+            shutil.rmtree(path)
+        else:
+            os.unlink(path)
 
 
 def setup_logging(log_level: str = "INFO", log_file: str = None):
@@ -105,11 +119,20 @@ def main():
         default=30,
         help="单个任务最大执行步数（默认: 30）",
     )
+    parser.add_argument(
+        "--max-task-seconds",
+        type=int,
+        default=0,
+        help="单个任务最大执行时长（秒，0 表示不限制）",
+    )
     args = parser.parse_args()
+
+    data_dir = os.path.join(os.path.dirname(__file__), "data")
+    clean_data_directory(data_dir)
 
     # 设置 logging
     log_file = args.log_file or os.path.join(
-        os.path.dirname(__file__), "data", "logs", "agent.log"
+        data_dir, "logs", "agent.log"
     )
     setup_logging(log_level=args.log_level, log_file=log_file)
 
@@ -125,6 +148,8 @@ def main():
 
     if args.max_steps:
         config.max_steps = args.max_steps
+    if args.max_task_seconds and args.max_task_seconds > 0:
+        config.max_task_seconds = args.max_task_seconds
 
     # 启动 Agent
     agent = AgentLoop(config)

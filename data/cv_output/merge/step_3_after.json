@@ -1,192 +1,241 @@
 {
     "compos": [
         {
-            "id": 0,
-            "class": "Compo",
-            "height": 20,
-            "width": 21,
-            "position": {
-                "column_min": 211,
-                "row_min": 45,
-                "column_max": 232,
-                "row_max": 65
-            }
-        },
-        {
-            "id": 1,
-            "class": "Compo",
-            "height": 17,
-            "width": 16,
-            "position": {
-                "column_min": 19,
-                "row_min": 47,
-                "column_max": 35,
-                "row_max": 64
-            }
-        },
-        {
-            "id": 4,
-            "class": "Compo",
-            "height": 12,
-            "width": 20,
-            "position": {
-                "column_min": 259,
-                "row_min": 50,
-                "column_max": 279,
-                "row_max": 62
-            }
-        },
-        {
-            "id": 2,
-            "class": "Compo",
-            "height": 18,
-            "width": 21,
-            "position": {
-                "column_min": 306,
-                "row_min": 47,
-                "column_max": 327,
-                "row_max": 65
-            }
-        },
-        {
-            "id": 7,
+            "id": 6,
             "class": "Compo",
             "height": 13,
-            "width": 141,
+            "width": 13,
             "position": {
-                "column_min": 71,
-                "row_min": 231,
-                "column_max": 212,
-                "row_max": 244
+                "column_min": 110,
+                "row_min": 186,
+                "column_max": 123,
+                "row_max": 199
             },
-            "parent": 6
+            "parent": 9
         },
         {
             "id": 10,
             "class": "Compo",
-            "height": 38,
-            "width": 28,
+            "height": 11,
+            "width": 14,
             "position": {
-                "column_min": 105,
-                "row_min": 705,
-                "column_max": 133,
-                "row_max": 743
+                "column_min": 288,
+                "row_min": 188,
+                "column_max": 302,
+                "row_max": 199
+            },
+            "parent": 9
+        },
+        {
+            "id": 8,
+            "class": "Compo",
+            "height": 13,
+            "width": 37,
+            "position": {
+                "column_min": 307,
+                "row_min": 186,
+                "column_max": 344,
+                "row_max": 199
+            },
+            "parent": 9
+        },
+        {
+            "id": 12,
+            "class": "Compo",
+            "height": 12,
+            "width": 25,
+            "position": {
+                "column_min": 58,
+                "row_min": 234,
+                "column_max": 83,
+                "row_max": 246
             }
         },
         {
-            "id": 11,
-            "class": "Compo",
-            "height": 36,
-            "width": 146,
+            "id": 13,
+            "class": "Combined",
+            "height": 12,
+            "width": 41,
             "position": {
-                "column_min": 137,
-                "row_min": 711,
-                "column_max": 283,
-                "row_max": 747
+                "column_min": 145,
+                "row_min": 234,
+                "column_max": 186,
+                "row_max": 246
             }
         },
         {
             "id": 14,
             "class": "Combined",
-            "height": 11,
-            "width": 29,
+            "height": 16,
+            "width": 39,
             "position": {
-                "column_min": 15,
-                "row_min": 720,
-                "column_max": 44,
-                "row_max": 731
+                "column_min": 191,
+                "row_min": 234,
+                "column_max": 230,
+                "row_max": 250
             }
         },
         {
-            "id": 12,
+            "id": 17,
             "class": "Compo",
-            "height": 16,
+            "height": 37,
+            "width": 79,
+            "position": {
+                "column_min": 285,
+                "row_min": 722,
+                "column_max": 364,
+                "row_max": 759
+            }
+        },
+        {
+            "id": 4,
+            "class": "Combined",
+            "height": 13,
             "width": 16,
             "position": {
-                "column_min": 70,
-                "row_min": 719,
-                "column_max": 86,
-                "row_max": 735
-            }
-        },
-        {
-            "id": 13,
-            "class": "Compo",
-            "height": 14,
-            "width": 20,
-            "position": {
-                "column_min": 344,
-                "row_min": 719,
-                "column_max": 364,
-                "row_max": 733
-            }
-        },
-        {
-            "id": 3,
-            "class": "Compo",
-            "height": 17,
-            "width": 5,
-            "position": {
-                "column_min": 360,
-                "row_min": 47,
-                "column_max": 365,
-                "row_max": 64
+                "column_min": 44,
+                "row_min": 186,
+                "column_max": 60,
+                "row_max": 199
             }
         },
         {
             "id": 5,
             "class": "Combined",
-            "height": 58,
-            "width": 247,
+            "height": 13,
+            "width": 25,
             "position": {
-                "column_min": 16,
-                "row_min": 108,
-                "column_max": 263,
-                "row_max": 166
+                "column_min": 62,
+                "row_min": 186,
+                "column_max": 87,
+                "row_max": 199
             },
-            "text_content": "codex.test@example.com"
+            "parent": 9
         },
         {
-            "id": 6,
-            "class": "Combined",
-            "height": 84,
-            "width": 351,
+            "id": 11,
+            "class": "Compo",
+            "height": 9,
+            "width": 7,
             "position": {
-                "column_min": 15,
-                "row_min": 160,
-                "column_max": 366,
-                "row_max": 244
+                "column_min": 255,
+                "row_min": 190,
+                "column_max": 262,
+                "row_max": 199
             },
-            "text_content": "Add recipient\ncodex.test@example.com",
-            "children": [
-                7
-            ]
+            "parent": 9
         },
         {
-            "id": 8,
+            "id": 7,
             "class": "Combined",
-            "height": 111,
-            "width": 381,
+            "height": 13,
+            "width": 20,
             "position": {
-                "column_min": 3,
-                "row_min": 515,
-                "column_max": 384,
-                "row_max": 626
+                "column_min": 264,
+                "row_min": 186,
+                "column_max": 284,
+                "row_max": 199
             },
-            "text_content": "\u81ea\u3002\nGIF\n2 W\n6 y"
+            "parent": 9
+        },
+        {
+            "id": 0,
+            "class": "Text",
+            "height": 32,
+            "width": 83,
+            "position": {
+                "column_min": 153,
+                "row_min": 45,
+                "column_max": 236,
+                "row_max": 77
+            },
+            "text_content": "Google"
+        },
+        {
+            "id": 1,
+            "class": "Combined",
+            "height": 43,
+            "width": 82,
+            "position": {
+                "column_min": 155,
+                "row_min": 79,
+                "column_max": 237,
+                "row_max": 122
+            },
+            "text_content": "Sign in"
+        },
+        {
+            "id": 2,
+            "class": "Text",
+            "height": 46,
+            "width": 345,
+            "position": {
+                "column_min": 24,
+                "row_min": 129,
+                "column_max": 369,
+                "row_max": 175
+            },
+            "text_content": "Use your Google Account. The account will be\nadded to this device and available to other"
+        },
+        {
+            "id": 3,
+            "class": "Text",
+            "height": 22,
+            "width": 105,
+            "position": {
+                "column_min": 144,
+                "row_min": 179,
+                "column_max": 249,
+                "row_max": 201
+            },
+            "text_content": "Google apps."
         },
         {
             "id": 9,
             "class": "Combined",
-            "height": 87,
-            "width": 355,
+            "height": 40,
+            "width": 294,
             "position": {
-                "column_min": 14,
-                "row_min": 605,
-                "column_max": 369,
-                "row_max": 692
+                "column_min": 50,
+                "row_min": 188,
+                "column_max": 344,
+                "row_max": 228
             },
-            "text_content": "k l\na"
+            "text_content": "Learn more about using your account",
+            "children": [
+                6,
+                10,
+                8,
+                5,
+                11,
+                7
+            ]
+        },
+        {
+            "id": 15,
+            "class": "Combined",
+            "height": 64,
+            "width": 353,
+            "position": {
+                "column_min": 12,
+                "row_min": 285,
+                "column_max": 365,
+                "row_max": 349
+            },
+            "text_content": "Forgot email?"
+        },
+        {
+            "id": 16,
+            "class": "Text",
+            "height": 20,
+            "width": 111,
+            "position": {
+                "column_min": 11,
+                "row_min": 421,
+                "column_max": 122,
+                "row_max": 441
+            },
+            "text_content": "Create account"
         }
     ],
     "img_shape": [

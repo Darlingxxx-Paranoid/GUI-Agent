@@ -1,0 +1,32 @@
+{
+  "run_dir": "data/benchmarks/oracle-v3-stopwatch-iter2-20260330-191424",
+  "label": "oracle-v3-stopwatch-iter2",
+  "serial": "emulator-5554",
+  "max_steps": 14,
+  "max_task_seconds": 210,
+  "dry_run": false,
+  "disable_cv": true,
+  "success_count": 0,
+  "total_count": 1,
+  "success_rate": 0.0,
+  "runtime_hard_total": 0,
+  "hard_boundary_total": 0,
+  "focus_shortcut_total": 0,
+  "uncertain_observe_total": 1,
+  "timeout_skipped_count": 1,
+  "results": [
+    {
+      "task_id": "ClockStopWatchPausedVerify",
+      "task": "Pause the stopwatch.",
+      "success": false,
+      "duration_sec": 237.58,
+      "log_file": "data/benchmarks/oracle-v3-stopwatch-iter2-20260330-191424/ClockStopWatchPausedVerify.log",
+      "runtime_hard_count": 0,
+      "hard_boundary_count": 0,
+      "focus_shortcut_count": 0,
+      "uncertain_observe_count": 1,
+      "error": "",
+      "failure_summary": "任务超时: 237.5s >= 210s, stage=step_4_planning，跳过该任务"
+    }
+  ]
+}

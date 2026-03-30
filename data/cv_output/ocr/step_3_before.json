@@ -7,103 +7,103 @@
     "texts": [
         {
             "id": 0,
-            "content": "From qinchenjiang17@gmaill.com",
-            "column_min": 0,
-            "row_min": 237,
-            "column_max": 748,
-            "row_max": 303,
-            "width": 748,
-            "height": 66
+            "content": "Google",
+            "column_min": 427,
+            "row_min": 127,
+            "column_max": 656,
+            "row_max": 215,
+            "width": 229,
+            "height": 88
         },
         {
             "id": 1,
-            "content": "To",
-            "column_min": 0,
-            "row_min": 404,
-            "column_max": 68,
-            "row_max": 461,
-            "width": 68,
-            "height": 57
+            "content": "Sign in",
+            "column_min": 432,
+            "row_min": 252,
+            "column_max": 659,
+            "row_max": 339,
+            "width": 227,
+            "height": 87
         },
         {
             "id": 2,
-            "content": "Subject",
-            "column_min": 0,
-            "row_min": 558,
-            "column_max": 197,
-            "row_max": 637,
-            "width": 197,
-            "height": 79
+            "content": "Use your Google Account. The account will be",
+            "column_min": 67,
+            "row_min": 359,
+            "column_max": 1026,
+            "row_max": 422,
+            "width": 959,
+            "height": 63
         },
         {
             "id": 3,
-            "content": "Compose email",
-            "column_min": 0,
-            "row_min": 727,
-            "column_max": 373,
-            "row_max": 804,
-            "width": 373,
-            "height": 77
+            "content": "added to this device and available to other",
+            "column_min": 104,
+            "row_min": 428,
+            "column_max": 989,
+            "row_max": 487,
+            "width": 885,
+            "height": 59
         },
         {
             "id": 4,
-            "content": "自。",
-            "column_min": 478,
-            "row_min": 1479,
-            "column_max": 719,
-            "row_max": 1569,
-            "width": 241,
-            "height": 90
+            "content": "Google apps.",
+            "column_min": 402,
+            "row_min": 498,
+            "column_max": 691,
+            "row_max": 560,
+            "width": 289,
+            "height": 62
         },
         {
             "id": 5,
-            "content": "GIF",
-            "column_min": 313,
-            "row_min": 1495,
-            "column_max": 393,
-            "row_max": 1545,
-            "width": 80,
-            "height": 50
+            "content": "Learn more about using your account",
+            "column_min": 141,
+            "row_min": 563,
+            "column_max": 955,
+            "row_max": 634,
+            "width": 814,
+            "height": 71
         },
         {
             "id": 6,
-            "content": "2 W 3 é",
-            "column_min": 94,
-            "row_min": 1617,
-            "column_max": 288,
-            "row_max": 1708,
-            "width": 194,
-            "height": 91
+            "content": "Email or phone",
+            "column_min": 86,
+            "row_min": 774,
+            "column_max": 405,
+            "row_max": 842,
+            "width": 319,
+            "height": 68
         },
         {
             "id": 7,
-            "content": "6 y",
-            "column_min": 546,
-            "row_min": 1630,
-            "column_max": 624,
-            "row_max": 1731,
-            "width": 78,
-            "height": 101
+            "content": "Forgot email?",
+            "column_min": 36,
+            "row_min": 913,
+            "column_max": 302,
+            "row_max": 971,
+            "width": 266,
+            "height": 58
         },
         {
             "id": 8,
-            "content": "a",
-            "column_min": 46,
-            "row_min": 1805,
-            "column_max": 98,
-            "row_max": 1866,
-            "width": 52,
-            "height": 61
+            "content": "Create account",
+            "column_min": 32,
+            "row_min": 1170,
+            "column_max": 340,
+            "row_max": 1224,
+            "width": 308,
+            "height": 54
         },
         {
             "id": 9,
-            "content": "P123",
-            "column_min": 0,
-            "row_min": 2109,
-            "column_max": 86,
-            "row_max": 2163,
-            "width": 86,
-            "height": 54
+            "content": "NEXT",
+            "column_min": 885,
+            "row_min": 2087,
+            "column_max": 1005,
+            "row_max": 2131,
+            "width": 120,
+            "height": 44
         }
     ]
 }

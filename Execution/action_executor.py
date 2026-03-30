@@ -67,6 +67,13 @@ class ActionExecutor:
         self.screenshot_dir = screenshot_dir
         self.dump_dir = dump_dir
         self.adb_path = self._resolve_adb_path(adb_path)
+        self._dump_consecutive_failures = 0
+        self._dump_skip_until_ts = 0.0
+        self._dump_last_failure_reason = ""
+        self._dump_base_cooldown_sec = 6
+        self._dump_max_cooldown_sec = 40
+        self._dump_prefer_compressed_until_ts = 0.0
+        self._dump_prefer_window_sec = 120
 
         os.makedirs(screenshot_dir, exist_ok=True)
         os.makedirs(dump_dir, exist_ok=True)
@@ -107,7 +114,7 @@ class ActionExecutor:
         logger.warning("未自动发现 adb, 将回退为依赖 PATH 中的 'adb'")
         return "adb"
 
-    def _adb_cmd(self, *args) -> subprocess.CompletedProcess:
+    def _adb_cmd(self, *args, timeout_sec: int = 30) -> subprocess.CompletedProcess:
         """构造并执行 ADB 命令"""
         cmd = [self.adb_path]
         if self.serial:
@@ -120,7 +127,7 @@ class ActionExecutor:
                 cmd,
                 capture_output=True,
                 text=True,
-                timeout=30,
+                timeout=max(1, int(timeout_sec or 30)),
             )
             if result.returncode != 0:
                 logger.warning("ADB 命令返回非零: %s, stderr: %s", result.returncode, result.stderr.strip())
@@ -269,6 +276,48 @@ class ActionExecutor:
         logger.info("执行回车键")
         self._adb_cmd("shell", "input", "keyevent", "KEYCODE_ENTER")
 
+    def launch_app(self, package_name: str):
+        """通过包名启动应用。"""
+        package = (package_name or "").strip()
+        if not package:
+            logger.warning("launch_app 包名为空，跳过")
+            return
+
+        logger.info("启动应用: %s", package)
+        result = self._adb_cmd(
+            "shell",
+            "monkey",
+            "-p",
+            package,
+            "-c",
+            "android.intent.category.LAUNCHER",
+            "1",
+        )
+        if result.returncode == 0:
+            return
+
+        logger.warning("monkey 启动失败，尝试 am start: %s", package)
+        resolve = self._adb_cmd(
+            "shell",
+            "cmd",
+            "package",
+            "resolve-activity",
+            "--brief",
+            package,
+        )
+        lines = [
+            line.strip()
+            for line in (resolve.stdout or "").splitlines()
+            if line.strip()
+        ]
+        target = ""
+        for line in reversed(lines):
+            if "/" in line and package in line:
+                target = line
+                break
+        if target:
+            self._adb_cmd("shell", "am", "start", "-n", target)
+
     def screenshot(self, filename: Optional[str] = None) -> str:
         """
         截取当前屏幕
@@ -294,6 +343,16 @@ class ActionExecutor:
         :param filename: 文件名，默认使用时间戳
         :return: dump 保存的本地路径
         """
+        now = time.time()
+        if now < self._dump_skip_until_ts:
+            cooldown_left = self._dump_skip_until_ts - now
+            logger.info(
+                "跳过 UI dump: 熔断冷却中(%.1fs), 最近失败原因=%s",
+                cooldown_left,
+                self._dump_last_failure_reason or "unknown",
+            )
+            return ""
+
         if filename is None:
             filename = f"dump_{int(time.time() * 1000)}.xml"
 
@@ -301,9 +360,146 @@ class ActionExecutor:
         local_path = os.path.join(self.dump_dir, filename)
 
         logger.info("Dump UI: %s", local_path)
-        self._adb_cmd("shell", "uiautomator", "dump", device_path)
-        self._adb_cmd("pull", device_path, local_path)
 
+        # 关键防护：先清理旧文件，避免 dump 失败时错误复用陈旧 XML。
+        if os.path.exists(local_path):
+            try:
+                os.remove(local_path)
+            except OSError:
+                pass
+        self._adb_cmd("shell", "rm", "-f", device_path)
+
+        prefer_compressed = (
+            self._dump_consecutive_failures >= 2
+            or now < self._dump_prefer_compressed_until_ts
+        )
+        if prefer_compressed:
+            dump_commands = [
+                ("compressed", ("shell", "uiautomator", "dump", "--compressed", device_path), 6),
+                ("normal", ("shell", "uiautomator", "dump", device_path), 8),
+            ]
+        else:
+            dump_commands = [
+                ("normal", ("shell", "uiautomator", "dump", device_path), 8),
+                ("compressed", ("shell", "uiautomator", "dump", "--compressed", device_path), 6),
+            ]
+
+        dump_success = False
+        failure_reason = "unknown"
+        selected_mode = ""
+        normal_mode_failed = False
+        for idx, (mode, cmd, call_timeout) in enumerate(dump_commands, start=1):
+            try:
+                dump_result = self._adb_cmd(*cmd, timeout_sec=call_timeout)
+            except subprocess.TimeoutExpired:
+                failure_reason = "timeout"
+                if mode == "normal":
+                    normal_mode_failed = True
+                if idx < len(dump_commands):
+                    logger.warning(
+                        "uiautomator dump 执行超时(%ss), 尝试重试: %d/%d (%s)",
+                        call_timeout,
+                        idx,
+                        len(dump_commands),
+                        mode,
+                    )
+                    time.sleep(0.25)
+                    continue
+                logger.warning("uiautomator dump 执行超时(%ss)，跳过本轮 dump", call_timeout)
+                self._record_dump_failure(failure_reason)
+                return ""
+
+            dump_output = (
+                f"{dump_result.stdout or ''}\n{dump_result.stderr or ''}"
+            ).lower()
+            if dump_result.returncode != 0:
+                failure_reason = f"rc_{dump_result.returncode}"
+                if mode == "normal":
+                    normal_mode_failed = True
+                if idx < len(dump_commands):
+                    logger.warning(
+                        "uiautomator dump 执行失败(rc=%d)，尝试重试: %d/%d (%s)",
+                        dump_result.returncode,
+                        idx,
+                        len(dump_commands),
+                        mode,
+                    )
+                    time.sleep(0.25)
+                    continue
+                logger.warning("uiautomator dump 执行失败(rc=%d)，跳过本轮 dump", dump_result.returncode)
+                self._record_dump_failure(failure_reason)
+                return ""
+            if "could not get idle state" in dump_output:
+                failure_reason = "could_not_get_idle_state"
+                if mode == "normal":
+                    normal_mode_failed = True
+                if idx < len(dump_commands):
+                    logger.warning(
+                        "uiautomator dump 失败(could not get idle state), 尝试重试: %d/%d (%s)",
+                        idx,
+                        len(dump_commands),
+                        mode,
+                    )
+                    time.sleep(0.35)
+                    continue
+                logger.warning("uiautomator dump 连续失败: could not get idle state，跳过本轮 dump")
+                self._record_dump_failure(failure_reason)
+                return ""
+
+            exists_result = self._adb_cmd("shell", "ls", "-l", device_path, timeout_sec=8)
+            exists_output = f"{exists_result.stdout or ''}\n{exists_result.stderr or ''}".lower()
+            missing_file = (
+                exists_result.returncode != 0
+                or "no such file" in exists_output
+                or "no such file or directory" in exists_output
+            )
+            if missing_file:
+                failure_reason = "missing_dump_file"
+                if mode == "normal":
+                    normal_mode_failed = True
+                if idx < len(dump_commands):
+                    logger.warning(
+                        "uiautomator dump 未生成文件，尝试重试: %d/%d (%s)",
+                        idx,
+                        len(dump_commands),
+                        mode,
+                    )
+                    time.sleep(0.25)
+                    continue
+                logger.warning("uiautomator dump 未生成文件，跳过本轮 dump")
+                self._record_dump_failure(failure_reason)
+                return ""
+
+            dump_success = True
+            selected_mode = mode
+            break
+
+        if not dump_success:
+            logger.warning("uiautomator dump 未成功，跳过本轮 dump")
+            self._record_dump_failure(failure_reason)
+            return ""
+
+        pull_result = self._adb_cmd("pull", device_path, local_path, timeout_sec=12)
+        self._adb_cmd("shell", "rm", "-f", device_path, timeout_sec=8)
+        if pull_result.returncode != 0 or not os.path.exists(local_path):
+            logger.warning("UI dump 拉取失败，跳过本轮 dump")
+            self._record_dump_failure("pull_failed")
+            return ""
+        if os.path.getsize(local_path) <= 32:
+            logger.warning("UI dump 文件过小，疑似无效: %s", local_path)
+            self._record_dump_failure("dump_file_too_small")
+            return ""
+
+        if selected_mode == "compressed" and normal_mode_failed:
+            self._dump_prefer_compressed_until_ts = time.time() + self._dump_prefer_window_sec
+            logger.info(
+                "检测到 normal dump 不稳定，接下来 %.0fs 内优先使用 compressed dump",
+                float(self._dump_prefer_window_sec),
+            )
+        elif selected_mode == "normal":
+            self._dump_prefer_compressed_until_ts = 0.0
+
+        self._record_dump_success()
         return local_path
 
     def get_current_activity(self) -> str:
@@ -388,3 +584,40 @@ class ActionExecutor:
                 return size
         logger.warning("无法获取屏幕分辨率, 使用默认 1080x1920")
         return (1080, 1920)
+
+    def stabilize_ui_animations(self):
+        """
+        关闭系统动画，降低 UIAutomator idle-state 失败概率。
+        """
+        for key in (
+            "window_animation_scale",
+            "transition_animation_scale",
+            "animator_duration_scale",
+        ):
+            self._adb_cmd("shell", "settings", "put", "global", key, "0", timeout_sec=8)
+
+    def _record_dump_failure(self, reason: str):
+        self._dump_consecutive_failures += 1
+        self._dump_last_failure_reason = str(reason or "unknown")
+
+        if self._dump_consecutive_failures >= 2:
+            # 2->6s, 3->12s, 4->24s, 5+->40s
+            exp = min(3, max(0, self._dump_consecutive_failures - 2))
+            cooldown = min(
+                self._dump_max_cooldown_sec,
+                self._dump_base_cooldown_sec * (2 ** exp),
+            )
+            self._dump_skip_until_ts = time.time() + cooldown
+            logger.info(
+                "UI dump 进入冷却: failures=%d, cooldown=%ss, reason=%s",
+                self._dump_consecutive_failures,
+                cooldown,
+                self._dump_last_failure_reason,
+            )
+
+    def _record_dump_success(self):
+        if self._dump_consecutive_failures:
+            logger.info("UI dump 恢复成功，清空失败计数(%d)", self._dump_consecutive_failures)
+        self._dump_consecutive_failures = 0
+        self._dump_skip_until_ts = 0.0
+        self._dump_last_failure_reason = ""

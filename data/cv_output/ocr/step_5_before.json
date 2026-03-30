@@ -7,113 +7,113 @@
     "texts": [
         {
             "id": 0,
-            "content": "From qinchenjiang17@gmail.com",
-            "column_min": 0,
-            "row_min": 232,
-            "column_max": 752,
-            "row_max": 291,
-            "width": 752,
-            "height": 59
-        },
-        {
-            "id": 1,
-            "content": "To",
-            "column_min": 0,
-            "row_min": 389,
-            "column_max": 59,
-            "row_max": 449,
-            "width": 59,
-            "height": 60
-        },
-        {
-            "id": 2,
-            "content": "example.comCodex Phase1 Input Test",
-            "column_min": 150,
-            "row_min": 391,
-            "column_max": 985,
-            "row_max": 481,
-            "width": 835,
-            "height": 90
-        },
-        {
-            "id": 3,
-            "content": "Add recipient",
-            "column_min": 155,
-            "row_min": 537,
-            "column_max": 451,
-            "row_max": 595,
-            "width": 296,
-            "height": 58
-        },
-        {
-            "id": 4,
-            "content": "codex.test@example.comCodex Phase1 lnput Test",
-            "column_min": 153,
-            "row_min": 601,
-            "column_max": 997,
-            "row_max": 671,
-            "width": 844,
-            "height": 70
-        },
-        {
-            "id": 5,
-            "content": "Test",
-            "column_min": 452,
-            "row_min": 1501,
-            "column_max": 575,
-            "row_max": 1568,
-            "width": 123,
-            "height": 67
-        },
-        {
-            "id": 6,
-            "content": "2 W 3 e",
-            "column_min": 81,
-            "row_min": 1624,
-            "column_max": 281,
-            "row_max": 1712,
-            "width": 200,
+            "content": "Google",
+            "column_min": 427,
+            "row_min": 129,
+            "column_max": 657,
+            "row_max": 217,
+            "width": 230,
             "height": 88
         },
         {
-            "id": 7,
-            "content": "6 y",
-            "column_min": 544,
-            "row_min": 1635,
-            "column_max": 619,
-            "row_max": 1731,
-            "width": 75,
-            "height": 96
+            "id": 1,
+            "content": "Sign in",
+            "column_min": 431,
+            "row_min": 254,
+            "column_max": 660,
+            "row_max": 344,
+            "width": 229,
+            "height": 90
         },
         {
-            "id": 8,
-            "content": "a",
-            "column_min": 34,
-            "row_min": 1804,
-            "column_max": 86,
-            "row_max": 1865,
-            "width": 52,
+            "id": 2,
+            "content": "Use your Google Account. The account will be",
+            "column_min": 64,
+            "row_min": 363,
+            "column_max": 1024,
+            "row_max": 425,
+            "width": 960,
+            "height": 62
+        },
+        {
+            "id": 3,
+            "content": "added to this device and available to other",
+            "column_min": 103,
+            "row_min": 435,
+            "column_max": 986,
+            "row_max": 489,
+            "width": 883,
+            "height": 54
+        },
+        {
+            "id": 4,
+            "content": "Google apps.",
+            "column_min": 402,
+            "row_min": 503,
+            "column_max": 690,
+            "row_max": 564,
+            "width": 288,
             "height": 61
         },
         {
+            "id": 5,
+            "content": "Learn more about using your account",
+            "column_min": 140,
+            "row_min": 571,
+            "column_max": 953,
+            "row_max": 635,
+            "width": 813,
+            "height": 64
+        },
+        {
+            "id": 6,
+            "content": "Email or phone",
+            "column_min": 80,
+            "row_min": 782,
+            "column_max": 404,
+            "row_max": 849,
+            "width": 324,
+            "height": 67
+        },
+        {
+            "id": 7,
+            "content": "Enter an email or phone number",
+            "column_min": 104,
+            "row_min": 901,
+            "column_max": 616,
+            "row_max": 967,
+            "width": 512,
+            "height": 66
+        },
+        {
+            "id": 8,
+            "content": "Forgot email?",
+            "column_min": 29,
+            "row_min": 979,
+            "column_max": 301,
+            "row_max": 1037,
+            "width": 272,
+            "height": 58
+        },
+        {
             "id": 9,
-            "content": "123",
-            "column_min": 0,
-            "row_min": 2112,
-            "column_max": 75,
-            "row_max": 2163,
-            "width": 75,
-            "height": 51
+            "content": "Create account",
+            "column_min": 31,
+            "row_min": 1240,
+            "column_max": 341,
+            "row_max": 1293,
+            "width": 310,
+            "height": 53
         },
         {
             "id": 10,
-            "content": "→I",
-            "column_min": 968,
-            "row_min": 2128,
-            "column_max": 1049,
-            "row_max": 2190,
-            "width": 81,
-            "height": 62
+            "content": "NEXT",
+            "column_min": 885,
+            "row_min": 2086,
+            "column_max": 1005,
+            "row_max": 2130,
+            "width": 120,
+            "height": 44
         }
     ]
 }

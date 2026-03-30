@@ -6,6 +6,7 @@
 - 跳变校验：与事前预期比对
 """
 import logging
+import re
 from typing import List, Dict, Optional
 
 import cv2
@@ -62,6 +63,8 @@ class OracleRuntime:
         screenshot_path: str,
         old_activity: str,
         new_activity: str,
+        old_package: str = "",
+        new_package: str = "",
         constraints: Optional[PreConstraints] = None,
     ) -> dict:
         """
@@ -69,37 +72,55 @@ class OracleRuntime:
         :param screenshot_path: 执行后的截图路径
         :param old_activity: 执行前的 Activity
         :param new_activity: 执行后的 Activity
-        :param constraints: 事前约束（跳变预期）
-        :return: {"ok": True/False, "issues": [...], "action_needed": "none/back/replan"}
+        :param old_package: 执行前包名
+        :param new_package: 执行后包名
+        :param constraints: 事前约束（边界 + 变化证据计划）
+        :return: {"ok": bool, "issues": [...], "action_needed": "none/back/replan", "severity": "none/soft/hard"}
         """
         issues = []
         action_needed = "none"
+        severity = "none"
 
         # 1. 异常兜底：检测白屏/黑屏
         if screenshot_path:
             screen_issue = self._check_screen_anomaly(screenshot_path)
             if screen_issue:
                 issues.append(screen_issue)
+                severity = "hard"
                 action_needed = "replan"
 
-        # 2. 跳变校验
-        if constraints and old_activity != new_activity:
+        # 2. 跳变与边界校验
+        if constraints:
             transition_issue = self._check_transition(
-                old_activity, new_activity, constraints
+                old_activity=old_activity,
+                new_activity=new_activity,
+                old_package=old_package,
+                new_package=new_package,
+                constraints=constraints,
             )
             if transition_issue:
-                issues.append(transition_issue)
-                action_needed = "back"
+                issues.append(str(transition_issue.get("message") or ""))
+                issue_severity = str(transition_issue.get("severity") or "soft")
+                if issue_severity == "hard":
+                    severity = "hard"
+                    if action_needed != "replan":
+                        action_needed = str(transition_issue.get("action_needed") or "back")
+                elif severity == "none":
+                    severity = "soft"
 
         if issues:
-            logger.warning("事中检查发现问题: %s, 建议: %s", issues, action_needed)
+            if severity == "hard":
+                logger.warning("事中检查发现硬问题: %s, 建议: %s", issues, action_needed)
+            else:
+                logger.info("事中检查发现软问题(继续评估): %s", issues)
         else:
             logger.debug("事中检查通过")
 
         return {
-            "ok": len(issues) == 0,
+            "ok": severity != "hard",
             "issues": issues,
             "action_needed": action_needed,
+            "severity": severity,
         }
 
     def record_action(self, action: Action):
@@ -174,35 +195,177 @@ class OracleRuntime:
         self,
         old_activity: str,
         new_activity: str,
+        old_package: str,
+        new_package: str,
         constraints: PreConstraints,
-    ) -> Optional[str]:
+    ) -> Optional[Dict[str, str]]:
         """
-        跳变校验：比对实际页面跳转与事前预期
+        跳变校验：
+        - 仅将边界违规作为硬问题（阻断）
+        - 变化范围偏离作为软问题（继续交由评估器判断）
         """
-        expected_type = constraints.transition_type
+        success_plan = constraints.success_evidence_plan or {}
+        boundary = constraints.boundary_constraints or {}
 
-        if expected_type == "none" and old_activity != new_activity:
-            # 预期不跳转但发生了跳转 → 非预期剧变
-            logger.warning(
-                "非预期页面跳转! 预期=不跳转, 实际: %s -> %s",
-                old_activity, new_activity,
+        expected_scope = str(success_plan.get("expected_change_scope") or "local").strip().lower()
+        must_stay_in_app = bool(boundary.get("must_stay_in_app", False))
+        expected_package = str(boundary.get("expected_package") or "").strip()
+        forbidden_packages = boundary.get("forbidden_packages") or []
+        if not isinstance(forbidden_packages, list):
+            forbidden_packages = []
+        forbidden_packages = [str(p).strip() for p in forbidden_packages if str(p).strip()]
+        expected_activity_contains = str(boundary.get("expected_activity_contains") or "").strip()
+        mismatch_severity = str(boundary.get("package_mismatch_severity") or "soft").strip().lower()
+        if mismatch_severity not in {"soft", "hard"}:
+            mismatch_severity = "soft"
+        related_tokens = boundary.get("related_package_tokens") or []
+        if not isinstance(related_tokens, list):
+            related_tokens = []
+        related_tokens = [str(v).strip().lower() for v in related_tokens if str(v).strip()]
+
+        if new_package and new_package in forbidden_packages:
+            message = f"进入禁止包名: {new_package}"
+            logger.warning(message)
+            return {"severity": "hard", "message": message, "action_needed": "back"}
+
+        # 若已进入显式期望包，视为有效目标变化，不应被 must_stay 规则先行误拦截。
+        entered_expected_package = bool(
+            expected_package
+            and new_package
+            and new_package == expected_package
+            and old_package
+            and old_package != new_package
+        )
+
+        if must_stay_in_app and old_package and new_package and old_package != new_package and not entered_expected_package:
+            relation = self._classify_package_relation(
+                reference_package=old_package,
+                new_package=new_package,
+                related_tokens=related_tokens,
             )
-            return f"非预期页面跳转: {old_activity} -> {new_activity} (预期不跳转)"
+            if relation == "related":
+                message = f"must_stay_in_app package drift(soft, related): {old_package} -> {new_package}"
+                logger.info(message)
+                return {"severity": "soft", "message": message, "action_needed": "none"}
+            if mismatch_severity == "hard":
+                message = f"must_stay_in_app violated(hard, {relation}): {old_package} -> {new_package}"
+                logger.warning(message)
+                return {"severity": "hard", "message": message, "action_needed": "back"}
+            message = f"must_stay_in_app drift(soft, {relation}): {old_package} -> {new_package}"
+            logger.info(message)
+            return {"severity": "soft", "message": message, "action_needed": "none"}
 
-        if expected_type == "partial_refresh" and old_activity != new_activity:
-            # 预期局部刷新但跳到新页面
-            logger.warning(
-                "非预期全页跳转! 预期=局部刷新, 实际: %s -> %s",
-                old_activity, new_activity,
+        if expected_package and new_package and expected_package != new_package:
+            relation = self._classify_package_relation(
+                reference_package=expected_package,
+                new_package=new_package,
+                related_tokens=related_tokens,
             )
-            return f"非预期全页跳转: {old_activity} -> {new_activity} (预期局部刷新)"
+            if relation == "related":
+                message = f"expected_package drift(soft, related): expected={expected_package}, actual={new_package}"
+                logger.info(message)
+                return {"severity": "soft", "message": message, "action_needed": "none"}
+            if mismatch_severity == "hard":
+                message = f"expected_package mismatch(hard, {relation}): expected={expected_package}, actual={new_package}"
+                logger.warning(message)
+                return {"severity": "hard", "message": message, "action_needed": "back"}
+            message = f"expected_package mismatch(soft, {relation}): expected={expected_package}, actual={new_package}"
+            logger.info(message)
+            return {"severity": "soft", "message": message, "action_needed": "none"}
 
-        if constraints.expected_activity and new_activity:
-            if constraints.expected_activity not in new_activity:
-                logger.warning(
-                    "跳转目标不符! 预期=%s, 实际=%s",
-                    constraints.expected_activity, new_activity,
-                )
-                return f"跳转目标不符: 预期={constraints.expected_activity}, 实际={new_activity}"
+        if expected_activity_contains and new_activity and expected_activity_contains not in new_activity:
+            message = f"跳转目标不符: 预期包含={expected_activity_contains}, 实际={new_activity}"
+            logger.warning(message)
+            return {"severity": "hard", "message": message, "action_needed": "back"}
+
+        if old_activity == new_activity and old_package == new_package:
+            return None
+
+        if expected_scope in {"anchor", "local"}:
+            message = (
+                f"变化范围偏离预期(scope={expected_scope}): "
+                f"activity {old_activity} -> {new_activity}, package {old_package} -> {new_package}"
+            )
+            logger.info(
+                "变化范围偏离预期(软问题): 预期scope=%s, activity=%s -> %s, package=%s -> %s",
+                expected_scope, old_activity, new_activity,
+                old_package, new_package,
+            )
+            return {"severity": "soft", "message": message, "action_needed": "none"}
 
         return None
+
+    def _classify_package_relation(self, reference_package: str, new_package: str, related_tokens: List[str]) -> str:
+        ref = str(reference_package or "").strip().lower()
+        new = str(new_package or "").strip().lower()
+        if not ref or not new:
+            return "unknown"
+        if ref == new:
+            return "same"
+
+        normalized_tokens = []
+        for token in related_tokens:
+            value = str(token or "").strip().lower()
+            if value and value not in normalized_tokens:
+                normalized_tokens.append(value)
+        if not normalized_tokens:
+            normalized_tokens = self._extract_package_tokens(ref)
+
+        for token in normalized_tokens:
+            if token in ref and token in new:
+                return "related"
+        return "unrelated"
+
+    def _extract_package_tokens(self, package_name: str) -> List[str]:
+        pkg = str(package_name or "").strip().lower()
+        if not pkg:
+            return []
+        ignored = {
+            "com",
+            "org",
+            "net",
+            "android",
+            "google",
+            "apps",
+            "app",
+            "activity",
+        }
+        tokens: List[str] = []
+        normalized = pkg.replace("-", ".").replace("_", ".")
+        for token in normalized.split("."):
+            for t in self._expand_package_token(token):
+                if not t or t in ignored or len(t) <= 2:
+                    continue
+                if t not in tokens:
+                    tokens.append(t)
+        return tokens[:8]
+
+    def _expand_package_token(self, token: str) -> List[str]:
+        raw = str(token or "").strip().lower()
+        if not raw:
+            return []
+
+        variants: List[str] = [raw]
+        without_tail_digits = re.sub(r"\d+$", "", raw)
+        if without_tail_digits and without_tail_digits != raw:
+            variants.append(without_tail_digits)
+
+        for prefix in ("google", "android"):
+            if raw.startswith(prefix) and len(raw) > len(prefix) + 2:
+                variants.append(raw[len(prefix):])
+
+        alpha_parts = re.findall(r"[a-z]+", raw)
+        if len(alpha_parts) >= 2:
+            merged_alpha = "".join(alpha_parts)
+            if merged_alpha:
+                variants.append(merged_alpha)
+            for part in alpha_parts:
+                if len(part) > 2:
+                    variants.append(part)
+
+        deduped: List[str] = []
+        for v in variants:
+            value = str(v or "").strip().lower()
+            if value and value not in deduped:
+                deduped.append(value)
+        return deduped
