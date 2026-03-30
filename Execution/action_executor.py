@@ -276,48 +276,6 @@ class ActionExecutor:
         logger.info("执行回车键")
         self._adb_cmd("shell", "input", "keyevent", "KEYCODE_ENTER")
 
-    def launch_app(self, package_name: str):
-        """通过包名启动应用。"""
-        package = (package_name or "").strip()
-        if not package:
-            logger.warning("launch_app 包名为空，跳过")
-            return
-
-        logger.info("启动应用: %s", package)
-        result = self._adb_cmd(
-            "shell",
-            "monkey",
-            "-p",
-            package,
-            "-c",
-            "android.intent.category.LAUNCHER",
-            "1",
-        )
-        if result.returncode == 0:
-            return
-
-        logger.warning("monkey 启动失败，尝试 am start: %s", package)
-        resolve = self._adb_cmd(
-            "shell",
-            "cmd",
-            "package",
-            "resolve-activity",
-            "--brief",
-            package,
-        )
-        lines = [
-            line.strip()
-            for line in (resolve.stdout or "").splitlines()
-            if line.strip()
-        ]
-        target = ""
-        for line in reversed(lines):
-            if "/" in line and package in line:
-                target = line
-                break
-        if target:
-            self._adb_cmd("shell", "am", "start", "-n", target)
-
     def screenshot(self, filename: Optional[str] = None) -> str:
         """
         截取当前屏幕

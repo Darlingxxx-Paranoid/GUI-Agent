@@ -8,7 +8,7 @@ Your task is to generate a GENERAL, ROBUST Success Evidence Plan for a GUI subgo
 
 Important rules:
 1. Do NOT rely on strict text matching as the main success criterion.
-2. Model success as verifying STATE CHANGE EVIDENCE, not by classifying the page scenario.
+2. Model success as verifying STATE CHANGE EVIDENCE, not by classifying page labels.
 3. Define evidence using low-level state-change primitives whenever possible.
 4. The clicked/trigger widget may disappear after success. This is often normal.
 5. Keep evidence plans conservative: a few strong signals, optional supporting signals, and counter-signals.
@@ -79,7 +79,7 @@ Return JSON only:
     "expected_activity_contains": "activity name fragment if inferable, otherwise empty string",
     "forbidden_ui_risks": ["payment", "permission", "destructive_action", "external_auth", "share_sheet", "browser_or_webview_escape"],
     "package_mismatch_severity": "soft|hard",
-    "related_package_tokens": ["settings", "intelligence"]
+    "related_package_tokens": ["product", "module"]
   }},
 
   "semantic_goal": "Natural language definition of success as an interaction capability or subgoal completion"

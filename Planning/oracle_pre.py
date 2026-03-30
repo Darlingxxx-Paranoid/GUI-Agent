@@ -108,7 +108,6 @@ class OraclePre:
         expected_package = boundary_defaults["expected_package"]
         package_mismatch_severity = boundary_defaults["package_mismatch_severity"]
         related_package_tokens = boundary_defaults["related_package_tokens"]
-        target_package = str(boundary_defaults.get("target_package") or "").strip()
         current_pkg = str(getattr(ui_state, "package_name", "") or "").strip()
 
         action_anchor = self._build_action_anchor(subgoal, ui_state)
@@ -286,41 +285,21 @@ class OraclePre:
         task_hint: str = "",
     ) -> Dict[str, Any]:
         """
-        边界默认策略:
-        - external_app 子目标：默认允许跨包
-        - 当前在 launcher/home：默认允许跨包（常见于“打开某应用”）
+        边界默认策略（通用版）:
+        - external_app/new_page/dialog：默认允许跨包
         - 其他场景：默认留在当前包
         """
         expected_transition = (subgoal.expected_transition or "").strip().lower()
         current_pkg = str(getattr(ui_state, "package_name", "") or "").strip()
-        current_activity = str(getattr(ui_state, "activity_name", "") or "").strip()
-
-        launcher_context = self._is_launcher_context(current_pkg, current_activity)
-        target_package = ""
-        # 仅在“直接打开应用”时推断目标包。
-        # 避免在 launcher 的准备步骤（如打开抽屉/搜索栏）过早约束 expected_package，
-        # 让 Oracle 始终围绕“当前动作是否造成预期变化”而非“先验场景分类”。
-        if expected_transition == "external_app":
-            target_package = self._infer_target_package(subgoal, task_hint=task_hint)
-        elif launcher_context and self._is_direct_open_app_intent(subgoal):
-            target_package = self._infer_target_package(subgoal, task_hint=task_hint)
 
         # new_page/dialog 常意味着上下文切换，默认允许跨包，避免把“有效跳转”误拦截。
         allow_cross_package = expected_transition in {"external_app", "new_page", "dialog"}
-        must_stay_in_app = (not allow_cross_package) and (not launcher_context)
+        must_stay_in_app = not allow_cross_package
         expected_package = current_pkg if (must_stay_in_app and current_pkg) else ""
-        if target_package:
-            # 目标包一旦明确：未到达前允许跨包，已到达后要求留在目标包内，防止后续漂移。
-            must_stay_in_app = bool(current_pkg and current_pkg == target_package)
-            expected_package = target_package
         package_mismatch_severity = self._infer_package_mismatch_severity(
             subgoal=subgoal,
-            launcher_context=launcher_context,
-            target_package=target_package,
+            must_stay_in_app=must_stay_in_app,
         )
-        if target_package:
-            # 分段策略：到达目标前允许 soft 漂移，到达后升级为 hard，避免“打开中”误拦截。
-            package_mismatch_severity = "hard" if must_stay_in_app else "soft"
         related_package_tokens = self._extract_package_tokens(expected_package or current_pkg)
 
         return {
@@ -328,98 +307,17 @@ class OraclePre:
             "expected_package": expected_package,
             "package_mismatch_severity": package_mismatch_severity,
             "related_package_tokens": related_package_tokens,
-            "target_package": target_package,
         }
-
-    def _is_direct_open_app_intent(self, subgoal: SubGoal) -> bool:
-        """
-        判断子目标是否是“直接打开某应用”的动作，而不是 launcher 准备步骤。
-        """
-        action_type = str(getattr(subgoal, "action_type", "") or "").strip().lower()
-        if action_type not in {"tap", "launch_app"}:
-            return False
-
-        text = " ".join(
-            [
-                subgoal.description or "",
-                subgoal.acceptance_criteria or "",
-                subgoal.target_widget_text or "",
-            ]
-        ).lower()
-        if not text:
-            return False
-
-        prepare_markers = (
-            "app drawer",
-            "all apps",
-            "search bar",
-            "open search",
-            "find the",
-            "locate",
-            "scroll to",
-            "swipe up",
-            "应用抽屉",
-            "搜索栏",
-            "找到",
-            "查找",
-            "滑动",
-        )
-        if any(marker in text for marker in prepare_markers):
-            return False
-        blocked_open_markers = (
-            "quick settings",
-            "notification shade",
-            "status bar",
-            "control center",
-            "internet tile",
-            "brightness slider",
-            "快捷设置",
-            "通知栏",
-            "状态栏",
-            "亮度",
-        )
-        if any(marker in text for marker in blocked_open_markers):
-            return False
-
-        open_markers = (
-            "open",
-            "launch",
-            "tap",
-            "click",
-            "switch to",
-            "go to",
-            "进入",
-            "打开",
-            "启动",
-            "点击",
-        )
-        has_open_marker = any(marker in text for marker in open_markers)
-        if not has_open_marker:
-            return False
-
-        app_pkg = self._infer_target_package_from_text(
-            text=text,
-            require_open_markers=False,
-        )
-        return bool(app_pkg)
 
     def _infer_package_mismatch_severity(
         self,
         subgoal: SubGoal,
-        launcher_context: bool,
-        target_package: str = "",
+        must_stay_in_app: bool,
     ) -> str:
         """
         包名漂移默认按 soft 处理，仅在显式“必须留在同一应用”语义时升级为 hard。
         """
-        if target_package:
-            # 显式“打开某应用”时，包名不匹配应视为 hard。
-            return "hard"
-        if launcher_context:
-            return "soft"
-
-        expected_transition = (subgoal.expected_transition or "").strip().lower()
-        if expected_transition in {"external_app", "new_page", "dialog"}:
+        if not must_stay_in_app:
             return "soft"
 
         text = " ".join(
@@ -442,120 +340,6 @@ class OraclePre:
         if any(marker in text for marker in strict_markers):
             return "hard"
         return "soft"
-
-    def _infer_target_package(self, subgoal: SubGoal, task_hint: str = "") -> str:
-        """
-        从子目标语义推断“目标应用包名”，用于跨应用上下文变化的约束校验。
-        """
-        subgoal_text = " ".join(
-            [
-                subgoal.description or "",
-                subgoal.target_widget_text or "",
-                subgoal.acceptance_criteria or "",
-            ]
-        ).lower()
-
-        pkg = self._infer_target_package_from_text(
-            text=subgoal_text,
-            require_open_markers=True,
-        )
-        if pkg:
-            return pkg
-
-        task_text = str(task_hint or "").strip().lower()
-        pkg = self._infer_target_package_from_text(
-            text=task_text,
-            require_open_markers=True,
-        )
-        if pkg:
-            return pkg
-        return ""
-
-    def _infer_target_package_from_text(self, text: str, require_open_markers: bool) -> str:
-        raw = str(text or "").strip().lower()
-        if not raw:
-            return ""
-
-        if require_open_markers:
-            open_markers = (
-                "open",
-                "launch",
-                "switch to",
-                "go to",
-                "进入",
-                "打开",
-                "启动",
-                "打开应用",
-                "app icon",
-                "search result",
-            )
-            if not any(marker in raw for marker in open_markers):
-                return ""
-
-        alias_to_pkg = self._get_app_alias_to_pkg()
-        for aliases, pkg in alias_to_pkg:
-            for alias in aliases:
-                if not re.search(rf"(^|[^a-z0-9]){re.escape(alias)}([^a-z0-9]|$)", raw):
-                    continue
-                if self._alias_blocked_by_context(alias=alias, raw_text=raw):
-                    continue
-                return pkg
-        return ""
-
-    def _alias_blocked_by_context(self, alias: str, raw_text: str) -> bool:
-        """过滤易歧义别名，避免把系统面板词误判为“打开某 App”意图。"""
-        alias_norm = str(alias or "").strip().lower()
-        text = str(raw_text or "").strip().lower()
-        if not alias_norm or not text:
-            return False
-
-        if alias_norm == "settings":
-            blocked_phrases = (
-                "quick settings",
-                "notification shade",
-                "control center",
-                "internet tile",
-                "quick setting tile",
-                "quick panel",
-                "status bar",
-                "下拉",
-                "快捷设置",
-                "通知栏",
-            )
-            if any(p in text for p in blocked_phrases):
-                return True
-        if alias_norm in {"clock", "deskclock"}:
-            blocked_phrases = (
-                "status bar",
-                "statusbar",
-                "near the clock",
-                "clock area",
-                "notification shade",
-                "quick settings",
-                "time in the status bar",
-                "状态栏",
-                "通知栏",
-                "快捷设置",
-            )
-            if any(p in text for p in blocked_phrases):
-                return True
-
-        return False
-
-    def _get_app_alias_to_pkg(self) -> List[tuple]:
-        return [
-            (("chrome",), "com.android.chrome"),
-            (("settings",), "com.android.settings"),
-            (("clock", "deskclock"), "com.google.android.deskclock"),
-            (("camera", "google camera"), "com.android.camera2"),
-            (("photos", "photo"), "com.google.android.apps.photos"),
-            (("gmail",), "com.google.android.gm"),
-            (("calendar",), "com.google.android.calendar"),
-            (("contacts", "contact"), "com.google.android.contacts"),
-            (("youtube",), "com.google.android.youtube"),
-            (("messages", "message", "messaging"), "com.google.android.apps.messaging"),
-            (("dialer", "phone"), "com.google.android.dialer"),
-        ]
 
     def _extract_package_tokens(self, package_name: str) -> List[str]:
         """
@@ -615,29 +399,6 @@ class OraclePre:
                 deduped.append(value)
         return deduped
 
-    def _is_launcher_context(self, package_name: str, activity_name: str) -> bool:
-        pkg = (package_name or "").strip().lower()
-        activity = (activity_name or "").strip().lower()
-
-        known_launchers = {
-            "com.google.android.apps.nexuslauncher",
-            "com.android.launcher3",
-            "com.miui.home",
-            "com.huawei.android.launcher",
-            "com.sec.android.app.launcher",
-            "com.oppo.launcher",
-            "com.vivo.launcher",
-        }
-        if pkg in known_launchers:
-            return True
-
-        launcher_tokens = ("launcher", "quickstep", "home")
-        if any(token in pkg for token in launcher_tokens):
-            return True
-
-        activity_tokens = ("launcher", "homeactivity", ".home")
-        return any(token in activity for token in activity_tokens)
-
     def _stabilize_boundary_constraints(
         self,
         constraints: PreConstraints,
@@ -666,7 +427,7 @@ class OraclePre:
             except Exception:
                 must_stay = defaults["must_stay_in_app"]
 
-        # Launcher/home 与 external_app 的场景强制放宽跨包约束
+        # 当默认允许跨包时，不将 must_stay 覆盖为更严格策略。
         if not defaults["must_stay_in_app"]:
             must_stay = False
 
@@ -675,7 +436,7 @@ class OraclePre:
             if not expected_pkg:
                 expected_pkg = current_pkg
         else:
-            # 允许跨包时，仍保留显式目标包（例如从 launcher 打开某 App）。
+            # 允许跨包时，保持模型或默认提供的 expected_package（若有）。
             expected_pkg = str(expected_pkg or "").strip()
 
         forbidden_packages = boundary.get("forbidden_packages") or []

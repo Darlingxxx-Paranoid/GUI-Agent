@@ -6,7 +6,7 @@ ReAct 动态规划器
 import json
 import logging
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import List, Dict, Any, Optional
 
 from Perception.context_builder import UIState
@@ -80,10 +80,6 @@ class Planner:
             replay_plan = self._plan_from_experience(experience)
             if replay_plan is not None:
                 return replay_plan
-
-        completion_plan = self._objective_completion_check(task=task, ui_state=ui_state)
-        if completion_plan is not None:
-            return completion_plan
 
         # 第二步：通过 LLM 动态规划
         return self._plan_with_llm(task, ui_state)
@@ -250,36 +246,8 @@ class Planner:
         return remaining >= self._plan_retry_min_remaining_sec
 
     def _build_topic_guard_plan(self, task: str, reason: str) -> Optional[PlanResult]:
-        task_text = self._normalize_subgoal(task)
-        reason_text = str(reason or "").strip().lower()
-        if not task_text:
+        if not str(task or "").strip():
             return None
-
-        if "wifi" in task_text or "wi fi" in task_text or "wi-fi" in task_text or "wlan" in task_text:
-            if "unrelated_subgoal" in reason_text:
-                return PlanResult(
-                    subgoal=SubGoal(
-                        description="Tap the Internet or Wi-Fi entry to continue the Wi-Fi task.",
-                        target_widget_text="Internet",
-                        action_type="tap",
-                        acceptance_criteria="Wi-Fi related controls become visible.",
-                        expected_transition="partial_refresh",
-                    ),
-                    reasoning=f"task_guard({reason})",
-                )
-
-        if "bluetooth" in task_text or "蓝牙" in task_text:
-            if "airplane_mode" in reason_text:
-                return PlanResult(
-                    subgoal=SubGoal(
-                        description="Tap the Bluetooth entry or switch to continue the Bluetooth task.",
-                        target_widget_text="Bluetooth",
-                        action_type="tap",
-                        acceptance_criteria="Bluetooth controls are focused and actionable.",
-                        expected_transition="partial_refresh",
-                    ),
-                    reasoning=f"task_guard({reason})",
-                )
 
         return PlanResult(
             subgoal=SubGoal(
@@ -290,103 +258,6 @@ class Planner:
             ),
             reasoning=f"task_guard({reason})",
         )
-
-    def _objective_completion_check(self, task: str, ui_state: UIState) -> Optional[PlanResult]:
-        """
-        基于客观状态跳变做任务完成判定，避免在已达成目标后陷入重复重规划。
-        当前仅用于“打开某 App”类任务。
-        """
-        target = self._infer_open_app_target(task)
-        if target is None:
-            return None
-        target_name, target_terms, target_package = target
-        current_package = str(getattr(ui_state, "package_name", "") or "").strip().lower()
-
-        if current_package and (current_package == target_package or current_package.startswith(f"{target_package}.")):
-            return PlanResult(
-                subgoal=SubGoal(description="objective_open_app_completion"),
-                is_task_complete=True,
-                reasoning=f"objective_completion: package={current_package} matched {target_name}",
-            )
-
-        transitional_packages = {
-            "com.google.android.gms",
-            "com.android.permissioncontroller",
-        }
-        if current_package in transitional_packages and self._has_recent_open_app_evidence(
-            target_terms=target_terms,
-            target_package=target_package,
-        ):
-            return PlanResult(
-                subgoal=SubGoal(description="objective_open_app_completion_via_transition"),
-                is_task_complete=True,
-                reasoning=(
-                    "objective_completion: target app launch evidenced, "
-                    f"current transitional package={current_package}"
-                ),
-            )
-        return None
-
-    def _infer_open_app_target(self, task: str) -> Optional[tuple]:
-        text = str(task or "").strip().lower()
-        if not text:
-            return None
-
-        # 仅处理“打开 app”主任务，避免影响多阶段任务（例如“先开 WiFi 再开 Calendar”）。
-        if "then " in text or "然后" in text or "先" in text:
-            return None
-        open_markers = ("open ", "open the ", "launch ", "打开")
-        if not any(marker in text for marker in open_markers):
-            return None
-        if "app" not in text and "应用" not in text:
-            return None
-
-        app_aliases = [
-            ("chrome", ("chrome",), "com.android.chrome"),
-            ("settings", ("settings",), "com.android.settings"),
-            ("clock", ("clock", "deskclock"), "com.google.android.deskclock"),
-            ("camera", ("camera",), "com.google.android.GoogleCamera"),
-            ("photos", ("photos",), "com.google.android.apps.photos"),
-            ("gmail", ("gmail",), "com.google.android.gm"),
-            ("calendar", ("calendar",), "com.google.android.calendar"),
-            ("contacts", ("contacts",), "com.google.android.contacts"),
-            ("youtube", ("youtube",), "com.google.android.youtube"),
-            ("messages", ("messages", "message"), "com.google.android.apps.messaging"),
-        ]
-        for name, terms, pkg in app_aliases:
-            if any(re.search(rf"(^|[^a-z0-9]){re.escape(term)}([^a-z0-9]|$)", text) for term in terms):
-                return name, terms, pkg
-        return None
-
-    def _has_recent_open_app_evidence(self, target_terms: tuple, target_package: str) -> bool:
-        history = list(getattr(self.memory.short_term, "history", []) or [])
-        for step in reversed(history[-6:]):
-            result = str(step.get("result") or "").lower()
-            if not result.startswith("success"):
-                continue
-            package_after = str(step.get("package_after") or "").strip().lower()
-            if package_after and (package_after == target_package or package_after.startswith(f"{target_package}.")):
-                return True
-
-            subgoal_text = str(step.get("subgoal") or "").lower()
-            action = step.get("action") or {}
-            if not isinstance(action, dict):
-                action = {}
-            action_blob = " ".join(
-                [
-                    subgoal_text,
-                    str(action.get("description") or ""),
-                    str(action.get("target_widget_text") or ""),
-                    str(action.get("text") or ""),
-                ]
-            ).lower()
-            if any(term in action_blob for term in target_terms):
-                return True
-            if str(action.get("action_type") or "").strip().lower() == "launch_app":
-                launch_pkg = str(action.get("text") or "").strip().lower()
-                if launch_pkg == target_package:
-                    return True
-        return False
 
     def _build_dedupe_prompt(self, base_prompt: str) -> str:
         recent_success = self._recent_success_subgoals(limit=3)
@@ -475,7 +346,7 @@ class Planner:
             f"- Final task: {task}\n"
             f"- Previous candidate was rejected for topic drift: {reason}\n"
             "- The next subgoal MUST stay strictly on the final task topic.\n"
-            "- Do not touch unrelated settings or features.\n"
+            "- Do not touch unrelated features.\n"
         )
 
     def _is_subgoal_misaligned(self, task: str, subgoal: SubGoal) -> tuple:
@@ -484,32 +355,62 @@ class Planner:
         if not task_text or not subgoal_text:
             return False, ""
 
-        task_wifi = any(t in task_text for t in ("wifi", "wi fi", "wi-fi", "wlan"))
-        task_bluetooth = any(t in task_text for t in ("bluetooth", "蓝牙"))
-        task_contact = any(t in task_text for t in ("contact", "contacts", "联系人"))
-        task_camera = any(t in task_text for t in ("camera", "photo", "video", "拍照", "录像"))
+        task_keywords = self._extract_keywords(task_text)
+        subgoal_keywords = self._extract_keywords(subgoal_text)
+        if len(task_keywords) < 2 or len(subgoal_keywords) < 2:
+            return False, ""
 
-        if task_wifi and any(
-            t in subgoal_text
-            for t in (
-                "airplane mode",
-                "flight mode",
-                "飞行模式",
-                "photos",
-                "google photos",
-                "camera",
-                "contacts",
-                "backup settings",
-            )
-        ):
-            return True, "wifi_task_but_unrelated_subgoal"
-        if task_bluetooth and any(t in subgoal_text for t in ("airplane mode", "flight mode", "飞行模式")):
-            return True, "bluetooth_task_but_airplane_mode_subgoal"
-        if task_contact and any(t in subgoal_text for t in ("wifi", "bluetooth", "airplane mode", "camera", "photo", "video")):
-            return True, "contact_task_but_system_or_camera_subgoal"
-        if task_camera and any(t in subgoal_text for t in ("wifi", "bluetooth", "airplane mode", "contacts")):
-            return True, "camera_task_but_system_or_contacts_subgoal"
+        overlap = task_keywords & subgoal_keywords
+        if overlap:
+            return False, ""
+
+        # 当关键词完全无交集时，认为可能偏题，触发一次对齐重规划。
+        if len(task_keywords) >= 3:
+            return True, "topic_keywords_no_overlap"
         return False, ""
+
+    def _extract_keywords(self, text: str) -> set:
+        tokens = re.findall(r"[a-z0-9\u4e00-\u9fff]+", str(text or "").lower())
+        stopwords = {
+            "the",
+            "a",
+            "an",
+            "to",
+            "of",
+            "and",
+            "or",
+            "in",
+            "on",
+            "for",
+            "with",
+            "at",
+            "from",
+            "by",
+            "is",
+            "are",
+            "be",
+            "do",
+            "does",
+            "did",
+            "tap",
+            "click",
+            "press",
+            "open",
+            "go",
+            "enter",
+            "into",
+            "page",
+            "screen",
+            "应用",
+            "页面",
+            "点击",
+            "打开",
+            "进入",
+            "返回",
+            "然后",
+            "继续",
+        }
+        return {token for token in tokens if len(token) > 1 and token not in stopwords}
 
     def _parse_plan_response(self, response: str) -> PlanResult:
         """解析 LLM 返回的 JSON 规划结果"""

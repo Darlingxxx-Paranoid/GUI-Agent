@@ -1,5 +1,5 @@
 #数据文件
-data
+data/
 
 #模型文件
 Module
@@ -9,3 +9,6 @@ myvenv
 
 #测试文件
 *test*
+
+# Agent文件
+.trae/

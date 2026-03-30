@@ -32,32 +32,7 @@ from agent_loop import AgentLoop
 LOGGER = logging.getLogger(__name__)
 
 
-DEFAULT_TASKS = [
-    {
-        "id": "ClockStopWatchRunning",
-        "task": "Run the stopwatch.",
-    },
-    {
-        "id": "ClockTimerEntry",
-        "task": "Create a timer with 0 hours, 0 minutes, and 10 seconds. Do not start the timer.",
-    },
-    {
-        "id": "CameraTakePhoto",
-        "task": "Take one photo.",
-    },
-    {
-        "id": "CameraTakeVideo",
-        "task": "Take one video.",
-    },
-    {
-        "id": "OpenAppTaskEval_Chrome",
-        "task": "Open the Chrome app. Clear any pop-ups that may appear by granting all permissions that are required.",
-    },
-    {
-        "id": "OpenAppTaskEval_Settings",
-        "task": "Open the Settings app. Clear any pop-ups that may appear by granting all permissions that are required.",
-    },
-]
+DEFAULT_TASKS: List[dict] = []
 
 
 PATTERN_RUNTIME_HARD = re.compile(r"runtime_hard", re.IGNORECASE)
@@ -239,7 +214,9 @@ def parse_args() -> argparse.Namespace:
 
 def _load_tasks(path: str) -> List[dict]:
     if not path:
-        return list(DEFAULT_TASKS)
+        if DEFAULT_TASKS:
+            return list(DEFAULT_TASKS)
+        raise ValueError("No built-in benchmark tasks. Please provide --tasks-json.")
     with open(path, "r", encoding="utf-8") as f:
         data = json.load(f)
     if not isinstance(data, list):

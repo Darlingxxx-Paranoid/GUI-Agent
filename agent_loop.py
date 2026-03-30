@@ -553,13 +553,6 @@ class AgentLoop:
         elif action.action_type == "enter":
             self.executor.enter()
 
-        elif action.action_type == "launch_app":
-            package_name = (getattr(action, "text", "") or "").strip()
-            if not package_name:
-                logger.warning("launch_app 缺少包名，跳过执行")
-                return
-            self.executor.launch_app(package_name)
-
         elif action.action_type == "long_press":
             self.executor.long_press(action.x, action.y)
 

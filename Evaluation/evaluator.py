@@ -572,7 +572,6 @@ class Evaluator:
         activity_transition_bonus = 0.0
         toggle_state_bonus = 0.0
         focus_state_bonus = 0.0
-        control_toggle_bonus = 0.0
         support = required_weight + 0.6 * supporting_weight
         against = 0.9 * counter_weight + min(1.2, 0.3 * len(soft_warnings))
 
@@ -651,60 +650,6 @@ class Evaluator:
                 elif switch_checked_delta > 0:
                     against += 0.9
             support += toggle_state_bonus
-
-        # 通用控制态切换证据：例如 pause -> resume / resume -> pause。
-        appeared_texts = [str(v).strip().lower() for v in (delta_evidence.get("appeared_texts") or []) if str(v).strip()]
-        vanished_texts = [str(v).strip().lower() for v in (delta_evidence.get("vanished_texts") or []) if str(v).strip()]
-        if action_type in {"tap", "long_press"}:
-            pause_markers = ("pause", "paused", "暂停", "stopwatch", "秒表")
-            resume_markers = ("resume", "start", "继续", "开始")
-            if any(marker in semantic_goal_text for marker in pause_markers):
-                if self._text_list_contains_any(appeared_texts, resume_markers):
-                    control_toggle_bonus += 0.95
-                if self._text_list_contains_any(vanished_texts, ("pause", "暂停", "stop")):
-                    control_toggle_bonus += 0.55
-            if any(marker in semantic_goal_text for marker in ("resume", "继续", "start stopwatch", "开始秒表")):
-                if self._text_list_contains_any(appeared_texts, ("pause", "暂停", "stop")):
-                    control_toggle_bonus += 0.9
-            support += control_toggle_bonus
-
-        # 对“控制态切换”子目标，允许在变化证据充分时直接成功，避免被语义补判误拖入不确定循环。
-        control_toggle_intent = (
-            action_type in {"tap", "long_press"}
-            and any(
-                marker in semantic_goal_text
-                for marker in (
-                    "pause",
-                    "resume",
-                    "stopwatch",
-                    "暂停",
-                    "继续",
-                    "开始秒表",
-                )
-            )
-        )
-        if control_toggle_intent and support >= 0.75 and against < 1.2:
-            return EvalResult(
-                success=True,
-                reason=(
-                    f"control_toggle_verified: support={support:.2f}, against={against:.2f}, "
-                    f"control_toggle_bonus={control_toggle_bonus:.2f}, "
-                    f"ui_changed={bool(delta_evidence.get('ui_changed_meaningfully', False))}"
-                ),
-                constraint_passed=True,
-                semantic_passed=True,
-                decision="success",
-                confidence=min(1.0, 0.62 + 0.1 * support),
-                needs_more_observation=False,
-                constraint_status="passed",
-                semantic_status="passed",
-                suggested_next_action="continue",
-                matched_signals=match.get("matched_signals") or [],
-                unmatched_signals=match.get("unmatched_signals") or [],
-                counter_signal_hits=match.get("counter_signal_hits") or [],
-                delta_facts=delta_facts,
-                boundary_evidence=boundary_evidence,
-            )
 
         # 变化验证优先：若关键变化证据几乎为零，直接判失败，避免无意义语义补判。
         if (
@@ -1140,18 +1085,6 @@ class Evaluator:
         if not target:
             return False
         return any(target in (t or "").lower() for t in texts)
-
-    def _text_list_contains_any(self, texts: List[str], needles: tuple) -> bool:
-        values = [str(t or "").strip().lower() for t in (texts or []) if str(t or "").strip()]
-        if not values:
-            return False
-        for needle in needles:
-            token = str(needle or "").strip().lower()
-            if not token:
-                continue
-            if any(token in value for value in values):
-                return True
-        return False
 
     def _infer_toggle_expectation(self, semantic_goal_text: str) -> str:
         text = str(semantic_goal_text or "").strip().lower()
