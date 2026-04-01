@@ -52,7 +52,7 @@ class Planner:
         self._plan_min_remaining_sec = 5
         logger.info("Planner 初始化完成 (V3.1)")
 
-    def plan(self, task: str, ui_state: UIState) -> PlanResult:
+    def plan(self, task: str, ui_state: UIState, step: int | None = None) -> PlanResult:
         logger.info("开始规划(V3.1), task='%s'", task[:80])
 
         source = "llm"
@@ -63,31 +63,17 @@ class Planner:
             if replay is not None:
                 source = "experience"
                 result = replay
-                self._record_plan_artifact(
-                    stage="plan_final",
-                    payload={
-                        "task": task,
-                        "source": source,
-                        "plan_result": result,
-                    },
-                )
+                self._record_plan_dataclass(source=source, result=result, step=step)
                 return result
 
         try:
-            result = self._plan_with_llm(task=task, ui_state=ui_state)
+            result = self._plan_with_llm(task=task, ui_state=ui_state, step=step)
         except Exception as exc:
             logger.warning("规划失败，回退启发式策略: %s", exc)
             source = "heuristic_fallback"
             result = self._heuristic_fallback_plan(task=task, ui_state=ui_state, error=str(exc))
 
-        self._record_plan_artifact(
-            stage="plan_final",
-            payload={
-                "task": task,
-                "source": source,
-                "plan_result": result,
-            },
-        )
+        self._record_plan_dataclass(source=source, result=result, step=step)
         return result
 
     def _plan_from_experience(self, experience) -> Optional[PlanResult]:
@@ -158,7 +144,7 @@ class Planner:
                 progress += 1
         return progress
 
-    def _plan_with_llm(self, task: str, ui_state: UIState) -> PlanResult:
+    def _plan_with_llm(self, task: str, ui_state: UIState, step: int | None = None) -> PlanResult:
         remaining = self._remaining_task_seconds()
         if remaining is not None and remaining < self._plan_min_remaining_sec:
             raise TimeoutError(
@@ -215,9 +201,13 @@ class Planner:
         response = self.llm.chat(
             prompt,
             timeout=primary_timeout,
-            audit_meta={"module": "planner", "stage": "primary"},
+            audit_meta={
+                "artifact_kind": "PlanResult",
+                "step": step,
+                "stage": "primary",
+            },
         )
-        result = self._parse_plan_response(response, source="primary")
+        result = self._parse_plan_response(response)
 
         if self._is_redundant(result):
             if self._can_afford_retry():
@@ -232,9 +222,13 @@ class Planner:
                 retry = self.llm.chat(
                     retry_prompt,
                     timeout=retry_timeout,
-                    audit_meta={"module": "planner", "stage": "retry"},
+                    audit_meta={
+                        "artifact_kind": "PlanResult",
+                        "step": step,
+                        "stage": "retry",
+                    },
                 )
-                retry_result = self._parse_plan_response(retry, source="retry")
+                retry_result = self._parse_plan_response(retry)
                 if not self._is_redundant(retry_result):
                     result = retry_result
 
@@ -252,96 +246,73 @@ class Planner:
             align_resp = self.llm.chat(
                 align_prompt,
                 timeout=align_timeout,
-                audit_meta={"module": "planner", "stage": "align"},
+                audit_meta={
+                    "artifact_kind": "PlanResult",
+                    "step": step,
+                    "stage": "align",
+                },
             )
-            align_result = self._parse_plan_response(align_resp, source="align")
+            align_result = self._parse_plan_response(align_resp)
             still_misaligned, _ = self._is_misaligned(task=task, result=align_result)
             if not still_misaligned:
                 result = align_result
 
-        self._record_plan_artifact(
-            stage="llm_selected",
-            payload={
-                "task": task,
-                "plan_result": result,
-            },
-        )
         return result
 
-    def _parse_plan_response(self, response: str, source: str = "unknown") -> PlanResult:
-        try:
-            payload = parse_json_object(response)
+    def _parse_plan_response(self, response: str) -> PlanResult:
+        payload = parse_json_object(response)
 
-            allowed_top_level = {
-                "is_task_complete",
-                "reasoning",
-                "goal",
-                "requested_action_type",
-                "input_text",
-                "target",
-                "planning_hints",
-            }
-            extras = sorted(set(payload.keys()) - allowed_top_level)
-            if extras:
-                raise ContractValidationError(f"Planner response has unexpected fields: {extras}")
+        allowed_top_level = {
+            "is_task_complete",
+            "reasoning",
+            "goal",
+            "requested_action_type",
+            "input_text",
+            "target",
+            "planning_hints",
+        }
+        extras = sorted(set(payload.keys()) - allowed_top_level)
+        if extras:
+            raise ContractValidationError(f"Planner response has unexpected fields: {extras}")
 
-            goal = parse_dataclass(payload.get("goal") or {}, GoalSpec, strict=True)
+        goal = parse_dataclass(payload.get("goal") or {}, GoalSpec, strict=True)
 
-            target_payload = payload.get("target")
-            target: Optional[TargetRef] = None
-            if target_payload is not None:
-                target = parse_dataclass(target_payload, TargetRef, strict=True)
+        target_payload = payload.get("target")
+        target: Optional[TargetRef] = None
+        if target_payload is not None:
+            target = parse_dataclass(target_payload, TargetRef, strict=True)
 
-            action_type = validate_action_type(
-                str(payload.get("requested_action_type") or "tap").strip().lower()
-            )
+        action_type = validate_action_type(
+            str(payload.get("requested_action_type") or "tap").strip().lower()
+        )
 
-            input_text = payload.get("input_text")
-            if not isinstance(input_text, str):
-                raise ContractValidationError("input_text must be a string")
+        input_text = payload.get("input_text")
+        if not isinstance(input_text, str):
+            raise ContractValidationError("input_text must be a string")
 
-            planning_hints = payload.get("planning_hints")
-            if not isinstance(planning_hints, dict):
-                raise ContractValidationError("planning_hints must be an object")
+        planning_hints = payload.get("planning_hints")
+        if not isinstance(planning_hints, dict):
+            raise ContractValidationError("planning_hints must be an object")
 
-            is_task_complete = payload.get("is_task_complete")
-            if not isinstance(is_task_complete, bool):
-                raise ContractValidationError("is_task_complete must be a boolean")
+        is_task_complete = payload.get("is_task_complete")
+        if not isinstance(is_task_complete, bool):
+            raise ContractValidationError("is_task_complete must be a boolean")
 
-            reasoning = payload.get("reasoning")
-            if not isinstance(reasoning, str):
-                raise ContractValidationError("reasoning must be a string")
+        reasoning = payload.get("reasoning")
+        if not isinstance(reasoning, str):
+            raise ContractValidationError("reasoning must be a string")
 
-            result = PlanResult(
-                goal=goal,
-                target=target,
-                requested_action_type=action_type,
-                input_text=input_text,
-                planning_hints=planning_hints,
-                is_task_complete=is_task_complete,
-                reasoning=reasoning.strip(),
-                from_experience=False,
-            )
-            self._record_plan_artifact(
-                stage=f"{source}_parsed",
-                payload={
-                    "source": source,
-                    "raw_response": response,
-                    "parsed_payload": payload,
-                    "plan_result": result,
-                },
-            )
-            return result
-        except Exception as exc:
-            self._record_plan_artifact(
-                stage=f"{source}_parse_error",
-                payload={
-                    "source": source,
-                    "raw_response": response,
-                    "error": str(exc),
-                },
-            )
-            raise
+        result = PlanResult(
+            goal=goal,
+            target=target,
+            requested_action_type=action_type,
+            input_text=input_text,
+            planning_hints=planning_hints,
+            is_task_complete=is_task_complete,
+            reasoning=reasoning.strip(),
+            from_experience=False,
+        )
+        return result
 
     def _safe_parse_goal(self, payload: Any) -> Optional[GoalSpec]:
         if not isinstance(payload, dict):
@@ -529,13 +500,14 @@ class Planner:
             return True
         return remaining >= self._plan_retry_min_remaining_sec
 
-    def _record_plan_artifact(self, stage: str, payload: dict[str, Any]) -> None:
+    def _record_plan_dataclass(self, source: str, result: PlanResult, step: int | None = None) -> None:
+        if step is None:
+            return
         try:
-            self.audit.record(
-                module="planner",
-                stage=stage,
-                event="plan_artifact",
-                payload=payload,
+            self.audit.record_step(
+                artifact_kind="PlanResult",
+                step=int(step),
+                payload=result,
             )
         except Exception as exc:
             logger.warning("写入 Planner 审计记录失败: %s", exc)

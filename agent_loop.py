@@ -204,7 +204,7 @@ class AgentLoop:
             stage=f"step_{step}_planning",
         )
         logger.info("[Step %d] 阶段2: 认知规划", step)
-        plan = self.planner.plan(task, ui_state)
+        plan = self.planner.plan(task, ui_state, step=step)
 
         if plan.is_task_complete:
             logger.info("Planner 判断任务已完成")
@@ -227,7 +227,12 @@ class AgentLoop:
         self.memory.short_term.current_subgoal = plan.goal.summary
         logger.info("本步目标: '%s' (action=%s)", plan.goal.summary, plan.requested_action_type)
 
-        contract = self.oracle_pre.generate_contract(plan=plan, ui_state=ui_state, task_hint=task)
+        contract = self.oracle_pre.generate_contract(
+            plan=plan,
+            ui_state=ui_state,
+            task_hint=task,
+            step=step,
+        )
 
         logger.info("[Step %d] 阶段3: 安全检查", step)
         if not self.safety.check(plan=plan, contract=contract):

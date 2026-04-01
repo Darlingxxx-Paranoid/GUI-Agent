@@ -54,6 +54,7 @@ class OraclePre:
         plan: PlanResult,
         ui_state: UIState,
         task_hint: str = "",
+        step: int | None = None,
     ) -> StepContract:
         normalized_goal = self._normalize_goal(plan.goal)
         normalized_target = self._normalize_target(plan.target)
@@ -67,7 +68,12 @@ class OraclePre:
         )
 
         semantic_source = "fallback_rules"
-        llm_contract = self._generate_contract_with_llm(plan=plan, ui_state=ui_state, task_hint=task_hint)
+        llm_contract = self._generate_contract_with_llm(
+            plan=plan,
+            ui_state=ui_state,
+            task_hint=task_hint,
+            step=step,
+        )
         if llm_contract is not None:
             semantic_source = "oracle_pre_llm"
             goal = self._normalize_goal(llm_contract.goal)
@@ -118,17 +124,7 @@ class OraclePre:
             policies=policies,
             planning_hints=hints,
         )
-        self._record_oracle_pre_artifact(
-            stage="final_stitched_contract",
-            payload={
-                "semantic_source": semantic_source,
-                "task_hint": str(task_hint or ""),
-                "plan": plan,
-                "fallback_expectations": fallback_expectations,
-                "fallback_policies": fallback_policies,
-                "final_contract": contract,
-            },
-        )
+        self._record_oracle_pre_artifact(step=step, payload=contract)
         logger.info(
             "生成 StepContract: goal='%s', expectations=%d, policies=%d, source=%s",
             contract.goal.summary,
@@ -143,6 +139,7 @@ class OraclePre:
         plan: PlanResult,
         ui_state: UIState,
         task_hint: str,
+        step: int | None = None,
     ) -> Optional[StepContract]:
         if self.llm is None:
             return None
@@ -178,30 +175,17 @@ class OraclePre:
             response = self.llm.chat(
                 prompt,
                 timeout=self._oracle_pre_timeout_sec,
-                audit_meta={"module": "oracle_pre", "stage": "generate_contract"},
+                audit_meta={
+                    "artifact_kind": "StepContract",
+                    "step": step,
+                    "stage": "generate_contract",
+                },
             )
             payload = parse_json_object(response)
             contract = parse_dataclass(payload, StepContract, strict=False)
-            self._record_oracle_pre_artifact(
-                stage="llm_parsed_contract",
-                payload={
-                    "task_hint": str(task_hint or ""),
-                    "plan": plan,
-                    "raw_response": response,
-                    "parsed_payload": payload,
-                    "parsed_contract": contract,
-                },
-            )
             return contract
         except Exception as exc:
-            self._record_oracle_pre_artifact(
-                stage="llm_parse_error",
-                payload={
-                    "task_hint": str(task_hint or ""),
-                    "plan": plan,
-                    "error": str(exc),
-                },
-            )
+            self._record_oracle_pre_parse_error(step=step, error=str(exc))
             logger.warning("OraclePre LLM 生成失败，回退规则合同: %s", exc)
             return None
 
@@ -580,13 +564,32 @@ class OraclePre:
             return False
         return bool(re.match(r"^[a-z][a-z0-9_]*(\.[a-z0-9_]+)+$", token))
 
-    def _record_oracle_pre_artifact(self, stage: str, payload: dict) -> None:
+    def _record_oracle_pre_artifact(self, step: int | None, payload) -> None:
+        if step is None:
+            return
         try:
-            self.audit.record(
-                module="oracle_pre",
-                stage=stage,
-                event="step_contract_artifact",
+            self.audit.record_step(
+                artifact_kind="StepContract",
+                step=int(step),
                 payload=payload,
             )
         except Exception as exc:
             logger.warning("写入 OraclePre 审计记录失败: %s", exc)
+
+    def _record_oracle_pre_parse_error(self, step: int | None, error: str) -> None:
+        if step is None:
+            return
+        try:
+            self.audit.record_step(
+                artifact_kind="StepContract",
+                step=int(step),
+                payload={
+                    "stage": "llm_parse_error",
+                    "llm_response": "",
+                    "error": error,
+                },
+                llm=True,
+                append=True,
+            )
+        except Exception as exc:
+            logger.warning("写入 OraclePre 解析错误审计记录失败: %s", exc)

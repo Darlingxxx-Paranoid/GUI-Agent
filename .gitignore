@@ -1,5 +1,6 @@
 #数据文件
 data/
+data/*
 
 #模型文件
 Module

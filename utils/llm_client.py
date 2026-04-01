@@ -130,46 +130,51 @@ class LLMClient:
             content = response.choices[0].message.content
             logger.debug("LLM 响应: len=%d", len(content) if content else 0)
             self._save_audit_record(
+                artifact_kind=str((audit_meta or {}).get("artifact_kind") or ""),
+                step=(audit_meta or {}).get("step"),
                 stage=str((audit_meta or {}).get("stage") or "chat"),
-                payload={
-                    "module": str((audit_meta or {}).get("module") or "llm"),
-                    "model": self.model,
-                    "temperature": self.temperature,
-                    "max_tokens": self.max_tokens,
-                    "timeout_sec": request_timeout,
-                    "prompt": prompt,
-                    "system_prompt": system_prompt or "",
-                    "response_text": content or "",
-                    "error": "",
-                },
+                llm_response=content or "",
+                error="",
             )
             return content or ""
         except Exception as e:
             logger.error("LLM 请求失败: %s", e)
             self._save_audit_record(
+                artifact_kind=str((audit_meta or {}).get("artifact_kind") or ""),
+                step=(audit_meta or {}).get("step"),
                 stage=str((audit_meta or {}).get("stage") or "chat_error"),
-                payload={
-                    "module": str((audit_meta or {}).get("module") or "llm"),
-                    "model": self.model,
-                    "temperature": self.temperature,
-                    "max_tokens": self.max_tokens,
-                    "timeout_sec": request_timeout,
-                    "prompt": prompt,
-                    "system_prompt": system_prompt or "",
-                    "response_text": "",
-                    "error": str(e),
-                },
+                llm_response="",
+                error=str(e),
             )
             raise
 
-    def _save_audit_record(self, stage: str, payload: dict[str, Any]) -> None:
-        module = str(payload.get("module") or "llm")
+    def _save_audit_record(
+        self,
+        artifact_kind: str,
+        step: Any,
+        stage: str,
+        llm_response: str,
+        error: str,
+    ) -> None:
+        if not artifact_kind:
+            return
         try:
-            self.audit.record(
-                module=module,
-                stage=stage,
-                event="llm_exchange",
-                payload=payload,
+            step_num = int(step)
+        except Exception:
+            return
+        if step_num <= 0:
+            return
+        try:
+            self.audit.record_step(
+                artifact_kind=artifact_kind,
+                step=step_num,
+                payload={
+                    "stage": stage,
+                    "llm_response": llm_response,
+                    "error": error,
+                },
+                llm=True,
+                append=True,
             )
         except Exception as exc:
             logger.warning("写入 LLM 审计记录失败: %s", exc)

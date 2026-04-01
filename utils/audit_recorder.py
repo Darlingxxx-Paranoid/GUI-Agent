@@ -1,4 +1,4 @@
-"""Audit artifact recorder for LLM outputs and stitched dataclass instances."""
+"""Step-aligned artifact recorder: data/<kind>/step_<n>[_llm].json."""
 
 from __future__ import annotations
 
@@ -6,67 +6,77 @@ import json
 import os
 import re
 import threading
-import time
 from typing import Any
 
 from Oracle.contracts import to_plain_dict
 
 
 class AuditRecorder:
-    """Write structured audit records under data/audit for manual inspection."""
+    """Write artifacts grouped by kind and aligned to agent step index."""
 
     _lock = threading.Lock()
-    _sequence = 0
 
     def __init__(self, component: str = "runtime", base_dir: str = ""):
         project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         self.component = self._sanitize_token(component or "runtime")
-        self.base_dir = base_dir or os.path.join(project_root, "data", "audit")
+        self.base_dir = os.path.abspath(base_dir or os.path.join(project_root, "data"))
         os.makedirs(self.base_dir, exist_ok=True)
 
-    @classmethod
-    def _next_sequence(cls) -> int:
-        with cls._lock:
-            cls._sequence += 1
-            return cls._sequence
-
-    def record(
+    def record_step(
         self,
-        module: str,
-        stage: str,
-        event: str,
+        artifact_kind: str,
+        step: int,
         payload: Any,
+        llm: bool = False,
+        append: bool = False,
     ) -> str:
-        module_token = self._sanitize_token(module or self.component)
-        stage_token = self._sanitize_token(stage or "default")
-        event_token = self._sanitize_token(event or "event")
-
-        folder = os.path.join(self.base_dir, module_token)
+        step_num = self._normalize_step(step)
+        kind = self._sanitize_token(artifact_kind)
+        folder = os.path.join(self.base_dir, kind)
         os.makedirs(folder, exist_ok=True)
 
-        now = time.time()
-        stamp = time.strftime("%Y%m%d_%H%M%S", time.localtime(now))
-        millis = int((now - int(now)) * 1000)
-        seq = self._next_sequence()
-        path = os.path.join(
-            folder,
-            f"{stamp}_{millis:03d}_{seq:06d}_{stage_token}_{event_token}.json",
-        )
+        suffix = "_llm" if llm else ""
+        path = os.path.join(folder, f"step_{step_num}{suffix}.json")
+        body = to_plain_dict(payload)
 
-        body = {
-            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(now)),
-            "component": self.component,
-            "module": module_token,
-            "stage": stage,
-            "event": event,
-            "payload": to_plain_dict(payload),
-        }
-
-        with open(path, "w", encoding="utf-8") as file:
-            json.dump(body, file, ensure_ascii=False, indent=2)
+        if append:
+            with self._lock:
+                merged = self._append_payload(path=path, payload=body)
+                self._write_json(path=path, payload=merged)
+        else:
+            self._write_json(path=path, payload=body)
         return path
 
+    def _append_payload(self, path: str, payload: Any) -> list[Any]:
+        current: list[Any] = []
+        if os.path.exists(path):
+            try:
+                with open(path, "r", encoding="utf-8") as file:
+                    old = json.load(file)
+                if isinstance(old, list):
+                    current = old
+                else:
+                    current = [old]
+            except Exception:
+                current = []
+        current.append(payload)
+        return current
+
+    def _write_json(self, path: str, payload: Any) -> None:
+        with open(path, "w", encoding="utf-8") as file:
+            json.dump(payload, file, ensure_ascii=False, indent=2)
+
+    def _normalize_step(self, step: int) -> int:
+        try:
+            value = int(step)
+        except Exception as exc:
+            raise ValueError(f"invalid step index: {step}") from exc
+        if value <= 0:
+            raise ValueError(f"step must be >=1, got {value}")
+        return value
+
     def _sanitize_token(self, value: str) -> str:
-        text = str(value or "").strip().lower()
-        text = re.sub(r"[^a-z0-9_.-]+", "_", text)
-        return text.strip("._-") or "default"
+        text = str(value or "").strip()
+        text = re.sub(r"[^0-9A-Za-z_.-]+", "_", text)
+        text = text.strip("._-")
+        return text or "default"
