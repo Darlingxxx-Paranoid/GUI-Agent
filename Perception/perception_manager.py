@@ -105,7 +105,8 @@ class PerceptionManager:
         )
 
         self._save_context(ui_state, dump_path=dump_path)
-        logger.info("环境感知完成: 最终控件数=%d", len(ui_state.widgets))
+        logger.info("环境感知完成: 最终控件数=%d", len(ui_state.get_prompt_widgets()))
+        logger.debug("环境感知完整视图控件数=%d", len(ui_state.get_runtime_widgets()))
         return ui_state
 
     def _should_trigger_cv_with_ocr(self, dump_elements: list) -> bool:
@@ -147,20 +148,29 @@ class PerceptionManager:
             stem = "context"
 
         out_path = os.path.join(self.context_output_dir, f"{stem}.json")
+        prompt_widgets = ui_state.get_prompt_widgets()
+        full_widgets = ui_state.get_runtime_widgets()
         payload = {
             "activity_name": ui_state.activity_name,
             "package_name": ui_state.package_name,
             "screen_width": ui_state.screen_width,
             "screen_height": ui_state.screen_height,
             "keyboard_visible": ui_state.keyboard_visible,
-            "editable_widgets_count": sum(1 for w in ui_state.widgets if getattr(w, "editable", False)),
-            "focused_widgets_count": sum(1 for w in ui_state.widgets if getattr(w, "focused", False)),
+            "editable_widgets_count": sum(1 for w in prompt_widgets if getattr(w, "editable", False)),
+            "focused_widgets_count": sum(1 for w in prompt_widgets if getattr(w, "focused", False)),
             "screenshot_path": ui_state.screenshot_path,
             "dump_path": dump_path or "",
-            "widgets_count": len(ui_state.widgets),
+            "widgets_count": len(prompt_widgets),
+            "full_widgets_count": len(full_widgets),
+            "full_editable_widgets_count": sum(1 for w in full_widgets if getattr(w, "editable", False)),
+            "full_focused_widgets_count": sum(1 for w in full_widgets if getattr(w, "focused", False)),
             "widgets": [
                 {**w.to_dict(), "cv_confidence": getattr(w, "cv_confidence", 0.0)}
-                for w in ui_state.widgets
+                for w in prompt_widgets
+            ],
+            "full_widgets": [
+                {**w.to_dict(), "cv_confidence": getattr(w, "cv_confidence", 0.0)}
+                for w in full_widgets
             ],
         }
 

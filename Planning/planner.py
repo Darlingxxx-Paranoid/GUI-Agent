@@ -360,7 +360,7 @@ class Planner:
 
         best_widget: Optional[WidgetInfo] = None
         best_score = -1
-        for widget in ui_state.widgets:
+        for widget in ui_state.get_prompt_widgets():
             text_blob = " ".join(
                 [
                     str(widget.text or ""),

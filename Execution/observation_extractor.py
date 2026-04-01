@@ -211,6 +211,7 @@ class ObservationExtractor:
         )
 
     def _find_target_in_state(self, target: TargetRef, state: UIState) -> Optional[WidgetInfo]:
+        widgets = state.get_runtime_widgets()
         if target.resolved and target.resolved.widget_id is not None:
             by_id = state.find_widget_by_id(int(target.resolved.widget_id))
             if by_id is not None:
@@ -232,18 +233,18 @@ class ObservationExtractor:
                     return widget
             if kind == "resource_id":
                 needle = str(value or "").strip().lower()
-                for widget in state.widgets:
+                for widget in widgets:
                     if needle and needle in str(widget.resource_id or "").lower():
                         return widget
             if kind == "content_desc":
                 needle = str(value or "").strip().lower()
-                for widget in state.widgets:
+                for widget in widgets:
                     if needle and needle in str(widget.content_desc or "").lower():
                         return widget
         return None
 
     def _focused_widget_signature(self, state: UIState) -> str:
-        for widget in state.widgets:
+        for widget in state.get_runtime_widgets():
             if getattr(widget, "focused", False):
                 token = "|".join(
                     [
@@ -258,7 +259,7 @@ class ObservationExtractor:
 
     def _collect_text_tokens(self, state: UIState) -> set[str]:
         out: set[str] = set()
-        for widget in state.widgets:
+        for widget in state.get_runtime_widgets():
             for token in (widget.text, widget.content_desc):
                 value = str(token or "").strip()
                 if value:

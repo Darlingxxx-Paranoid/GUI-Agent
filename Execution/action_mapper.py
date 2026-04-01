@@ -304,6 +304,7 @@ class ActionMapper:
     def _match_selector_all(self, selector: Selector, ui_state: UIState) -> list[WidgetInfo]:
         kind = str(selector.kind or "").strip().lower()
         value = selector.value
+        widgets = ui_state.get_runtime_widgets()
 
         if kind == "widget_id":
             try:
@@ -316,25 +317,25 @@ class ActionMapper:
             token = str(value or "").strip().lower()
             if not token:
                 return []
-            return [w for w in ui_state.widgets if token in str(w.text or "").lower() or token in str(w.content_desc or "").lower()]
+            return [w for w in widgets if token in str(w.text or "").lower() or token in str(w.content_desc or "").lower()]
 
         if kind == "resource_id":
             token = str(value or "").strip().lower()
             if not token:
                 return []
-            return [w for w in ui_state.widgets if token in str(w.resource_id or "").lower()]
+            return [w for w in widgets if token in str(w.resource_id or "").lower()]
 
         if kind == "content_desc":
             token = str(value or "").strip().lower()
             if not token:
                 return []
-            return [w for w in ui_state.widgets if token in str(w.content_desc or "").lower()]
+            return [w for w in widgets if token in str(w.content_desc or "").lower()]
 
         if kind == "class_name":
             token = str(value or "").strip().lower()
             if not token:
                 return []
-            return [w for w in ui_state.widgets if str(w.class_name or "").lower() == token]
+            return [w for w in widgets if str(w.class_name or "").lower() == token]
 
         if kind == "bounds" and isinstance(value, (list, tuple)) and len(value) == 4:
             try:
@@ -342,7 +343,7 @@ class ActionMapper:
             except Exception:
                 return []
             out: list[WidgetInfo] = []
-            for widget in ui_state.widgets:
+            for widget in widgets:
                 iou = calc_iou(bounds, widget.bounds)
                 if iou > 0.1:
                     out.append(widget)
@@ -355,7 +356,7 @@ class ActionMapper:
             except Exception:
                 return []
             out: list[WidgetInfo] = []
-            for widget in ui_state.widgets:
+            for widget in widgets:
                 x1, y1, x2, y2 = widget.bounds
                 if x1 <= x <= x2 and y1 <= y <= y2:
                     out.append(widget)
@@ -367,6 +368,7 @@ class ActionMapper:
         kind = str(selector.kind or "").strip().lower()
         operator = str(selector.operator or "").strip().lower()
         value = selector.value
+        widgets = ui_state.get_runtime_widgets()
 
         if kind == "widget_id":
             try:
@@ -385,7 +387,7 @@ class ActionMapper:
             if not token:
                 return None
             return self._best_match(
-                ui_state.widgets,
+                widgets,
                 lambda w: token in str(w.resource_id or "").lower(),
             )
 
@@ -394,7 +396,7 @@ class ActionMapper:
             if not token:
                 return None
             return self._best_match(
-                ui_state.widgets,
+                widgets,
                 lambda w: token in str(w.content_desc or "").lower(),
             )
 
@@ -403,7 +405,7 @@ class ActionMapper:
             if not token:
                 return None
             return self._best_match(
-                ui_state.widgets,
+                widgets,
                 lambda w: str(w.class_name or "").lower() == token,
             )
 
@@ -414,7 +416,7 @@ class ActionMapper:
                 return None
             best = None
             best_iou = 0.0
-            for widget in ui_state.widgets:
+            for widget in widgets:
                 iou = calc_iou(bounds, widget.bounds)
                 if iou > best_iou:
                     best = widget
@@ -429,13 +431,13 @@ class ActionMapper:
                 y = int(value[1])
             except Exception:
                 return None
-            for widget in ui_state.widgets:
+            for widget in widgets:
                 x1, y1, x2, y2 = widget.bounds
                 if x1 <= x <= x2 and y1 <= y <= y2:
                     return widget
             # point near fallback
             return self._best_match(
-                ui_state.widgets,
+                widgets,
                 lambda w: abs(w.center[0] - x) + abs(w.center[1] - y) <= 120,
             )
 

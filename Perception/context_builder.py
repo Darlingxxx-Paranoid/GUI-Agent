@@ -98,7 +98,8 @@ class UIState:
     当前 UI 的完整状态快照
     作为所有模块间传递的核心数据结构
     """
-    widgets: List[WidgetInfo] = field(default_factory=list)
+    widgets: List[WidgetInfo] = field(default_factory=list)  # context view (for LLM prompt)
+    full_widgets: List[WidgetInfo] = field(default_factory=list)  # full view (for runtime/eval/debug)
     activity_name: str = ""                  # 当前 Activity
     package_name: str = ""                   # 当前包名
     screen_width: int = 0
@@ -107,21 +108,30 @@ class UIState:
     screenshot_path: str = ""                # 对应截图路径
     raw_cv_elements: List[Dict] = field(default_factory=list)  # CV 原始检测结果
 
+    def get_prompt_widgets(self) -> List[WidgetInfo]:
+        """返回用于 LLM 的精简视图。"""
+        return self.widgets
+
+    def get_runtime_widgets(self) -> List[WidgetInfo]:
+        """返回用于执行/评估的完整视图（缺失时回退到精简视图）。"""
+        return self.full_widgets or self.widgets
+
     def to_prompt_text(self) -> str:
         """生成供 LLM 使用的状态描述文本"""
-        editable_count = sum(1 for w in self.widgets if w.editable)
-        focused_editable_count = sum(1 for w in self.widgets if w.editable and w.focused)
+        prompt_widgets = self.get_prompt_widgets()
+        editable_count = sum(1 for w in prompt_widgets if w.editable)
+        focused_editable_count = sum(1 for w in prompt_widgets if w.editable and w.focused)
         lines = [
             f"Current Activity: {self.activity_name or 'unknown'}",
             f"Package: {self.package_name or 'unknown'}",
             f"Screen: {self.screen_width}x{self.screen_height}",
             f"Keyboard Visible: {self.keyboard_visible}",
-            f"Widgets Count: {len(self.widgets)}",
+            f"Widgets Count: {len(prompt_widgets)}",
             f"Editable Widgets: {editable_count}",
             f"Focused Editable Widgets: {focused_editable_count}",
             "--- Widgets List ---",
         ]
-        for w in self.widgets:
+        for w in prompt_widgets:
             lines.append(w.get_description())
         return "\n".join(lines)
 
@@ -132,7 +142,7 @@ class UIState:
             return None
 
         candidates = []
-        for w in self.widgets:
+        for w in self.get_runtime_widgets():
             text_hit = query in (w.text or "").lower()
             desc_hit = query in (w.content_desc or "").lower()
             if not (text_hit or desc_hit):
@@ -157,7 +167,7 @@ class UIState:
 
     def find_widget_by_id(self, widget_id: int) -> Optional[WidgetInfo]:
         """根据 widget_id 查找控件"""
-        for w in self.widgets:
+        for w in self.get_runtime_widgets():
             if w.widget_id == widget_id:
                 return w
         return None
@@ -218,15 +228,14 @@ class ContextBuilder:
         # 第二步：融合 CV 元素和 Dump 控件
         merged_widgets = self._merge_sources(restored_cv, dump_elements)
 
-        # 第三步：上下文瘦身 — 过滤冗余
-        filtered = self._filter_widgets(merged_widgets, screen_area)
-
-        # 重新分配 ID
-        for i, w in enumerate(filtered):
+        # 第三步：先给完整视图分配稳定 ID，再做上下文瘦身
+        for i, w in enumerate(merged_widgets):
             w.widget_id = i
+        filtered = self._filter_widgets(merged_widgets, screen_area)
 
         state = UIState(
             widgets=filtered,
+            full_widgets=merged_widgets,
             activity_name=activity_name,
             package_name=package_name,
             screen_width=screen_w,
