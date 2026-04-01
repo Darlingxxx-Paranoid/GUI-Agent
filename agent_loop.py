@@ -12,12 +12,13 @@ from utils.llm_client import LLMClient
 from Evaluation.evaluator import Evaluator
 from Evaluation.replanner import Replanner
 from Execution.action_executor import ActionExecutor
-from Execution.action_mapper import ActionMapper
+from Execution.action_mapper import ActionMapper, MappingFailure
 from Execution.oracle_runtime import OracleRuntime
 from Memory.memory_manager import MemoryManager
 from Oracle.contracts import (
     ACTION_TYPES,
     AdviceParams,
+    Assessment,
     RecommendedAction,
     StepEvaluation,
     to_plain_dict,
@@ -40,7 +41,7 @@ class AgentLoop:
             os.path.dirname(__file__),
             "data",
             "contracts",
-            "oracle_contracts_v3_1.json",
+            "oracle_contracts_v4_0.json",
         )
         os.makedirs(os.path.dirname(self.contract_schema_path), exist_ok=True)
         try:
@@ -61,10 +62,7 @@ class AgentLoop:
             cv_output_dir=config.cv_output_dir,
             resize_height=config.cv_resize_height,
         )
-        self.memory = MemoryManager(
-            experience_store_path=config.long_term_memory_file,
-            similarity_threshold=config.experience_similarity_threshold,
-        )
+        self.memory = MemoryManager()
         self.planner = Planner(llm_client=self.llm, memory_manager=self.memory)
         self.oracle_pre = OraclePre(llm_client=self.llm)
         self.safety = SafetyInterceptor(high_risk_keywords=config.high_risk_keywords)
@@ -85,7 +83,7 @@ class AgentLoop:
             dead_end_threshold=config.dead_end_threshold,
         )
 
-        logger.info("AgentLoop 初始化完成(V3.1), max_steps=%d", config.max_steps)
+        logger.info("AgentLoop 初始化完成(V4), max_steps=%d", config.max_steps)
 
     def run(self, task: str, dry_run: bool = False):
         logger.info("=" * 60)
@@ -245,7 +243,36 @@ class AgentLoop:
             return {"task_completed": False, "abort": True, "reason": "用户拒绝高风险操作"}
 
         logger.info("[Step %d] 阶段4: 动作映射", step)
-        action = self.mapper.map_action(plan=plan, ui_state=ui_state, contract=contract)
+        try:
+            action = self.mapper.map_action(plan=plan, ui_state=ui_state, contract=contract)
+        except MappingFailure as exc:
+            logger.warning("动作映射失败: %s", exc)
+            eval_result = self._evaluation_from_mapper_failure(exc)
+            decision = self.replanner.handle_failure(
+                subgoal_description=plan.goal.summary,
+                evaluation=eval_result,
+                ui_state=ui_state,
+            )
+            self.memory.short_term.add_step(
+                {
+                    "step": step,
+                    "goal": to_plain_dict(plan.goal),
+                    "contract": to_plain_dict(contract),
+                    "evaluation": to_plain_dict(eval_result),
+                    "result": f"failed_mapper:{exc.reason_code}",
+                    "replan_decision": decision.action,
+                    "from_experience": bool(plan.from_experience),
+                }
+            )
+            if decision.action == "back" and not dry_run:
+                self._execute_adaptive_back(
+                    reference_activity=str(getattr(ui_state, "activity_name", "") or ""),
+                    reference_package=str(getattr(ui_state, "package_name", "") or ""),
+                )
+            if decision.action == "abort":
+                return {"task_completed": False, "abort": True, "reason": decision.reason}
+            return {"task_completed": False}
+
         logger.info("映射动作: type=%s, params=%s", action.type, action.params)
 
         pre_guard = self.oracle_runtime.pre_guard(action=action, contract=contract, ui_state=ui_state)
@@ -471,6 +498,29 @@ class AgentLoop:
             expectation_matches=[],
         )
 
+    def _evaluation_from_mapper_failure(self, error: MappingFailure) -> StepEvaluation:
+        assessment = Assessment(
+            name="mapper_failure_check",
+            source="runtime",
+            applies_to="runtime_guard",
+            outcome="fail",
+            severity="soft",
+            reason_code=str(error.reason_code or "mapper_failure"),
+            message=str(error.message or "动作映射失败"),
+            evidence_refs=[],
+            score=None,
+            remedy_hint=AdviceParams(reason_tags=["mapper_failure"]),
+        )
+        return StepEvaluation(
+            decision="fail",
+            confidence=0.9,
+            recommended_action=RecommendedAction(kind="replan", params=AdviceParams(reason_tags=["mapper_failure"])),
+            assessments=[assessment],
+            observations=[],
+            metrics=[],
+            expectation_matches=[],
+        )
+
     def _should_observe_again(self, evaluation: StepEvaluation) -> bool:
         if evaluation.decision != "uncertain":
             return False
@@ -511,6 +561,12 @@ class AgentLoop:
 
         if action_type == "enter":
             self.executor.enter()
+            return
+
+        if action_type == "launch_app":
+            package = str(params.get("package") or "").strip()
+            activity = str(params.get("activity") or "").strip()
+            self.executor.launch_app(package=package, activity=activity)
             return
 
         if action_type == "long_press":

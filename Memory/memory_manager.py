@@ -1,12 +1,9 @@
-"""Memory manager for short-term context and v3 long-term triplets."""
+"""Memory manager for short-term context only."""
 
 from __future__ import annotations
 
 import logging
 from typing import Any, Dict, List, Optional
-
-from Memory.experience_store import ExperienceRecord, ExperienceStore
-from utils.utils import cosine_similarity
 
 logger = logging.getLogger(__name__)
 
@@ -50,25 +47,14 @@ class ShortTermMemory:
 
 
 class MemoryManager:
-    def __init__(self, experience_store_path: str, similarity_threshold: float = 0.75):
+    def __init__(self, experience_store_path: str = "", similarity_threshold: float = 0.75):
         self.short_term = ShortTermMemory()
-        self.experience_store = ExperienceStore(experience_store_path)
         self.similarity_threshold = float(similarity_threshold or 0.75)
-        logger.info("记忆管理器初始化完成(v3), path=%s", experience_store_path)
+        logger.info("记忆管理器初始化完成(v4, long_term_disabled)")
 
-    def search_experience(self, task_description: str) -> Optional[ExperienceRecord]:
-        best_match: Optional[ExperienceRecord] = None
-        best_score = 0.0
-
-        for exp in self.experience_store.get_successful():
-            score = cosine_similarity(str(task_description or ""), exp.task_description)
-            if score > best_score:
-                best_score = score
-                best_match = exp
-
-        if best_match and best_score >= self.similarity_threshold:
-            logger.info("经验命中(v3): score=%.3f task='%s'", best_score, best_match.task_description[:60])
-            return best_match
+    def search_experience(self, task_description: str):
+        _ = task_description
+        # 长期记忆链路已停用，统一返回空命中。
         return None
 
     def save_experience(
@@ -78,14 +64,9 @@ class MemoryManager:
         success: bool,
         metadata: Optional[Dict[str, Any]] = None,
     ):
-        record = ExperienceRecord(
-            task_description=task_description,
-            step_triplets=list(step_triplets or []),
-            success=success,
-            metadata=metadata or {},
-            schema_version=3,
-        )
-        self.experience_store.add(record)
+        _ = (task_description, step_triplets, success, metadata)
+        # 长期记忆链路已停用。
+        return None
 
     def reset_short_term(self):
         self.short_term.clear()

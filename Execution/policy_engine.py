@@ -47,36 +47,77 @@ class PolicyEngine:
         message = ""
 
         if kind == "loop_guard":
+            threshold = int(policy.loop_threshold or context.get("loop_threshold") or 3)
             loop_detected = bool(context.get("loop_detected", False))
             violation = loop_detected
             reason_code = "loop_detected" if violation else "loop_clear"
-            message = "检测到重复动作循环" if violation else "循环检测通过"
+            message = (
+                f"检测到重复动作循环(阈值={threshold})"
+                if violation
+                else f"循环检测通过(阈值={threshold})"
+            )
 
         elif kind == "app_boundary":
-            expected_pkg = str((policy.extra or {}).get("expected_package") or "").strip()
-            must_stay = bool((policy.extra or {}).get("must_stay_in_app", False))
             old_pkg = str(context.get("old_package") or "")
             new_pkg = str(context.get("new_package") or "")
-            forbidden = [str(v).strip() for v in ((policy.extra or {}).get("forbidden_packages") or []) if str(v).strip()]
+            expected_packages = [
+                str(v).strip()
+                for v in (policy.expected_packages or [])
+                if str(v).strip()
+            ]
+            forbidden = [
+                str(v).strip()
+                for v in (policy.forbidden_packages or [])
+                if str(v).strip()
+            ]
+            mode = str(policy.boundary_mode or "").strip().lower()
+            if mode not in {"stay", "switch", "either"}:
+                if expected_packages and new_pkg and new_pkg in expected_packages:
+                    mode = "switch"
+                elif expected_packages:
+                    mode = "stay"
+                else:
+                    mode = "either"
 
             if new_pkg and forbidden and new_pkg in forbidden:
                 violation = True
                 reason_code = "forbidden_package"
                 message = f"进入禁止包名: {new_pkg}"
-            elif must_stay and old_pkg and new_pkg and old_pkg != new_pkg and (not expected_pkg or expected_pkg != new_pkg):
-                violation = True
-                reason_code = "must_stay_in_app"
-                message = f"跨包漂移: {old_pkg} -> {new_pkg}"
-            elif expected_pkg and new_pkg and new_pkg != expected_pkg and must_stay:
-                violation = True
-                reason_code = "expected_package_mismatch"
-                message = f"包名不匹配: expected={expected_pkg}, actual={new_pkg}"
             else:
-                reason_code = "app_boundary_pass"
-                message = "应用边界检查通过"
+                if mode == "stay":
+                    if old_pkg and new_pkg and old_pkg != new_pkg:
+                        violation = True
+                        reason_code = "must_stay_in_app"
+                        message = f"跨包漂移: {old_pkg} -> {new_pkg}"
+                    elif expected_packages and new_pkg and new_pkg not in expected_packages:
+                        violation = True
+                        reason_code = "expected_package_mismatch"
+                        message = f"包名不匹配: expected in {expected_packages}, actual={new_pkg}"
+                    else:
+                        reason_code = "stay_boundary_pass"
+                        message = "stay 边界检查通过"
+                elif mode == "switch":
+                    if not expected_packages:
+                        violation = True
+                        reason_code = "switch_boundary_missing_target"
+                        message = "switch 模式缺少 expected_packages，无法判定目标切换"
+                    elif not new_pkg:
+                        violation = True
+                        reason_code = "switch_boundary_unknown"
+                        message = "无法识别当前包名，无法确认 switch 边界"
+                    elif new_pkg in expected_packages:
+                        reason_code = "switch_boundary_pass"
+                        message = f"已切换到期望包: {new_pkg}"
+                    else:
+                        violation = True
+                        reason_code = "switch_boundary_mismatch"
+                        message = f"切换到非期望包: expected in {expected_packages}, actual={new_pkg}"
+                else:
+                    reason_code = "either_boundary_pass"
+                    message = "either 边界检查通过"
 
         elif kind == "activity_boundary":
-            expected_fragment = str((policy.extra or {}).get("expected_activity_contains") or "").strip()
+            expected_fragment = str(policy.expected_activity_contains or "").strip()
             new_activity = str(context.get("new_activity") or "")
             if expected_fragment and new_activity and expected_fragment not in new_activity:
                 violation = True
@@ -87,7 +128,7 @@ class PolicyEngine:
                 message = "Activity 边界检查通过"
 
         elif kind == "visual_guard":
-            threshold = float((policy.extra or {}).get("max_similarity") or 0.999)
+            threshold = float(policy.max_similarity or 0.999)
             sim_facts = [obs for obs in observations if str(obs.type) == "visual_similarity_state"]
             similarity = None
             if sim_facts:

@@ -3,9 +3,8 @@ LLM 客户端模块
 封装与大语言模型的 API 交互，使用 OpenAI 兼容接口
 """
 import logging
-import json
 import time
-from typing import Optional
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -14,6 +13,8 @@ try:
 except ImportError:
     OpenAI = None
     logger.warning("openai 包未安装, LLM 功能将不可用; 请运行 pip install openai")
+
+from utils.audit_recorder import AuditRecorder
 
 
 class LLMClient:
@@ -36,6 +37,7 @@ class LLMClient:
         self.max_tokens = max_tokens
         self.default_timeout = max(1, int(timeout or 60))
         self._deadline_ts: Optional[float] = None
+        self.audit = AuditRecorder(component="llm_client")
 
         if OpenAI is None:
             logger.error("openai 包未安装, 无法初始化 LLMClient")
@@ -92,6 +94,7 @@ class LLMClient:
         prompt: str,
         system_prompt: Optional[str] = None,
         timeout: Optional[float] = None,
+        audit_meta: Optional[dict[str, Any]] = None,
     ) -> str:
         """
         发送单轮对话请求
@@ -126,7 +129,47 @@ class LLMClient:
             )
             content = response.choices[0].message.content
             logger.debug("LLM 响应: len=%d", len(content) if content else 0)
+            self._save_audit_record(
+                stage=str((audit_meta or {}).get("stage") or "chat"),
+                payload={
+                    "module": str((audit_meta or {}).get("module") or "llm"),
+                    "model": self.model,
+                    "temperature": self.temperature,
+                    "max_tokens": self.max_tokens,
+                    "timeout_sec": request_timeout,
+                    "prompt": prompt,
+                    "system_prompt": system_prompt or "",
+                    "response_text": content or "",
+                    "error": "",
+                },
+            )
             return content or ""
         except Exception as e:
             logger.error("LLM 请求失败: %s", e)
+            self._save_audit_record(
+                stage=str((audit_meta or {}).get("stage") or "chat_error"),
+                payload={
+                    "module": str((audit_meta or {}).get("module") or "llm"),
+                    "model": self.model,
+                    "temperature": self.temperature,
+                    "max_tokens": self.max_tokens,
+                    "timeout_sec": request_timeout,
+                    "prompt": prompt,
+                    "system_prompt": system_prompt or "",
+                    "response_text": "",
+                    "error": str(e),
+                },
+            )
             raise
+
+    def _save_audit_record(self, stage: str, payload: dict[str, Any]) -> None:
+        module = str(payload.get("module") or "llm")
+        try:
+            self.audit.record(
+                module=module,
+                stage=stage,
+                event="llm_exchange",
+                payload=payload,
+            )
+        except Exception as exc:
+            logger.warning("写入 LLM 审计记录失败: %s", exc)

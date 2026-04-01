@@ -1,4 +1,4 @@
-"""Post evaluator that outputs StepEvaluation (V3.1)."""
+"""Post evaluator that outputs StepEvaluation (V4)."""
 
 from __future__ import annotations
 
@@ -34,7 +34,7 @@ class Evaluator:
         self.matcher = ExpectationMatcher()
         self.policy_engine = PolicyEngine()
         self.extractor = ObservationExtractor()
-        logger.info("Evaluator 初始化完成 (V3.1)")
+        logger.info("Evaluator 初始化完成 (V4)")
 
     def evaluate(
         self,
@@ -45,7 +45,7 @@ class Evaluator:
         action: Optional[ResolvedAction] = None,
         post_guard: Optional[GuardResult] = None,
     ) -> StepEvaluation:
-        logger.info("开始事后评估(V3.1): '%s'", subgoal_description)
+        logger.info("开始事后评估(V4): '%s'", subgoal_description)
 
         runtime_observations = list(post_guard.observations) if post_guard else []
         runtime_assessments = list(post_guard.assessments) if post_guard else []
@@ -99,8 +99,23 @@ class Evaluator:
 
         hard_fail_count = sum(1 for item in policy_assessments if item.outcome == "fail" and item.severity == "hard")
         soft_fail_count = sum(1 for item in policy_assessments if item.outcome == "fail" and item.severity == "soft")
+        required_ok = bool(required_total > 0 and required_matched == required_total)
+        required_missing = bool(required_total > 0 and required_matched < required_total)
 
         meaningful_change = self._has_meaningful_change(observations)
+        soft_boundary_fail = any(
+            item.outcome == "fail"
+            and item.severity == "soft"
+            and str(item.name or "").strip().lower() in {"app_boundary_check", "activity_boundary_check"}
+            for item in policy_assessments
+        )
+        app_boundary_mode = self._get_app_boundary_mode(contract)
+        switch_boundary_pass = any(
+            item.outcome == "pass"
+            and str(item.name or "").strip().lower() == "app_boundary_check"
+            and str(item.reason_code or "").strip().lower() == "switch_boundary_pass"
+            for item in policy_assessments
+        )
 
         if hard_fail_count > 0:
             decision = "fail"
@@ -110,21 +125,36 @@ class Evaluator:
                 params=AdviceParams(backtrack_steps=1, reason_tags=["policy_hard_fail"]),
             )
             eval_reason = "硬策略失败，触发回退"
-        elif required_total > 0 and required_matched == required_total:
-            decision = "success"
-            confidence = min(0.95, 0.65 + 0.3 * self._ratio(total_matched, max(1, total_expectations)))
-            recommended = RecommendedAction(kind="continue", params=None)
-            eval_reason = "核心期望匹配"
-            if soft_fail_count > 0:
+        else:
+            if required_ok:
+                if soft_boundary_fail:
+                    decision = "uncertain"
+                    confidence = 0.58
+                    recommended = RecommendedAction(
+                        kind="observe",
+                        params=AdviceParams(
+                            observe_delay_ms=1800,
+                            reason_tags=["semantic_conflict_required_vs_boundary_soft"],
+                        ),
+                    )
+                    eval_reason = "required 证据满足，但 boundary 存在软失败"
+                else:
+                    decision = "success"
+                    confidence = min(0.95, 0.65 + 0.3 * self._ratio(total_matched, max(1, total_expectations)))
+                    recommended = RecommendedAction(kind="continue", params=None)
+                    eval_reason = "核心 required 期望匹配"
+            elif app_boundary_mode == "switch" and switch_boundary_pass and required_missing:
                 decision = "uncertain"
-                confidence = 0.58
+                confidence = 0.52
                 recommended = RecommendedAction(
                     kind="observe",
-                    params=AdviceParams(observe_delay_ms=1800, reason_tags=["policy_soft_fail"]),
+                    params=AdviceParams(
+                        observe_delay_ms=1800,
+                        reason_tags=["semantic_conflict_switch_pass_but_missing_required"],
+                    ),
                 )
-                eval_reason = "存在软策略告警，先观察"
-        else:
-            if meaningful_change:
+                eval_reason = "switch boundary 已通过，但 required effect 证据不足"
+            elif meaningful_change:
                 decision = "uncertain"
                 confidence = 0.48
                 recommended = RecommendedAction(
@@ -265,7 +295,7 @@ class Evaluator:
         project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         out_dir = os.path.join(project_root, "data", "context")
         os.makedirs(out_dir, exist_ok=True)
-        out_path = os.path.join(out_dir, f"{base}.eval_v3.json")
+        out_path = os.path.join(out_dir, f"{base}.eval_v4.json")
 
         payload = {
             "subgoal_description": subgoal_description,
@@ -291,3 +321,12 @@ class Evaluator:
                 json.dump(payload, file, ensure_ascii=False, indent=2)
         except Exception as exc:
             logger.warning("写入评估 artifact 失败: %s", exc)
+
+    def _get_app_boundary_mode(self, contract: StepContract) -> str:
+        for policy in (contract.policies or []):
+            if str(policy.kind or "").strip().lower() != "app_boundary":
+                continue
+            mode = str(policy.boundary_mode or "").strip().lower()
+            if mode in {"stay", "switch", "either"}:
+                return mode
+        return ""

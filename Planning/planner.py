@@ -22,6 +22,7 @@ from Oracle.contracts import (
 )
 from Perception.context_builder import UIState, WidgetInfo
 from prompt.planner_prompt import PLANNER_PROMPT
+from utils.audit_recorder import AuditRecorder
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +45,7 @@ class Planner:
     def __init__(self, llm_client, memory_manager: MemoryManager):
         self.llm = llm_client
         self.memory = memory_manager
+        self.audit = AuditRecorder(component="planner")
         self._plan_primary_timeout_sec = 18
         self._plan_retry_timeout_sec = 10
         self._plan_retry_min_remaining_sec = 14
@@ -53,17 +55,40 @@ class Planner:
     def plan(self, task: str, ui_state: UIState) -> PlanResult:
         logger.info("开始规划(V3.1), task='%s'", task[:80])
 
+        source = "llm"
+        result: PlanResult
         experience = self.memory.search_experience(task)
         if experience:
             replay = self._plan_from_experience(experience)
             if replay is not None:
-                return replay
+                source = "experience"
+                result = replay
+                self._record_plan_artifact(
+                    stage="plan_final",
+                    payload={
+                        "task": task,
+                        "source": source,
+                        "plan_result": result,
+                    },
+                )
+                return result
 
         try:
-            return self._plan_with_llm(task=task, ui_state=ui_state)
+            result = self._plan_with_llm(task=task, ui_state=ui_state)
         except Exception as exc:
             logger.warning("规划失败，回退启发式策略: %s", exc)
-            return self._heuristic_fallback_plan(task=task, ui_state=ui_state, error=str(exc))
+            source = "heuristic_fallback"
+            result = self._heuristic_fallback_plan(task=task, ui_state=ui_state, error=str(exc))
+
+        self._record_plan_artifact(
+            stage="plan_final",
+            payload={
+                "task": task,
+                "source": source,
+                "plan_result": result,
+            },
+        )
+        return result
 
     def _plan_from_experience(self, experience) -> Optional[PlanResult]:
         triplets = list(getattr(experience, "step_triplets", None) or [])
@@ -159,7 +184,7 @@ class Planner:
                 "reasoning": {"type": "string"},
                 "goal": dataclass_to_json_schema(GoalSpec),
                 "requested_action_type": {
-                    "enum": ["tap", "input", "swipe", "back", "enter", "long_press"],
+                    "enum": ["tap", "input", "swipe", "back", "enter", "long_press", "launch_app"],
                 },
                 "input_text": {"type": "string"},
                 "target": {
@@ -187,8 +212,12 @@ class Planner:
             default_timeout=self._plan_primary_timeout_sec,
             reserve_seconds=8,
         )
-        response = self.llm.chat(prompt, timeout=primary_timeout)
-        result = self._parse_plan_response(response)
+        response = self.llm.chat(
+            prompt,
+            timeout=primary_timeout,
+            audit_meta={"module": "planner", "stage": "primary"},
+        )
+        result = self._parse_plan_response(response, source="primary")
 
         if self._is_redundant(result):
             if self._can_afford_retry():
@@ -200,8 +229,12 @@ class Planner:
                     default_timeout=self._plan_retry_timeout_sec,
                     reserve_seconds=6,
                 )
-                retry = self.llm.chat(retry_prompt, timeout=retry_timeout)
-                retry_result = self._parse_plan_response(retry)
+                retry = self.llm.chat(
+                    retry_prompt,
+                    timeout=retry_timeout,
+                    audit_meta={"module": "planner", "stage": "retry"},
+                )
+                retry_result = self._parse_plan_response(retry, source="retry")
                 if not self._is_redundant(retry_result):
                     result = retry_result
 
@@ -216,70 +249,99 @@ class Planner:
                 default_timeout=self._plan_retry_timeout_sec,
                 reserve_seconds=6,
             )
-            align_resp = self.llm.chat(align_prompt, timeout=align_timeout)
-            align_result = self._parse_plan_response(align_resp)
+            align_resp = self.llm.chat(
+                align_prompt,
+                timeout=align_timeout,
+                audit_meta={"module": "planner", "stage": "align"},
+            )
+            align_result = self._parse_plan_response(align_resp, source="align")
             still_misaligned, _ = self._is_misaligned(task=task, result=align_result)
             if not still_misaligned:
                 result = align_result
 
+        self._record_plan_artifact(
+            stage="llm_selected",
+            payload={
+                "task": task,
+                "plan_result": result,
+            },
+        )
         return result
 
-    def _parse_plan_response(self, response: str) -> PlanResult:
-        payload = parse_json_object(response)
+    def _parse_plan_response(self, response: str, source: str = "unknown") -> PlanResult:
+        try:
+            payload = parse_json_object(response)
 
-        allowed_top_level = {
-            "is_task_complete",
-            "reasoning",
-            "goal",
-            "requested_action_type",
-            "input_text",
-            "target",
-            "planning_hints",
-        }
-        extras = sorted(set(payload.keys()) - allowed_top_level)
-        if extras:
-            raise ContractValidationError(f"Planner response has unexpected fields: {extras}")
+            allowed_top_level = {
+                "is_task_complete",
+                "reasoning",
+                "goal",
+                "requested_action_type",
+                "input_text",
+                "target",
+                "planning_hints",
+            }
+            extras = sorted(set(payload.keys()) - allowed_top_level)
+            if extras:
+                raise ContractValidationError(f"Planner response has unexpected fields: {extras}")
 
-        goal = parse_dataclass(payload.get("goal") or {}, GoalSpec, strict=True)
+            goal = parse_dataclass(payload.get("goal") or {}, GoalSpec, strict=True)
 
-        target_payload = payload.get("target")
-        target: Optional[TargetRef] = None
-        if target_payload is not None:
-            target = parse_dataclass(target_payload, TargetRef, strict=True)
+            target_payload = payload.get("target")
+            target: Optional[TargetRef] = None
+            if target_payload is not None:
+                target = parse_dataclass(target_payload, TargetRef, strict=True)
 
-        action_type = validate_action_type(
-            str(payload.get("requested_action_type") or "tap").strip().lower()
-        )
-        if action_type == "launch_app":
-            # 执行器暂不支持 launch_app，规划层先收敛到可执行动作集合。
-            action_type = "tap"
+            action_type = validate_action_type(
+                str(payload.get("requested_action_type") or "tap").strip().lower()
+            )
 
-        input_text = payload.get("input_text")
-        if not isinstance(input_text, str):
-            raise ContractValidationError("input_text must be a string")
+            input_text = payload.get("input_text")
+            if not isinstance(input_text, str):
+                raise ContractValidationError("input_text must be a string")
 
-        planning_hints = payload.get("planning_hints")
-        if not isinstance(planning_hints, dict):
-            raise ContractValidationError("planning_hints must be an object")
+            planning_hints = payload.get("planning_hints")
+            if not isinstance(planning_hints, dict):
+                raise ContractValidationError("planning_hints must be an object")
 
-        is_task_complete = payload.get("is_task_complete")
-        if not isinstance(is_task_complete, bool):
-            raise ContractValidationError("is_task_complete must be a boolean")
+            is_task_complete = payload.get("is_task_complete")
+            if not isinstance(is_task_complete, bool):
+                raise ContractValidationError("is_task_complete must be a boolean")
 
-        reasoning = payload.get("reasoning")
-        if not isinstance(reasoning, str):
-            raise ContractValidationError("reasoning must be a string")
+            reasoning = payload.get("reasoning")
+            if not isinstance(reasoning, str):
+                raise ContractValidationError("reasoning must be a string")
 
-        return PlanResult(
-            goal=goal,
-            target=target,
-            requested_action_type=action_type,
-            input_text=input_text,
-            planning_hints=planning_hints,
-            is_task_complete=is_task_complete,
-            reasoning=reasoning.strip(),
-            from_experience=False,
-        )
+            result = PlanResult(
+                goal=goal,
+                target=target,
+                requested_action_type=action_type,
+                input_text=input_text,
+                planning_hints=planning_hints,
+                is_task_complete=is_task_complete,
+                reasoning=reasoning.strip(),
+                from_experience=False,
+            )
+            self._record_plan_artifact(
+                stage=f"{source}_parsed",
+                payload={
+                    "source": source,
+                    "raw_response": response,
+                    "parsed_payload": payload,
+                    "plan_result": result,
+                },
+            )
+            return result
+        except Exception as exc:
+            self._record_plan_artifact(
+                stage=f"{source}_parse_error",
+                payload={
+                    "source": source,
+                    "raw_response": response,
+                    "error": str(exc),
+                },
+            )
+            raise
 
     def _safe_parse_goal(self, payload: Any) -> Optional[GoalSpec]:
         if not isinstance(payload, dict):
@@ -466,3 +528,14 @@ class Planner:
         if remaining is None:
             return True
         return remaining >= self._plan_retry_min_remaining_sec
+
+    def _record_plan_artifact(self, stage: str, payload: dict[str, Any]) -> None:
+        try:
+            self.audit.record(
+                module="planner",
+                stage=stage,
+                event="plan_artifact",
+                payload=payload,
+            )
+        except Exception as exc:
+            logger.warning("写入 Planner 审计记录失败: %s", exc)

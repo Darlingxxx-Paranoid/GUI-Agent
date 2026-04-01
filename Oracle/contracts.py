@@ -216,7 +216,12 @@ class PolicyRule:
     subject_ref: Optional[str] = None
     predicates: list[Predicate] = field(default_factory=list)
     tags: list[str] = field(default_factory=list)
-    extra: dict = field(default_factory=dict)
+    boundary_mode: Optional[Literal["stay", "switch", "either"]] = None
+    expected_packages: list[str] = field(default_factory=list)
+    forbidden_packages: list[str] = field(default_factory=list)
+    expected_activity_contains: Optional[str] = None
+    loop_threshold: Optional[int] = None
+    max_similarity: Optional[float] = None
 
 
 @dataclass
@@ -585,7 +590,7 @@ def contract_schema_bundle() -> dict:
         StepEvaluation,
     ]
     return {
-        "schema_version": "v3.1",
+        "schema_version": "v4.0",
         "definitions": {cls.__name__: dataclass_to_json_schema(cls) for cls in classes},
     }
 

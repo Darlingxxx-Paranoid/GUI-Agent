@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import Optional
 
 from Oracle.contracts import (
@@ -21,12 +22,33 @@ from utils.utils import calc_iou
 logger = logging.getLogger(__name__)
 
 
+class MappingFailure(ValueError):
+    """Raised when mapper cannot provide a safe executable action."""
+
+    def __init__(self, reason_code: str, message: str):
+        self.reason_code = str(reason_code or "mapper_failure")
+        self.message = str(message or "")
+        super().__init__(f"{self.reason_code}:{self.message}")
+
+
 class ActionMapper:
     """Resolve target and build concrete action parameters."""
 
+    _APP_ALIAS_MAP = {
+        "gmail": "com.google.android.gm",
+        "chrome": "com.android.chrome",
+        "settings": "com.android.settings",
+        "clock": "com.google.android.deskclock",
+        "youtube": "com.google.android.youtube",
+        "maps": "com.google.android.apps.maps",
+        "photos": "com.google.android.apps.photos",
+        "play store": "com.android.vending",
+        "camera": "com.android.camera",
+    }
+
     def __init__(self, llm_client=None):
         self.llm = llm_client
-        logger.info("ActionMapper 初始化完成 (V3.1)")
+        logger.info("ActionMapper 初始化完成 (V4)")
 
     def map_action(
         self,
@@ -39,13 +61,18 @@ class ActionMapper:
             action_type = validate_action_type(requested)
         except Exception:
             action_type = "tap"
-        if action_type == "launch_app":
-            action_type = "tap"
 
-        target = self._resolve_target(
-            target=(contract.target if contract and contract.target is not None else plan.target),
-            ui_state=ui_state,
-        )
+        original_target = contract.target if contract and contract.target is not None else plan.target
+        target = self._resolve_target(target=original_target, ui_state=ui_state)
+
+        if action_type == "launch_app":
+            return self._map_launch_app(
+                plan=plan,
+                ui_state=ui_state,
+                contract=contract,
+                original_target=original_target,
+                resolved_target=target,
+            )
 
         if action_type == "back":
             return ResolvedAction(type="back", params={}, target=target, description="按返回键")
@@ -77,6 +104,156 @@ class ActionMapper:
             params={"x": x, "y": y},
             target=target,
             description=f"未知动作回退为点击({x},{y})",
+        )
+
+    def _map_launch_app(
+        self,
+        plan: PlanResult,
+        ui_state: UIState,
+        contract: Optional[StepContract],
+        original_target: TargetRef | None,
+        resolved_target: TargetRef | None,
+    ) -> ResolvedAction:
+        package, activity = self._resolve_launch_target(
+            plan=plan,
+            contract=contract,
+            target=original_target,
+        )
+
+        if package:
+            params = {"package": package}
+            if activity:
+                params["activity"] = activity
+            return ResolvedAction(
+                type="launch_app",
+                params=params,
+                target=resolved_target,
+                description=f"启动应用 {package}",
+            )
+
+        # Safe downgrade rule 1: resolved target center tap.
+        if resolved_target and resolved_target.resolved and resolved_target.resolved.center:
+            x, y = self._clamp(resolved_target.resolved.center[0], resolved_target.resolved.center[1], ui_state)
+            return ResolvedAction(
+                type="tap",
+                params={
+                    "x": x,
+                    "y": y,
+                    "degraded_from_launch_app": True,
+                    "degrade_reason": "launch_app_missing_package_resolved_target",
+                },
+                target=resolved_target,
+                description=f"launch_app 解析失败，安全降级为点击({x},{y})",
+            )
+
+        # Safe downgrade rule 2: unique selector remap target tap.
+        unique_widget = self._resolve_unique_widget_from_selectors(target=original_target, ui_state=ui_state)
+        if unique_widget is not None:
+            downgrade_target = self._target_from_widget(widget=unique_widget)
+            x, y = self._clamp(unique_widget.center[0], unique_widget.center[1], ui_state)
+            return ResolvedAction(
+                type="tap",
+                params={
+                    "x": x,
+                    "y": y,
+                    "degraded_from_launch_app": True,
+                    "degrade_reason": "launch_app_missing_package_unique_selector",
+                },
+                target=downgrade_target,
+                description=f"launch_app 解析失败，按唯一 selector 降级点击({x},{y})",
+            )
+
+        raise MappingFailure(
+            reason_code="launch_app_unresolved_package_no_safe_target",
+            message="launch_app 目标包解析失败且不存在安全可点击目标",
+        )
+
+    def _resolve_launch_target(
+        self,
+        plan: PlanResult,
+        contract: Optional[StepContract],
+        target: TargetRef | None,
+    ) -> tuple[str, str]:
+        activity = ""
+        package_candidates: list[str] = []
+
+        plan_hints = dict(plan.planning_hints or {})
+        contract_hints = dict((contract.planning_hints if contract else {}) or {})
+
+        for hints in (plan_hints, contract_hints):
+            pkg = str(hints.get("target_package") or "").strip().lower()
+            if self._is_valid_package(pkg):
+                package_candidates.append(pkg)
+            act = str(hints.get("target_activity") or "").strip()
+            if act and not activity:
+                activity = act
+
+        text_blob = " ".join(
+            [
+                str(plan.goal.summary or ""),
+                str(plan.goal.success_definition or ""),
+                str(plan.reasoning or ""),
+                str(contract_hints.get("task_hint") or ""),
+            ]
+        ).lower()
+
+        for match in re.findall(r"package:([a-z0-9_.]+)", text_blob):
+            pkg = str(match or "").strip().lower()
+            if self._is_valid_package(pkg):
+                package_candidates.append(pkg)
+
+        if target is not None:
+            for selector in target.selectors:
+                if str(selector.kind or "").strip().lower() != "resource_id":
+                    continue
+                value = str(selector.value or "").strip().lower()
+                if ":id/" in value:
+                    pkg = value.split(":id/", 1)[0]
+                    if self._is_valid_package(pkg):
+                        package_candidates.append(pkg)
+
+        for alias, pkg in self._APP_ALIAS_MAP.items():
+            if alias in text_blob:
+                package_candidates.append(pkg)
+
+        deduped: list[str] = []
+        for pkg in package_candidates:
+            if pkg and pkg not in deduped:
+                deduped.append(pkg)
+
+        return (deduped[0] if deduped else ""), activity
+
+    def _resolve_unique_widget_from_selectors(self, target: TargetRef | None, ui_state: UIState) -> Optional[WidgetInfo]:
+        if target is None:
+            return None
+
+        matched: dict[int, WidgetInfo] = {}
+        for selector in (target.selectors or []):
+            for widget in self._match_selector_all(selector=selector, ui_state=ui_state):
+                matched[int(widget.widget_id)] = widget
+
+        if len(matched) == 1:
+            return list(matched.values())[0]
+        return None
+
+    def _target_from_widget(self, widget: WidgetInfo) -> TargetRef:
+        return TargetRef(
+            ref_id=normalize_subject_ref(None, fallback_widget_id=int(widget.widget_id)),
+            role="primary",
+            selectors=[Selector(kind="widget_id", operator="equals", value=int(widget.widget_id))],
+            resolved=TargetResolved(
+                widget_id=int(widget.widget_id),
+                bounds=tuple(int(v) for v in widget.bounds),
+                center=tuple(int(v) for v in widget.center),
+                snapshot={
+                    "text": widget.text,
+                    "resource_id": widget.resource_id,
+                    "content_desc": widget.content_desc,
+                    "class_name": widget.class_name,
+                    "clickable": bool(widget.clickable),
+                    "enabled": bool(widget.enabled),
+                },
+            ),
         )
 
     def _resolve_target(self, target: TargetRef | None, ui_state: UIState) -> TargetRef | None:
@@ -123,6 +300,68 @@ class ActionMapper:
             selectors=selectors,
             resolved=resolved,
         )
+
+    def _match_selector_all(self, selector: Selector, ui_state: UIState) -> list[WidgetInfo]:
+        kind = str(selector.kind or "").strip().lower()
+        value = selector.value
+
+        if kind == "widget_id":
+            try:
+                widget = ui_state.find_widget_by_id(int(value))
+            except Exception:
+                widget = None
+            return [widget] if widget is not None else []
+
+        if kind == "text":
+            token = str(value or "").strip().lower()
+            if not token:
+                return []
+            return [w for w in ui_state.widgets if token in str(w.text or "").lower() or token in str(w.content_desc or "").lower()]
+
+        if kind == "resource_id":
+            token = str(value or "").strip().lower()
+            if not token:
+                return []
+            return [w for w in ui_state.widgets if token in str(w.resource_id or "").lower()]
+
+        if kind == "content_desc":
+            token = str(value or "").strip().lower()
+            if not token:
+                return []
+            return [w for w in ui_state.widgets if token in str(w.content_desc or "").lower()]
+
+        if kind == "class_name":
+            token = str(value or "").strip().lower()
+            if not token:
+                return []
+            return [w for w in ui_state.widgets if str(w.class_name or "").lower() == token]
+
+        if kind == "bounds" and isinstance(value, (list, tuple)) and len(value) == 4:
+            try:
+                bounds = tuple(int(v) for v in value)
+            except Exception:
+                return []
+            out: list[WidgetInfo] = []
+            for widget in ui_state.widgets:
+                iou = calc_iou(bounds, widget.bounds)
+                if iou > 0.1:
+                    out.append(widget)
+            return out
+
+        if kind == "point" and isinstance(value, (list, tuple)) and len(value) == 2:
+            try:
+                x = int(value[0])
+                y = int(value[1])
+            except Exception:
+                return []
+            out: list[WidgetInfo] = []
+            for widget in ui_state.widgets:
+                x1, y1, x2, y2 = widget.bounds
+                if x1 <= x <= x2 and y1 <= y <= y2:
+                    out.append(widget)
+            return out
+
+        return []
 
     def _match_selector(self, selector: Selector, ui_state: UIState) -> Optional[WidgetInfo]:
         kind = str(selector.kind or "").strip().lower()
@@ -276,3 +515,11 @@ class ActionMapper:
         safe_x = min(max(1, int(x)), width - 1)
         safe_y = min(max(1, int(y)), height - 1)
         return safe_x, safe_y
+
+    def _is_valid_package(self, value: str) -> bool:
+        token = str(value or "").strip().lower()
+        if not token:
+            return False
+        if token.count(".") < 1:
+            return False
+        return bool(re.match(r"^[a-z][a-z0-9_]*(\.[a-z0-9_]+)+$", token))

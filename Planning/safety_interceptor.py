@@ -47,7 +47,19 @@ class SafetyInterceptor:
 
         if contract is not None:
             for policy in contract.policies:
-                texts.extend(self._flatten_values(policy.extra.values()))
+                texts.extend(
+                    self._flatten_values(
+                        [
+                            policy.kind,
+                            policy.boundary_mode,
+                            policy.expected_packages,
+                            policy.forbidden_packages,
+                            policy.expected_activity_contains,
+                            policy.loop_threshold,
+                            policy.max_similarity,
+                        ]
+                    )
+                )
 
         check_text = " ".join(texts).lower()
         matches: List[str] = []

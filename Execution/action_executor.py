@@ -278,6 +278,54 @@ class ActionExecutor:
         logger.info("执行 Home 键")
         self._adb_cmd("shell", "input", "keyevent", "KEYCODE_HOME")
 
+    def launch_app(self, package: str, activity: str = ""):
+        """启动应用（优先 am start，失败时回退 monkey）。"""
+        pkg = str(package or "").strip()
+        act = str(activity or "").strip()
+        if not pkg:
+            raise ValueError("launch_app requires non-empty package")
+
+        component = self._normalize_component(pkg, act)
+        if component:
+            logger.info("执行启动应用(am start): %s", component)
+            result = self._adb_cmd("shell", "am", "start", "-n", component, timeout_sec=20)
+            if result.returncode == 0:
+                return
+            logger.warning(
+                "am start 失败，回退 monkey: component=%s stderr=%s",
+                component,
+                (result.stderr or "").strip(),
+            )
+
+        logger.info("执行启动应用(monkey): package=%s", pkg)
+        monkey = self._adb_cmd(
+            "shell",
+            "monkey",
+            "-p",
+            pkg,
+            "-c",
+            "android.intent.category.LAUNCHER",
+            "1",
+            timeout_sec=20,
+        )
+        if monkey.returncode != 0:
+            raise RuntimeError(f"launch_app failed for package={pkg}: {(monkey.stderr or '').strip()}")
+
+    def _normalize_component(self, package: str, activity: str) -> str:
+        pkg = str(package or "").strip()
+        act = str(activity or "").strip()
+        if not pkg:
+            return ""
+        if not act:
+            return ""
+        if "/" in act:
+            return act
+        if act.startswith("."):
+            return f"{pkg}/{act}"
+        if act.startswith(pkg + "."):
+            return f"{pkg}/{act}"
+        return f"{pkg}/.{act}"
+
     def enter(self):
         """按回车键"""
         logger.info("执行回车键")
