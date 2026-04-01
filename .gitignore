@@ -13,3 +13,5 @@ myvenv
 
 # Agent文件
 .trae/
+
+__pycache__/

@@ -97,21 +97,39 @@ class PolicyEngine:
                         reason_code = "stay_boundary_pass"
                         message = "stay 边界检查通过"
                 elif mode == "switch":
-                    if not expected_packages:
-                        violation = True
-                        reason_code = "switch_boundary_missing_target"
-                        message = "switch 模式缺少 expected_packages，无法判定目标切换"
-                    elif not new_pkg:
-                        violation = True
-                        reason_code = "switch_boundary_unknown"
-                        message = "无法识别当前包名，无法确认 switch 边界"
-                    elif new_pkg in expected_packages:
-                        reason_code = "switch_boundary_pass"
-                        message = f"已切换到期望包: {new_pkg}"
+                    if phase == "pre":
+                        # 在 pre 阶段动作尚未执行，new_pkg 仍是当前包名。
+                        # switch 的目标达成应在 post 阶段验证，避免执行前被错误阻断。
+                        if not expected_packages:
+                            violation = True
+                            reason_code = "switch_boundary_missing_target"
+                            message = "switch 模式缺少 expected_packages，无法判定目标切换"
+                        elif not new_pkg:
+                            violation = True
+                            reason_code = "switch_boundary_unknown"
+                            message = "无法识别当前包名，无法确认 switch 边界"
+                        elif new_pkg in expected_packages:
+                            reason_code = "switch_boundary_already_in_target"
+                            message = f"当前已在期望包: {new_pkg}"
+                        else:
+                            reason_code = "switch_boundary_pending"
+                            message = f"switch 边界待执行后验证: current={new_pkg}, target in {expected_packages}"
                     else:
-                        violation = True
-                        reason_code = "switch_boundary_mismatch"
-                        message = f"切换到非期望包: expected in {expected_packages}, actual={new_pkg}"
+                        if not expected_packages:
+                            violation = True
+                            reason_code = "switch_boundary_missing_target"
+                            message = "switch 模式缺少 expected_packages，无法判定目标切换"
+                        elif not new_pkg:
+                            violation = True
+                            reason_code = "switch_boundary_unknown"
+                            message = "无法识别当前包名，无法确认 switch 边界"
+                        elif new_pkg in expected_packages:
+                            reason_code = "switch_boundary_pass"
+                            message = f"已切换到期望包: {new_pkg}"
+                        else:
+                            violation = True
+                            reason_code = "switch_boundary_mismatch"
+                            message = f"切换到非期望包: expected in {expected_packages}, actual={new_pkg}"
                 else:
                     reason_code = "either_boundary_pass"
                     message = "either 边界检查通过"
