@@ -22,4 +22,5 @@ Rules:
 4. visual_similarity_state can only be supporting evidence, never required.
 5. Use app_boundary.boundary_mode = stay/switch/either and expected_packages to express boundary intent.
 6. planning_hints can include diagnostics but must not include decision logic.
+7. Predicate.field must use explicit attributes paths like "attributes.text" or "attributes.similarity", never bare keys like "text", "package", "activity", or "resolved.widget_id".
 """

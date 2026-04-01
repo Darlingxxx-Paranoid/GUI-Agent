@@ -8,6 +8,7 @@ import re
 from typing import List, Optional
 
 from Oracle.contracts import (
+    FACT_ATTRIBUTE_SCHEMA,
     Expectation,
     GoalSpec,
     PolicyRule,
@@ -224,6 +225,12 @@ class OraclePre:
         if not expectations:
             return fallback
 
+        fallback_by_fact_type: dict[str, Expectation] = {}
+        for item in fallback:
+            key = str(item.fact_type or "").strip()
+            if key and key not in fallback_by_fact_type:
+                fallback_by_fact_type[key] = item
+
         out: list[Expectation] = []
         for idx, exp in enumerate(expectations, start=1):
             exp_id = str(exp.id or "").strip() or f"effect.auto_{idx}"
@@ -241,13 +248,35 @@ class OraclePre:
                 tier = "supporting"
                 optional = True
 
+            predicates = self._sanitize_expectation_predicates(
+                expectation_id=exp_id,
+                fact_type=fact_type,
+                predicates=list(exp.predicates or []),
+            )
+
+            # For required expectations, try fallback predicates before downgrading to type-only match.
+            if tier == "required" and not optional and not predicates and exp.predicates:
+                fallback_exp = fallback_by_fact_type.get(fact_type)
+                if fallback_exp is not None:
+                    predicates = self._sanitize_expectation_predicates(
+                        expectation_id=exp_id,
+                        fact_type=fact_type,
+                        predicates=list(fallback_exp.predicates or []),
+                    )
+                if not predicates:
+                    logger.debug(
+                        "Expectation required 谓词清洗后为空，将按 fact_type 匹配: id=%s, fact_type=%s",
+                        exp_id,
+                        fact_type,
+                    )
+
             out.append(
                 Expectation(
                     id=exp_id,
                     fact_type=fact_type,
                     scope=exp.scope,
                     subject_ref=exp.subject_ref or subject_ref,
-                    predicates=list(exp.predicates or []),
+                    predicates=predicates,
                     weight=float(exp.weight if exp.weight is not None else 1.0),
                     optional=optional,
                     polarity=exp.polarity if exp.polarity in {"positive", "negative"} else "positive",
@@ -272,6 +301,38 @@ class OraclePre:
                     tier="required",
                 )
             )
+        return out
+
+    def _sanitize_expectation_predicates(
+        self,
+        expectation_id: str,
+        fact_type: str,
+        predicates: list[Predicate],
+    ) -> list[Predicate]:
+        allowed_fields = FACT_ATTRIBUTE_SCHEMA.get(str(fact_type or "").strip())
+        if allowed_fields is None:
+            if predicates:
+                logger.debug(
+                    "Expectation 谓词被清空: 未知 fact_type=%s, id=%s",
+                    fact_type,
+                    expectation_id,
+                )
+            return []
+
+        out: list[Predicate] = []
+        for pred in predicates:
+            field = str(pred.field or "").strip()
+            if not field:
+                continue
+            if field not in allowed_fields:
+                logger.debug(
+                    "过滤非法 expectation predicate 字段: id=%s, fact_type=%s, field=%s",
+                    expectation_id,
+                    fact_type,
+                    field,
+                )
+                continue
+            out.append(Predicate(field=field, operator=pred.operator, value=pred.value))
         return out
 
     def _sanitize_policies(

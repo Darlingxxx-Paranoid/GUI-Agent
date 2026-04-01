@@ -157,6 +157,59 @@ OBSERVATION_SOURCES = {
     "semantic_llm",
 }
 
+FACT_ATTRIBUTE_SCHEMA: dict[str, frozenset[str]] = {
+    # Event facts
+    "package_changed": frozenset({"attributes.old", "attributes.new"}),
+    "activity_changed": frozenset({"attributes.old", "attributes.new"}),
+    "text_appeared": frozenset({"attributes.text", "attributes.from_action_input"}),
+    "text_disappeared": frozenset({"attributes.text"}),
+    "widget_appeared": frozenset(
+        {
+            "attributes.widget_id",
+            "attributes.resource_id",
+            "attributes.text",
+            "attributes.content_desc",
+            "attributes.bounds",
+            "attributes.center",
+        }
+    ),
+    "widget_disappeared": frozenset(
+        {
+            "attributes.widget_id",
+            "attributes.resource_id",
+            "attributes.text",
+            "attributes.content_desc",
+            "attributes.bounds",
+            "attributes.center",
+        }
+    ),
+    "keyboard_changed": frozenset({"attributes.old", "attributes.new"}),
+    "focus_changed": frozenset({"attributes.old", "attributes.new"}),
+    "risk_detected": frozenset({"attributes.risk", "attributes.history_len", "attributes.message"}),
+    "target_resolved": frozenset({"attributes.widget_id", "attributes.bounds", "attributes.center"}),
+    "target_missing": frozenset({"attributes.reason"}),
+    # State facts
+    "keyboard_state": frozenset({"attributes.visible"}),
+    "focus_state": frozenset({"attributes.focused_widget", "attributes.widget_id", "attributes.focused"}),
+    "package_relation_state": frozenset({"attributes.old", "attributes.new", "attributes.relation"}),
+    "target_presence_state": frozenset({"attributes.present"}),
+    "target_region_state": frozenset({"attributes.center", "attributes.bounds"}),
+    "forbidden_package_state": frozenset({"attributes.package", "attributes.forbidden"}),
+    "switch_state": frozenset(
+        {
+            "attributes.old",
+            "attributes.new",
+            "attributes.changed",
+            "attributes.enabled",
+            "attributes.checked",
+        }
+    ),
+    "switch_checked_delta_state": frozenset(
+        {"attributes.old", "attributes.new", "attributes.delta", "attributes.changed"}
+    ),
+    "visual_similarity_state": frozenset({"attributes.similarity"}),
+}
+
 
 @dataclass
 class GoalSpec:
@@ -191,7 +244,7 @@ class TargetRef:
 @dataclass
 class Predicate:
     field: str
-    operator: Union[PredicateOperator, str]
+    operator: PredicateOperator
     value: Any = None
 
 
