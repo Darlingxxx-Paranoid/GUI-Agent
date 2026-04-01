@@ -28,6 +28,7 @@ from Perception.perception_manager import PerceptionManager
 from Planning.oracle_pre import OraclePre
 from Planning.planner import Planner
 from Planning.safety_interceptor import SafetyInterceptor
+from utils.audit_recorder import AuditRecorder
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +37,7 @@ class AgentLoop:
     def __init__(self, config: AgentConfig):
         self.config = config
         config.ensure_dirs()
+        self.audit = AuditRecorder(component="agent_loop")
 
         self.contract_schema_path = os.path.join(
             os.path.dirname(__file__),
@@ -55,7 +57,6 @@ class AgentLoop:
             model=config.llm_model,
             temperature=config.llm_temperature,
             max_tokens=config.llm_max_tokens,
-            timeout=config.llm_timeout,
         )
 
         self.perception = PerceptionManager(
@@ -97,62 +98,39 @@ class AgentLoop:
         step = 0
         task_completed = False
         screen_size = (1080, 1920)
-        task_start_ts = time.time()
-        max_task_seconds = int(getattr(self.config, "max_task_seconds", 0) or 0)
-        task_deadline_ts = (task_start_ts + max_task_seconds) if max_task_seconds > 0 else None
-        self.llm.set_deadline(task_deadline_ts)
+        if not dry_run:
+            try:
+                screen_size = self.executor.get_screen_size()
+                self.executor.stabilize_ui_animations()
+            except Exception as exc:
+                logger.warning("获取屏幕尺寸失败: %s，使用默认值", exc)
 
-        try:
-            if not dry_run:
-                try:
-                    screen_size = self.executor.get_screen_size()
-                    self.executor.stabilize_ui_animations()
-                except Exception as exc:
-                    logger.warning("获取屏幕尺寸失败: %s，使用默认值", exc)
+        while not task_completed and step < self.config.max_steps:
+            step += 1
+            logger.info("=" * 40)
+            logger.info("第 %d 步 (最大 %d)", step, self.config.max_steps)
+            logger.info("=" * 40)
 
-            while not task_completed and step < self.config.max_steps:
-                try:
-                    self._raise_if_task_timeout(
-                        task_start_ts=task_start_ts,
-                        max_task_seconds=max_task_seconds,
-                        stage="loop_boundary",
-                    )
-                except TimeoutError as exc:
-                    logger.warning("%s，跳过该任务", exc)
+            try:
+                result = self._execute_one_step(
+                    task=task,
+                    step=step,
+                    screen_size=screen_size,
+                    dry_run=dry_run,
+                )
+                task_completed = bool(result.get("task_completed", False))
+                if bool(result.get("abort", False)):
+                    logger.warning("任务中止: %s", result.get("reason", ""))
                     break
-
-                step += 1
-                logger.info("=" * 40)
-                logger.info("第 %d 步 (最大 %d)", step, self.config.max_steps)
-                logger.info("=" * 40)
-
-                try:
-                    result = self._execute_one_step(
-                        task=task,
-                        step=step,
-                        screen_size=screen_size,
-                        dry_run=dry_run,
-                        task_start_ts=task_start_ts,
-                        max_task_seconds=max_task_seconds,
-                    )
-                    task_completed = bool(result.get("task_completed", False))
-                    if bool(result.get("abort", False)):
-                        logger.warning("任务中止: %s", result.get("reason", ""))
-                        break
-                except TimeoutError as exc:
-                    logger.warning("%s，跳过该任务", exc)
-                    break
-                except KeyboardInterrupt:
-                    logger.info("用户中断任务")
-                    break
-                except Exception as exc:
-                    logger.error("步骤 %d 执行异常: %s", step, exc, exc_info=True)
-                    if step < self.config.max_steps:
-                        logger.info("尝试继续执行...")
-                        continue
-                    break
-        finally:
-            self.llm.set_deadline(None)
+            except KeyboardInterrupt:
+                logger.info("用户中断任务")
+                break
+            except Exception as exc:
+                logger.error("步骤 %d 执行异常: %s", step, exc, exc_info=True)
+                if step < self.config.max_steps:
+                    logger.info("尝试继续执行...")
+                    continue
+                break
 
         self.replanner.save_task_experience(task, task_completed)
 
@@ -169,15 +147,7 @@ class AgentLoop:
         step: int,
         screen_size: tuple,
         dry_run: bool,
-        task_start_ts: float,
-        max_task_seconds: int,
     ) -> dict:
-        self._raise_if_task_timeout(
-            task_start_ts=task_start_ts,
-            max_task_seconds=max_task_seconds,
-            stage=f"step_{step}_start",
-        )
-
         logger.info("[Step %d] 阶段1: 环境感知", step)
         if dry_run:
             from Perception.context_builder import UIState
@@ -198,13 +168,13 @@ class AgentLoop:
                 keyboard_visible=keyboard_visible,
             )
 
-        self._raise_if_task_timeout(
-            task_start_ts=task_start_ts,
-            max_task_seconds=max_task_seconds,
-            stage=f"step_{step}_planning",
-        )
         logger.info("[Step %d] 阶段2: 认知规划", step)
         plan = self.planner.plan(task, ui_state, step=step)
+        self._record_step_artifact(
+            artifact_kind="PlanResult",
+            step=step,
+            payload=plan,
+        )
 
         if plan.is_task_complete:
             logger.info("Planner 判断任务已完成")
@@ -233,6 +203,21 @@ class AgentLoop:
             task_hint=task,
             step=step,
         )
+        self._record_step_artifact(
+            artifact_kind="StepContract",
+            step=step,
+            payload=contract,
+        )
+
+        self._record_step_artifact(
+            artifact_kind="UIState",
+            step=step,
+            payload={
+                "phase": "before_action",
+                "state": ui_state,
+            },
+            append=True,
+        )
 
         logger.info("[Step %d] 阶段3: 安全检查", step)
         if not self.safety.check(plan=plan, contract=contract):
@@ -253,10 +238,28 @@ class AgentLoop:
         except MappingFailure as exc:
             logger.warning("动作映射失败: %s", exc)
             eval_result = self._evaluation_from_mapper_failure(exc)
+            self._record_step_artifact(
+                artifact_kind="StepEvaluation",
+                step=step,
+                payload={
+                    "phase": "mapper_failure",
+                    "value": eval_result,
+                },
+                append=True,
+            )
             decision = self.replanner.handle_failure(
                 subgoal_description=plan.goal.summary,
                 evaluation=eval_result,
                 ui_state=ui_state,
+            )
+            self._record_step_artifact(
+                artifact_kind="ReplanDecision",
+                step=step,
+                payload={
+                    "phase": "mapper_failure",
+                    "value": decision,
+                },
+                append=True,
             )
             self.memory.short_term.add_step(
                 {
@@ -279,15 +282,70 @@ class AgentLoop:
             return {"task_completed": False}
 
         logger.info("映射动作: type=%s, params=%s", action.type, action.params)
+        self._record_step_artifact(
+            artifact_kind="action",
+            step=step,
+            payload=action,
+        )
+        self._record_step_artifact(
+            artifact_kind="ResolvedAction",
+            step=step,
+            payload=action,
+        )
 
         pre_guard = self.oracle_runtime.pre_guard(action=action, contract=contract, ui_state=ui_state)
+        self._record_step_artifact(
+            artifact_kind="GuardResult",
+            step=step,
+            payload={
+                "phase": "pre",
+                "value": pre_guard,
+            },
+            append=True,
+        )
+        self._record_step_artifact(
+            artifact_kind="ObservationFact",
+            step=step,
+            payload={
+                "phase": "pre",
+                "facts": list(pre_guard.observations or []),
+            },
+            append=True,
+        )
+        self._record_step_artifact(
+            artifact_kind="Assessment",
+            step=step,
+            payload={
+                "phase": "pre",
+                "items": list(pre_guard.assessments or []),
+            },
+            append=True,
+        )
         if not pre_guard.allowed:
             logger.warning("pre-guard 阻断执行: assessments=%d", len(pre_guard.assessments))
             eval_result = self._evaluation_from_pre_guard(pre_guard)
+            self._record_step_artifact(
+                artifact_kind="StepEvaluation",
+                step=step,
+                payload={
+                    "phase": "pre_guard_blocked",
+                    "value": eval_result,
+                },
+                append=True,
+            )
             decision = self.replanner.handle_failure(
                 subgoal_description=plan.goal.summary,
                 evaluation=eval_result,
                 ui_state=ui_state,
+            )
+            self._record_step_artifact(
+                artifact_kind="ReplanDecision",
+                step=step,
+                payload={
+                    "phase": "pre_guard_blocked",
+                    "value": decision,
+                },
+                append=True,
             )
 
             self.memory.short_term.add_step(
@@ -325,12 +383,7 @@ class AgentLoop:
         self.memory.short_term.add_action(to_plain_dict(action))
 
         if not dry_run:
-            self._sleep_with_task_timeout(
-                seconds=3.0,
-                task_start_ts=task_start_ts,
-                max_task_seconds=max_task_seconds,
-                stage=f"step_{step}_post_action_wait",
-            )
+            time.sleep(3.0)
 
         logger.info("[Step %d] 阶段6: 执行后感知 + post-guard", step)
         if dry_run:
@@ -360,12 +413,43 @@ class AgentLoop:
             new_state=new_state,
             screenshot_path=new_screenshot,
         )
-
-        self._raise_if_task_timeout(
-            task_start_ts=task_start_ts,
-            max_task_seconds=max_task_seconds,
-            stage=f"step_{step}_evaluate",
+        self._record_step_artifact(
+            artifact_kind="GuardResult",
+            step=step,
+            payload={
+                "phase": "post",
+                "value": post_guard,
+            },
+            append=True,
         )
+        self._record_step_artifact(
+            artifact_kind="ObservationFact",
+            step=step,
+            payload={
+                "phase": "post",
+                "facts": list(post_guard.observations or []),
+            },
+            append=True,
+        )
+        self._record_step_artifact(
+            artifact_kind="Assessment",
+            step=step,
+            payload={
+                "phase": "post",
+                "items": list(post_guard.assessments or []),
+            },
+            append=True,
+        )
+        self._record_step_artifact(
+            artifact_kind="UIState",
+            step=step,
+            payload={
+                "phase": "after_action",
+                "state": new_state,
+            },
+            append=True,
+        )
+
         logger.info("[Step %d] 阶段7: 事后评估", step)
         evaluation = self.evaluator.evaluate(
             subgoal_description=plan.goal.summary,
@@ -377,51 +461,108 @@ class AgentLoop:
         )
 
         if self._should_observe_again(evaluation=evaluation) and not dry_run:
-            remaining = self._remaining_task_seconds(task_start_ts=task_start_ts, max_task_seconds=max_task_seconds)
-            if remaining is None or remaining >= 6.0:
-                delay_ms = 1800
-                params = evaluation.recommended_action.params if evaluation.recommended_action else None
-                if params and params.observe_delay_ms:
-                    delay_ms = max(400, int(params.observe_delay_ms))
+            delay_ms = 1800
+            params = evaluation.recommended_action.params if evaluation.recommended_action else None
+            if params and params.observe_delay_ms:
+                delay_ms = max(400, int(params.observe_delay_ms))
 
-                logger.info("评估建议再次观测，等待 %dms", delay_ms)
-                self._sleep_with_task_timeout(
-                    seconds=delay_ms / 1000.0,
-                    task_start_ts=task_start_ts,
-                    max_task_seconds=max_task_seconds,
-                    stage=f"step_{step}_observe_again_wait",
-                )
+            logger.info("评估建议再次观测，等待 %dms", delay_ms)
+            time.sleep(delay_ms / 1000.0)
 
-                new_screenshot_2 = self.executor.screenshot(f"step_{step}_after2.png")
-                new_dump_2 = self.executor.dump_ui(f"step_{step}_after2.xml")
-                new_activity_2 = self.executor.get_current_activity()
-                new_package_2 = self.executor.get_current_package()
-                new_keyboard_visible_2 = self.executor.get_keyboard_visible()
-                new_state_2 = self.perception.perceive(
-                    screenshot_path=new_screenshot_2,
-                    dump_path=new_dump_2,
-                    screen_size=screen_size,
-                    activity_name=new_activity_2,
-                    package_name=new_package_2,
-                    keyboard_visible=new_keyboard_visible_2,
-                )
+            new_screenshot_2 = self.executor.screenshot(f"step_{step}_after2.png")
+            new_dump_2 = self.executor.dump_ui(f"step_{step}_after2.xml")
+            new_activity_2 = self.executor.get_current_activity()
+            new_package_2 = self.executor.get_current_package()
+            new_keyboard_visible_2 = self.executor.get_keyboard_visible()
+            new_state_2 = self.perception.perceive(
+                screenshot_path=new_screenshot_2,
+                dump_path=new_dump_2,
+                screen_size=screen_size,
+                activity_name=new_activity_2,
+                package_name=new_package_2,
+                keyboard_visible=new_keyboard_visible_2,
+            )
 
-                post_guard_2 = self.oracle_runtime.post_guard(
-                    action=action,
-                    contract=contract,
-                    old_state=ui_state,
-                    new_state=new_state_2,
-                    screenshot_path=new_screenshot_2,
-                )
-                evaluation = self.evaluator.evaluate(
-                    subgoal_description=plan.goal.summary,
-                    contract=contract,
-                    old_state=ui_state,
-                    new_state=new_state_2,
-                    action=action,
-                    post_guard=post_guard_2,
-                )
-                new_state = new_state_2
+            post_guard_2 = self.oracle_runtime.post_guard(
+                action=action,
+                contract=contract,
+                old_state=ui_state,
+                new_state=new_state_2,
+                screenshot_path=new_screenshot_2,
+            )
+            evaluation = self.evaluator.evaluate(
+                subgoal_description=plan.goal.summary,
+                contract=contract,
+                old_state=ui_state,
+                new_state=new_state_2,
+                action=action,
+                post_guard=post_guard_2,
+            )
+            self._record_step_artifact(
+                artifact_kind="GuardResult",
+                step=step,
+                payload={
+                    "phase": "post_observe_again",
+                    "value": post_guard_2,
+                },
+                append=True,
+            )
+            self._record_step_artifact(
+                artifact_kind="ObservationFact",
+                step=step,
+                payload={
+                    "phase": "post_observe_again",
+                    "facts": list(post_guard_2.observations or []),
+                },
+                append=True,
+            )
+            self._record_step_artifact(
+                artifact_kind="Assessment",
+                step=step,
+                payload={
+                    "phase": "post_observe_again",
+                    "items": list(post_guard_2.assessments or []),
+                },
+                append=True,
+            )
+            self._record_step_artifact(
+                artifact_kind="UIState",
+                step=step,
+                payload={
+                    "phase": "after_observe_again",
+                    "state": new_state_2,
+                },
+                append=True,
+            )
+            new_state = new_state_2
+
+        self._record_step_artifact(
+            artifact_kind="StepEvaluation",
+            step=step,
+            payload={
+                "phase": "post",
+                "value": evaluation,
+            },
+            append=True,
+        )
+        self._record_step_artifact(
+            artifact_kind="ObservationFact",
+            step=step,
+            payload={
+                "phase": "evaluation",
+                "facts": list(evaluation.observations or []),
+            },
+            append=True,
+        )
+        self._record_step_artifact(
+            artifact_kind="Assessment",
+            step=step,
+            payload={
+                "phase": "evaluation",
+                "items": list(evaluation.assessments or []),
+            },
+            append=True,
+        )
 
         if evaluation.decision == "success":
             logger.info("子目标完成: '%s'", plan.goal.summary)
@@ -447,6 +588,15 @@ class AgentLoop:
             subgoal_description=plan.goal.summary,
             evaluation=evaluation,
             ui_state=new_state,
+        )
+        self._record_step_artifact(
+            artifact_kind="ReplanDecision",
+            step=step,
+            payload={
+                "phase": "post_evaluation_failure",
+                "value": decision,
+            },
+            append=True,
         )
 
         self.memory.short_term.add_step(
@@ -474,12 +624,7 @@ class AgentLoop:
                     reference_activity=before_back_activity,
                     reference_package=before_back_package,
                 )
-                self._sleep_with_task_timeout(
-                    seconds=0.5,
-                    task_start_ts=task_start_ts,
-                    max_task_seconds=max_task_seconds,
-                    stage=f"step_{step}_back_wait",
-                )
+                time.sleep(0.5)
 
         if decision.action == "abort":
             logger.warning("任务中止: %s", decision.reason)
@@ -502,6 +647,25 @@ class AgentLoop:
             metrics=[],
             expectation_matches=[],
         )
+
+    def _record_step_artifact(
+        self,
+        artifact_kind: str,
+        step: int,
+        payload,
+        append: bool = False,
+    ) -> None:
+        if step <= 0:
+            return
+        try:
+            self.audit.record_step(
+                artifact_kind=artifact_kind,
+                step=int(step),
+                payload=payload,
+                append=append,
+            )
+        except Exception as exc:
+            logger.warning("写入 %s 审计记录失败(step=%s): %s", artifact_kind, step, exc)
 
     def _evaluation_from_mapper_failure(self, error: MappingFailure) -> StepEvaluation:
         assessment = Assessment(
@@ -640,43 +804,3 @@ class AgentLoop:
         ax1, ay1, ax2, ay2 = box_a
         bx1, by1, bx2, by2 = box_b
         return not (ax2 < bx1 or bx2 < ax1 or ay2 < by1 or by2 < ay1)
-
-    def _raise_if_task_timeout(self, task_start_ts: float, max_task_seconds: int, stage: str = "") -> None:
-        if max_task_seconds <= 0:
-            return
-        elapsed = time.time() - task_start_ts
-        if elapsed >= max_task_seconds:
-            stage_hint = f", stage={stage}" if stage else ""
-            raise TimeoutError(f"任务超时: {elapsed:.1f}s >= {max_task_seconds}s{stage_hint}")
-
-    def _remaining_task_seconds(self, task_start_ts: float, max_task_seconds: int):
-        if max_task_seconds <= 0:
-            return None
-        elapsed = time.time() - task_start_ts
-        return max(0.0, float(max_task_seconds - elapsed))
-
-    def _sleep_with_task_timeout(
-        self,
-        seconds: float,
-        task_start_ts: float,
-        max_task_seconds: int,
-        stage: str = "",
-    ) -> None:
-        duration = max(0.0, float(seconds or 0.0))
-        if duration <= 0:
-            return
-        if max_task_seconds <= 0:
-            time.sleep(duration)
-            return
-
-        elapsed = time.time() - task_start_ts
-        remaining = max_task_seconds - elapsed
-        if remaining <= 0:
-            self._raise_if_task_timeout(task_start_ts, max_task_seconds, stage=stage)
-            return
-
-        sleep_time = min(duration, remaining)
-        if sleep_time > 0:
-            time.sleep(sleep_time)
-        if sleep_time < duration:
-            self._raise_if_task_timeout(task_start_ts, max_task_seconds, stage=stage)

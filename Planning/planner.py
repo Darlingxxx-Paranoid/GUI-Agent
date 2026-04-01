@@ -46,10 +46,6 @@ class Planner:
         self.llm = llm_client
         self.memory = memory_manager
         self.audit = AuditRecorder(component="planner")
-        self._plan_primary_timeout_sec = 18
-        self._plan_retry_timeout_sec = 10
-        self._plan_retry_min_remaining_sec = 14
-        self._plan_min_remaining_sec = 5
         logger.info("Planner 初始化完成 (V3.1)")
 
     def plan(self, task: str, ui_state: UIState, step: int | None = None) -> PlanResult:
@@ -145,12 +141,6 @@ class Planner:
         return progress
 
     def _plan_with_llm(self, task: str, ui_state: UIState, step: int | None = None) -> PlanResult:
-        remaining = self._remaining_task_seconds()
-        if remaining is not None and remaining < self._plan_min_remaining_sec:
-            raise TimeoutError(
-                f"规划阶段剩余预算不足: remaining={remaining}s < {self._plan_min_remaining_sec}s"
-            )
-
         history_text = self.memory.short_term.get_context_summary() or "暂无历史记录"
         ui_text = ui_state.to_prompt_text()
 
@@ -194,13 +184,8 @@ class Planner:
             schema_json=json.dumps(planner_schema, ensure_ascii=False),
         )
 
-        primary_timeout = self._select_llm_timeout(
-            default_timeout=self._plan_primary_timeout_sec,
-            reserve_seconds=8,
-        )
         response = self.llm.chat(
             prompt,
-            timeout=primary_timeout,
             audit_meta={
                 "artifact_kind": "PlanResult",
                 "step": step,
@@ -210,42 +195,31 @@ class Planner:
         result = self._parse_plan_response(response)
 
         if self._is_redundant(result):
-            if self._can_afford_retry():
-                logger.info("检测到重复规划，触发一次重规划")
-                retry_prompt = prompt + (
-                    "\n\nRecent output looked redundant. Choose a different concrete action/target from history."
-                )
-                retry_timeout = self._select_llm_timeout(
-                    default_timeout=self._plan_retry_timeout_sec,
-                    reserve_seconds=6,
-                )
-                retry = self.llm.chat(
-                    retry_prompt,
-                    timeout=retry_timeout,
-                    audit_meta={
-                        "artifact_kind": "PlanResult",
-                        "step": step,
-                        "stage": "retry",
-                    },
-                )
-                retry_result = self._parse_plan_response(retry)
-                if not self._is_redundant(retry_result):
-                    result = retry_result
+            logger.info("检测到重复规划，触发一次重规划")
+            retry_prompt = prompt + (
+                "\n\nRecent output looked redundant. Choose a different concrete action/target from history."
+            )
+            retry = self.llm.chat(
+                retry_prompt,
+                audit_meta={
+                    "artifact_kind": "PlanResult",
+                    "step": step,
+                    "stage": "retry",
+                },
+            )
+            retry_result = self._parse_plan_response(retry)
+            if not self._is_redundant(retry_result):
+                result = retry_result
 
         misaligned, reason = self._is_misaligned(task=task, result=result)
-        if misaligned and self._can_afford_retry():
+        if misaligned:
             logger.info("检测到主题偏移，触发一次纠偏重规划: %s", reason)
             align_prompt = (
                 prompt
                 + "\n\nYour last output may be off-topic. Keep the next intent strictly aligned with the final task."
             )
-            align_timeout = self._select_llm_timeout(
-                default_timeout=self._plan_retry_timeout_sec,
-                reserve_seconds=6,
-            )
             align_resp = self.llm.chat(
                 align_prompt,
-                timeout=align_timeout,
                 audit_meta={
                     "artifact_kind": "PlanResult",
                     "step": step,
@@ -469,36 +443,6 @@ class Planner:
             return False, ""
 
         return True, "token_overlap_zero"
-
-    def _remaining_task_seconds(self) -> Optional[int]:
-        getter = getattr(self.llm, "remaining_seconds", None)
-        if not callable(getter):
-            return None
-        try:
-            value = getter()
-        except Exception:
-            return None
-        if value is None:
-            return None
-        try:
-            remaining = int(value)
-        except Exception:
-            return None
-        return max(0, remaining)
-
-    def _select_llm_timeout(self, default_timeout: int, reserve_seconds: int = 6) -> int:
-        timeout = max(1, int(default_timeout or 1))
-        remaining = self._remaining_task_seconds()
-        if remaining is None:
-            return timeout
-        budget = max(1, remaining - max(0, int(reserve_seconds or 0)))
-        return max(1, min(timeout, budget))
-
-    def _can_afford_retry(self) -> bool:
-        remaining = self._remaining_task_seconds()
-        if remaining is None:
-            return True
-        return remaining >= self._plan_retry_min_remaining_sec
 
     def _record_plan_dataclass(self, source: str, result: PlanResult, step: int | None = None) -> None:
         if step is None:

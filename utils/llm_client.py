@@ -3,7 +3,6 @@ LLM 客户端模块
 封装与大语言模型的 API 交互，使用 OpenAI 兼容接口
 """
 import logging
-import time
 from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
@@ -30,13 +29,10 @@ class LLMClient:
         model: str = "gpt-4o",
         temperature: float = 0.3,
         max_tokens: int = 2048,
-        timeout: int = 60,
     ):
         self.model = model
         self.temperature = temperature
         self.max_tokens = max_tokens
-        self.default_timeout = max(1, int(timeout or 60))
-        self._deadline_ts: Optional[float] = None
         self.audit = AuditRecorder(component="llm_client")
 
         if OpenAI is None:
@@ -46,61 +42,22 @@ class LLMClient:
             self.client = OpenAI(
                 base_url=api_base,
                 api_key=api_key,
-                timeout=self.default_timeout,
-                # 严格受任务预算约束，避免 SDK 内部重试把短超时放大为长阻塞。
+                # 禁用 SDK 自动重试，避免重复请求带来的额外延迟。
                 max_retries=0,
             )
 
         logger.info("LLMClient 初始化完成: model=%s, api_base=%s", model, api_base)
 
-    def set_deadline(self, deadline_ts: Optional[float]) -> None:
-        """
-        设置当前任务级截止时间戳（秒）。
-        传入 None 表示清除限制。
-        """
-        self._deadline_ts = float(deadline_ts) if deadline_ts else None
-
-    def remaining_seconds(self) -> Optional[int]:
-        """
-        返回当前任务级时限的剩余秒数。
-        若未设置任务时限，则返回 None。
-        """
-        if self._deadline_ts is None:
-            return None
-        try:
-            remaining = int(self._deadline_ts - time.time())
-        except Exception:
-            return None
-        return max(0, remaining)
-
-    def _resolve_timeout(self, timeout: Optional[float]) -> int:
-        timeout_sec = self.default_timeout
-        if timeout is not None:
-            try:
-                timeout_sec = max(1, int(float(timeout)))
-            except Exception:
-                timeout_sec = self.default_timeout
-
-        if self._deadline_ts is None:
-            return timeout_sec
-
-        remaining = int(self._deadline_ts - time.time())
-        if remaining <= 1:
-            raise TimeoutError("任务时限已到，取消 LLM 调用")
-        return max(1, min(timeout_sec, remaining))
-
     def chat(
         self,
         prompt: str,
         system_prompt: Optional[str] = None,
-        timeout: Optional[float] = None,
         audit_meta: Optional[dict[str, Any]] = None,
     ) -> str:
         """
         发送单轮对话请求
         :param prompt: 用户 prompt
         :param system_prompt: 系统 prompt（可选）
-        :param timeout: 本次请求超时秒数（可选）
         :return: LLM 响应文本
         """
         if self.client is None:
@@ -111,13 +68,7 @@ class LLMClient:
             messages.append({"role": "system", "content": system_prompt})
         messages.append({"role": "user", "content": prompt})
 
-        request_timeout = self._resolve_timeout(timeout)
-        logger.debug(
-            "发送 LLM 请求: model=%s, prompt_len=%d, timeout=%ds",
-            self.model,
-            len(prompt),
-            request_timeout,
-        )
+        logger.debug("发送 LLM 请求: model=%s, prompt_len=%d", self.model, len(prompt))
 
         try:
             response = self.client.chat.completions.create(
@@ -125,7 +76,6 @@ class LLMClient:
                 messages=messages,
                 temperature=self.temperature,
                 max_completion_tokens=self.max_tokens,
-                timeout=request_timeout,
             )
             content = response.choices[0].message.content
             logger.debug("LLM 响应: len=%d", len(content) if content else 0)

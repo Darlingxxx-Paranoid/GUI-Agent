@@ -119,12 +119,6 @@ def main():
         default=30,
         help="单个任务最大执行步数（默认: 30）",
     )
-    parser.add_argument(
-        "--max-task-seconds",
-        type=int,
-        default=0,
-        help="单个任务最大执行时长（秒，0 表示不限制）",
-    )
     args = parser.parse_args()
 
     data_dir = os.path.join(os.path.dirname(__file__), "data")
@@ -148,8 +142,6 @@ def main():
 
     if args.max_steps:
         config.max_steps = args.max_steps
-    if args.max_task_seconds and args.max_task_seconds > 0:
-        config.max_task_seconds = args.max_task_seconds
 
     # 启动 Agent
     agent = AgentLoop(config)

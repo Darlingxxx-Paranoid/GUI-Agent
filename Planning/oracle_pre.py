@@ -46,7 +46,6 @@ class OraclePre:
     def __init__(self, llm_client=None):
         self.llm = llm_client
         self.audit = AuditRecorder(component="oracle_pre")
-        self._oracle_pre_timeout_sec = 14
         logger.info("OraclePre 初始化完成 (V4)")
 
     def generate_contract(
@@ -174,7 +173,6 @@ class OraclePre:
         try:
             response = self.llm.chat(
                 prompt,
-                timeout=self._oracle_pre_timeout_sec,
                 audit_meta={
                     "artifact_kind": "StepContract",
                     "step": step,

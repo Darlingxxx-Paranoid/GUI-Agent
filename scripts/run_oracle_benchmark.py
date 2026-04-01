@@ -133,7 +133,6 @@ def run_single_task(
     task_text: str,
     serial: str,
     max_steps: int,
-    max_task_seconds: int,
     run_dir: str,
     adb_path: str,
     dry_run: bool = False,
@@ -154,7 +153,6 @@ def run_single_task(
         config = AgentConfig()
         config.adb_serial = serial
         config.max_steps = max_steps
-        config.max_task_seconds = max(0, int(max_task_seconds or 0))
         # Isolate Oracle behavior from experience replay and safety pauses.
         config.experience_similarity_threshold = 1.1
         config.high_risk_keywords = []
@@ -193,7 +191,6 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run Oracle benchmark suite.")
     parser.add_argument("--serial", type=str, default="emulator-5554")
     parser.add_argument("--max-steps", type=int, default=12)
-    parser.add_argument("--max-task-seconds", type=int, default=420)
     parser.add_argument("--label", type=str, default="oracle-bench")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--disable-cv", action="store_true", default=False)
@@ -252,7 +249,6 @@ def main() -> int:
             task_text=item["task"],
             serial=args.serial,
             max_steps=args.max_steps,
-            max_task_seconds=args.max_task_seconds,
             run_dir=run_dir,
             adb_path=args.adb_path,
             dry_run=args.dry_run,
@@ -267,7 +263,6 @@ def main() -> int:
         "label": args.label,
         "serial": args.serial,
         "max_steps": args.max_steps,
-        "max_task_seconds": int(args.max_task_seconds),
         "dry_run": bool(args.dry_run),
         "disable_cv": disable_cv,
         "success_count": success_count,
