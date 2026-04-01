@@ -10,3 +10,4 @@ pypdfium2==5.6.0
 python-bidi==0.6.7
 ruamel-yaml==0.19.1
 shapely==2.0.7
+uiautomator2==3.5.0

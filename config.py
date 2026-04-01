@@ -20,7 +20,7 @@ class AgentConfig:
         # LLM 配置 (OpenAI 兼容接口)
         # ========================
         self.llm_api_base: str = "https://api.poixe.com/v1"
-        self.llm_api_key: str = "sk-kbkg2ZXBcai8A0lq36mYN5qolckALs73nGz6u7xYoi2SOAEF"
+        self.llm_api_key: str = "sk-rAR4iHHBCwD1T3FI6VJtakvMFkaaIf8GsMmH4j5wPCIdDFiw"
         self.llm_model: str = "gpt-5.2"
         self.llm_temperature: float = 0
         self.llm_max_tokens: int = 5000
@@ -57,7 +57,9 @@ class AgentConfig:
         self.high_risk_keywords: list = [
             "支付", "付款", "购买", "删除", "卸载", "清除数据",
             "授权", "权限", "登录", "密码", "转账", "确认支付",
+            "恢复出厂设置", "出厂设置", "恢复出厂", "重置手机", "抹掉所有数据",
             "pay", "delete", "uninstall", "authorize", "purchase",
+            "factory reset", "reset phone", "erase all data",
         ]
 
     def ensure_dirs(self):

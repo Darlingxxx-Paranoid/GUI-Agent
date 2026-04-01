@@ -1,6 +1,6 @@
 """
 Android UI Dump 解析模块
-解析 uiautomator dump 输出的 XML，提取所有可见控件属性
+解析 UI 层级 XML（由 uiautomator2 等来源生成），提取所有可见控件属性
 """
 import xml.etree.ElementTree as ET
 import re
@@ -109,7 +109,7 @@ class UIElement:
 class DumpParser:
     """
     Android UI Dump 解析器
-    解析 uiautomator dump 生成的 XML 文件
+    解析 UI 层级 XML 文件
     """
 
     # bounds 正则匹配: [x1,y1][x2,y2]

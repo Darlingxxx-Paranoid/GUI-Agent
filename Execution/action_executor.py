@@ -9,7 +9,12 @@ import shutil
 import subprocess
 import time
 import logging
-from typing import List, Optional
+from typing import Any, List, Optional, Tuple
+
+try:
+    import uiautomator2 as u2
+except Exception:  # pragma: no cover - import check at runtime
+    u2 = None
 
 logger = logging.getLogger(__name__)
 
@@ -74,14 +79,16 @@ class ActionExecutor:
         self._dump_max_cooldown_sec = 40
         self._dump_prefer_compressed_until_ts = 0.0
         self._dump_prefer_window_sec = 120
+        self._u2_device: Optional[Any] = None
 
         os.makedirs(screenshot_dir, exist_ok=True)
         os.makedirs(dump_dir, exist_ok=True)
 
         logger.info(
-            "ActionExecutor 初始化完成, serial='%s', adb='%s'",
+            "ActionExecutor 初始化完成, serial='%s', adb='%s', dump_backend=%s",
             serial or "default",
             self.adb_path,
+            "uiautomator2" if u2 is not None else "unavailable",
         )
 
     def _resolve_adb_path(self, explicit_path: str = "") -> str:
@@ -297,7 +304,7 @@ class ActionExecutor:
 
     def dump_ui(self, filename: Optional[str] = None) -> str:
         """
-        导出当前 UI 结构
+        导出当前 UI 结构（使用 uiautomator2）
         :param filename: 文件名，默认使用时间戳
         :return: dump 保存的本地路径
         """
@@ -314,10 +321,9 @@ class ActionExecutor:
         if filename is None:
             filename = f"dump_{int(time.time() * 1000)}.xml"
 
-        device_path = "/sdcard/window_dump.xml"
         local_path = os.path.join(self.dump_dir, filename)
 
-        logger.info("Dump UI: %s", local_path)
+        logger.info("Dump UI(u2): %s", local_path)
 
         # 关键防护：先清理旧文件，避免 dump 失败时错误复用陈旧 XML。
         if os.path.exists(local_path):
@@ -325,127 +331,48 @@ class ActionExecutor:
                 os.remove(local_path)
             except OSError:
                 pass
-        self._adb_cmd("shell", "rm", "-f", device_path)
 
         prefer_compressed = (
             self._dump_consecutive_failures >= 2
             or now < self._dump_prefer_compressed_until_ts
         )
         if prefer_compressed:
-            dump_commands = [
-                ("compressed", ("shell", "uiautomator", "dump", "--compressed", device_path), 6),
-                ("normal", ("shell", "uiautomator", "dump", device_path), 8),
+            dump_modes = [
+                ("compressed", True),
+                ("normal", False),
             ]
         else:
-            dump_commands = [
-                ("normal", ("shell", "uiautomator", "dump", device_path), 8),
-                ("compressed", ("shell", "uiautomator", "dump", "--compressed", device_path), 6),
+            dump_modes = [
+                ("normal", False),
+                ("compressed", True),
             ]
 
-        dump_success = False
         failure_reason = "unknown"
         selected_mode = ""
         normal_mode_failed = False
-        for idx, (mode, cmd, call_timeout) in enumerate(dump_commands, start=1):
-            try:
-                dump_result = self._adb_cmd(*cmd, timeout_sec=call_timeout)
-            except subprocess.TimeoutExpired:
-                failure_reason = "timeout"
-                if mode == "normal":
-                    normal_mode_failed = True
-                if idx < len(dump_commands):
-                    logger.warning(
-                        "uiautomator dump 执行超时(%ss), 尝试重试: %d/%d (%s)",
-                        call_timeout,
-                        idx,
-                        len(dump_commands),
-                        mode,
-                    )
-                    time.sleep(0.25)
-                    continue
-                logger.warning("uiautomator dump 执行超时(%ss)，跳过本轮 dump", call_timeout)
-                self._record_dump_failure(failure_reason)
-                return ""
+        for idx, (mode, compressed) in enumerate(dump_modes, start=1):
+            dump_ok, reason = self._dump_hierarchy_via_u2(local_path, compressed=compressed)
+            if dump_ok:
+                selected_mode = mode
+                break
 
-            dump_output = (
-                f"{dump_result.stdout or ''}\n{dump_result.stderr or ''}"
-            ).lower()
-            if dump_result.returncode != 0:
-                failure_reason = f"rc_{dump_result.returncode}"
-                if mode == "normal":
-                    normal_mode_failed = True
-                if idx < len(dump_commands):
-                    logger.warning(
-                        "uiautomator dump 执行失败(rc=%d)，尝试重试: %d/%d (%s)",
-                        dump_result.returncode,
-                        idx,
-                        len(dump_commands),
-                        mode,
-                    )
-                    time.sleep(0.25)
-                    continue
-                logger.warning("uiautomator dump 执行失败(rc=%d)，跳过本轮 dump", dump_result.returncode)
-                self._record_dump_failure(failure_reason)
-                return ""
-            if "could not get idle state" in dump_output:
-                failure_reason = "could_not_get_idle_state"
-                if mode == "normal":
-                    normal_mode_failed = True
-                if idx < len(dump_commands):
-                    logger.warning(
-                        "uiautomator dump 失败(could not get idle state), 尝试重试: %d/%d (%s)",
-                        idx,
-                        len(dump_commands),
-                        mode,
-                    )
-                    time.sleep(0.35)
-                    continue
-                logger.warning("uiautomator dump 连续失败: could not get idle state，跳过本轮 dump")
-                self._record_dump_failure(failure_reason)
-                return ""
+            failure_reason = reason
+            if mode == "normal":
+                normal_mode_failed = True
 
-            exists_result = self._adb_cmd("shell", "ls", "-l", device_path, timeout_sec=8)
-            exists_output = f"{exists_result.stdout or ''}\n{exists_result.stderr or ''}".lower()
-            missing_file = (
-                exists_result.returncode != 0
-                or "no such file" in exists_output
-                or "no such file or directory" in exists_output
-            )
-            if missing_file:
-                failure_reason = "missing_dump_file"
-                if mode == "normal":
-                    normal_mode_failed = True
-                if idx < len(dump_commands):
-                    logger.warning(
-                        "uiautomator dump 未生成文件，尝试重试: %d/%d (%s)",
-                        idx,
-                        len(dump_commands),
-                        mode,
-                    )
-                    time.sleep(0.25)
-                    continue
-                logger.warning("uiautomator dump 未生成文件，跳过本轮 dump")
-                self._record_dump_failure(failure_reason)
-                return ""
+            if idx < len(dump_modes):
+                logger.warning(
+                    "u2 dump_hierarchy 失败(reason=%s)，尝试重试: %d/%d (%s)",
+                    reason,
+                    idx,
+                    len(dump_modes),
+                    mode,
+                )
+                time.sleep(0.2)
+                continue
 
-            dump_success = True
-            selected_mode = mode
-            break
-
-        if not dump_success:
-            logger.warning("uiautomator dump 未成功，跳过本轮 dump")
+            logger.warning("u2 dump_hierarchy 连续失败(reason=%s)，跳过本轮 dump", reason)
             self._record_dump_failure(failure_reason)
-            return ""
-
-        pull_result = self._adb_cmd("pull", device_path, local_path, timeout_sec=12)
-        self._adb_cmd("shell", "rm", "-f", device_path, timeout_sec=8)
-        if pull_result.returncode != 0 or not os.path.exists(local_path):
-            logger.warning("UI dump 拉取失败，跳过本轮 dump")
-            self._record_dump_failure("pull_failed")
-            return ""
-        if os.path.getsize(local_path) <= 32:
-            logger.warning("UI dump 文件过小，疑似无效: %s", local_path)
-            self._record_dump_failure("dump_file_too_small")
             return ""
 
         if selected_mode == "compressed" and normal_mode_failed:
@@ -459,6 +386,77 @@ class ActionExecutor:
 
         self._record_dump_success()
         return local_path
+
+    def _get_u2_device(self) -> Optional[Any]:
+        if u2 is None:
+            logger.error("uiautomator2 未安装，无法获取 UI dump")
+            return None
+
+        if self._u2_device is not None:
+            return self._u2_device
+
+        try:
+            serial = self.serial if self.serial else None
+            self._u2_device = u2.connect(serial)
+            logger.debug("uiautomator2 连接成功: serial=%s", serial or "auto")
+            return self._u2_device
+        except Exception as exc:
+            logger.warning("uiautomator2 连接失败: %s", exc)
+            self._u2_device = None
+            return None
+
+    def _dump_hierarchy_via_u2(self, local_path: str, compressed: bool) -> Tuple[bool, str]:
+        device = self._get_u2_device()
+        if device is None:
+            return False, "u2_connect_failed"
+
+        mode = "compressed" if compressed else "normal"
+        start = time.time()
+        try:
+            xml_content = device.dump_hierarchy(compressed=compressed)
+        except Exception as exc:  # pragma: no cover - runtime device behavior
+            reason = self._classify_u2_dump_exception(exc)
+            logger.warning("u2 dump_hierarchy 异常(mode=%s, reason=%s): %s", mode, reason, exc)
+            if reason in ("rpc_error", "timeout"):
+                self._u2_device = None
+            return False, reason
+
+        elapsed = time.time() - start
+        if not xml_content:
+            logger.warning("u2 dump_hierarchy 返回空内容(mode=%s)", mode)
+            return False, "empty_hierarchy"
+        if "<hierarchy" not in xml_content:
+            logger.warning("u2 dump_hierarchy 返回内容缺少 hierarchy(mode=%s)", mode)
+            return False, "invalid_xml"
+
+        try:
+            with open(local_path, "w", encoding="utf-8") as f:
+                f.write(xml_content)
+        except OSError as exc:
+            return False, f"write_failed:{type(exc).__name__}"
+
+        file_size = os.path.getsize(local_path) if os.path.exists(local_path) else 0
+        if file_size <= 32:
+            logger.warning("UI dump 文件过小，疑似无效: %s", local_path)
+            return False, "dump_file_too_small"
+
+        logger.debug(
+            "u2 dump_hierarchy 成功(mode=%s, elapsed=%.2fs, size=%d)",
+            mode,
+            elapsed,
+            file_size,
+        )
+        return True, "ok"
+
+    def _classify_u2_dump_exception(self, exc: Exception) -> str:
+        text = str(exc or "").lower()
+        if "timeout" in text or "timed out" in text:
+            return "timeout"
+        if "dump hierarchy is empty" in text or "hierarchy is empty" in text:
+            return "empty_hierarchy"
+        if "rpc" in text or "connection" in text or "socket" in text:
+            return "rpc_error"
+        return f"u2_exception:{type(exc).__name__}"
 
     def get_current_activity(self) -> str:
         """获取当前前台 Activity 名"""

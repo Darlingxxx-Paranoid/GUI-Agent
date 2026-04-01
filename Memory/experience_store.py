@@ -1,72 +1,70 @@
-"""
-经验持久化存储模块
-将成功的任务执行经验以JSON格式持久化到磁盘，支持增删查
-"""
+"""Persistent experience storage for schema v3 triplets."""
+
+from __future__ import annotations
+
 import json
-import os
 import logging
+import os
 import time
-from typing import List, Optional, Dict, Any
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
 
 class ExperienceRecord:
-    """单条经验记录"""
+    """Single persisted experience record (schema v3)."""
 
     def __init__(
         self,
         task_description: str,
         success: bool,
-        action_sequence: Optional[List[Dict[str, Any]]] = None,
-        timestamp: float = None,
-        metadata: Dict[str, Any] = None,
-        semantic_steps: Optional[List[Dict[str, Any]]] = None,
-        schema_version: int = 1,
+        step_triplets: Optional[List[Dict[str, Any]]] = None,
+        timestamp: float | None = None,
+        metadata: Optional[Dict[str, Any]] = None,
+        schema_version: int = 3,
     ):
-        self.task_description = task_description
-        self.semantic_steps = semantic_steps if semantic_steps is not None else (action_sequence or [])
-        # 向后兼容：旧逻辑仍通过 action_sequence 访问
-        self.action_sequence = self.semantic_steps
-        self.success = success
-        self.timestamp = timestamp or time.time()
-        self.metadata = metadata or {}
-        self.schema_version = schema_version
+        self.task_description = str(task_description or "")
+        self.step_triplets = list(step_triplets or [])
+        self.success = bool(success)
+        self.timestamp = float(timestamp or time.time())
+        self.metadata = dict(metadata or {})
+        self.schema_version = int(schema_version or 3)
 
     def to_dict(self) -> dict:
         return {
             "task_description": self.task_description,
-            "schema_version": self.schema_version,
-            "semantic_steps": self.semantic_steps,
-            # 保留旧字段，便于旧版本读取
-            "action_sequence": self.semantic_steps,
-            "success": self.success,
-            "timestamp": self.timestamp,
+            "schema_version": int(self.schema_version),
+            "step_triplets": self.step_triplets,
+            "success": bool(self.success),
+            "timestamp": float(self.timestamp),
             "metadata": self.metadata,
         }
 
     @classmethod
     def from_dict(cls, data: dict) -> "ExperienceRecord":
-        semantic_steps = data.get("semantic_steps")
-        if semantic_steps is None:
-            semantic_steps = data.get("action_sequence", [])
+        schema_version = int(data.get("schema_version", 1) or 1)
+        if schema_version < 3:
+            raise ValueError(f"unsupported_schema_version={schema_version}")
+
+        triplets = data.get("step_triplets")
+        if triplets is None:
+            triplets = []
+
+        if not isinstance(triplets, list):
+            triplets = []
 
         return cls(
-            task_description=data["task_description"],
-            action_sequence=semantic_steps,
-            success=data.get("success", False),
-            timestamp=data.get("timestamp", 0),
-            metadata=data.get("metadata", {}),
-            semantic_steps=semantic_steps,
-            schema_version=int(data.get("schema_version", 1) or 1),
+            task_description=str(data.get("task_description") or ""),
+            step_triplets=triplets,
+            success=bool(data.get("success", False)),
+            timestamp=float(data.get("timestamp") or time.time()),
+            metadata=data.get("metadata") if isinstance(data.get("metadata"), dict) else {},
+            schema_version=3,
         )
 
 
 class ExperienceStore:
-    """
-    基于JSON文件的经验持久化存储
-    每条经验包含：任务描述、动作序列、成功标记、时间戳
-    """
+    """JSON-backed store for v3 experience records."""
 
     def __init__(self, store_path: str):
         self.store_path = store_path
@@ -74,43 +72,60 @@ class ExperienceStore:
         self._load()
 
     def _load(self):
-        """从磁盘加载经验库"""
-        if os.path.exists(self.store_path):
-            try:
-                with open(self.store_path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                self._experiences = [ExperienceRecord.from_dict(d) for d in data]
-                logger.info("从 %s 加载了 %d 条经验记录", self.store_path, len(self._experiences))
-            except (json.JSONDecodeError, KeyError) as e:
-                logger.warning("经验库文件损坏，将重建: %s", e)
-                self._experiences = []
-        else:
+        if not os.path.exists(self.store_path):
             logger.info("经验库文件不存在，将创建新文件: %s", self.store_path)
             self._experiences = []
+            return
+
+        try:
+            with open(self.store_path, "r", encoding="utf-8") as file:
+                payload = json.load(file)
+        except (json.JSONDecodeError, OSError) as exc:
+            logger.warning("经验库读取失败，将重建为空: %s", exc)
+            self._experiences = []
+            self._save()
+            return
+
+        if not isinstance(payload, list):
+            logger.warning("经验库结构异常(非列表)，将重建为空")
+            self._experiences = []
+            self._save()
+            return
+
+        loaded: List[ExperienceRecord] = []
+        dropped = 0
+        for item in payload:
+            if not isinstance(item, dict):
+                dropped += 1
+                continue
+            try:
+                loaded.append(ExperienceRecord.from_dict(item))
+            except Exception:
+                dropped += 1
+
+        self._experiences = loaded
+        if dropped > 0:
+            logger.warning("经验库已丢弃 %d 条非 v3 记录", dropped)
+            self._save()
+
+        logger.info("经验库加载完成: %d 条(v3)", len(self._experiences))
 
     def _save(self):
-        """持久化到磁盘"""
         os.makedirs(os.path.dirname(self.store_path), exist_ok=True)
-        with open(self.store_path, "w", encoding="utf-8") as f:
-            json.dump([e.to_dict() for e in self._experiences], f, ensure_ascii=False, indent=2)
-        logger.debug("经验库已保存，共 %d 条记录", len(self._experiences))
+        with open(self.store_path, "w", encoding="utf-8") as file:
+            json.dump([item.to_dict() for item in self._experiences], file, ensure_ascii=False, indent=2)
 
     def add(self, record: ExperienceRecord):
-        """添加一条经验记录并持久化"""
         self._experiences.append(record)
         self._save()
-        logger.info("新增经验记录: task='%s', success=%s", record.task_description[:50], record.success)
 
     def get_successful(self) -> List[ExperienceRecord]:
-        """获取所有成功的经验"""
-        return [e for e in self._experiences if e.success]
+        return [item for item in self._experiences if item.success]
 
     def get_all(self) -> List[ExperienceRecord]:
-        """获取所有经验"""
         return list(self._experiences)
 
     def clear(self):
-        """清空经验库"""
         self._experiences = []
         self._save()
         logger.info("经验库已清空")

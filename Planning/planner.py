@@ -1,219 +1,441 @@
-"""
-ReAct 动态规划器
-评估当前UI状态与目标差距，生成单个子目标
-支持长期记忆经验复用
-"""
+"""Single-step planner that outputs V3.1 planning intent."""
+
+from __future__ import annotations
+
 import json
 import logging
 import re
-from dataclasses import dataclass
-from typing import List, Dict, Any, Optional
+from dataclasses import dataclass, field
+from typing import Any, Dict, Optional
 
-from Perception.context_builder import UIState
 from Memory.memory_manager import MemoryManager
+from Oracle.contracts import (
+    GoalSpec,
+    Selector,
+    TargetRef,
+    TargetResolved,
+    ContractValidationError,
+    dataclass_to_json_schema,
+    parse_dataclass,
+    parse_json_object,
+    validate_action_type,
+)
+from Perception.context_builder import UIState, WidgetInfo
 from prompt.planner_prompt import PLANNER_PROMPT
 
 logger = logging.getLogger(__name__)
 
 
-# ========================
-# 数据类定义
-# ========================
-
-
-@dataclass
-class SubGoal:
-    """单个子目标"""
-    description: str                           # 子目标描述
-    target_widget_text: str = ""               # 目标控件文本特征
-    target_widget_id: Optional[int] = None     # 目标控件 ID
-    action_type: str = ""                      # 预期动作类型 (tap/swipe/input/back)
-    input_text: str = ""                       # 输入文本（action_type=input 时）
-    acceptance_criteria: str = ""              # 验收标准描述
-    expected_transition: str = ""              # 跳变预期类型 (partial_refresh/new_page/external_app/dialog)
-    from_experience: bool = False              # 是否来自长期记忆复用
-
-
 @dataclass
 class PlanResult:
-    """规划结果"""
-    subgoal: SubGoal
-    is_task_complete: bool = False             # LLM 判断任务是否已完成
-    reasoning: str = ""                        # 推理过程
+    goal: GoalSpec
+    target: TargetRef | None = None
+    requested_action_type: str = "tap"
+    input_text: str = ""
+    planning_hints: Dict[str, Any] = field(default_factory=dict)
+    is_task_complete: bool = False
+    reasoning: str = ""
+    from_experience: bool = False
 
 
 class Planner:
-    """
-    ReAct 动态规划器
-    - 优先检索长期记忆中的经验
-    - 无命中时通过 LLM 生成单个子目标
-    - 子目标包含验收标准和跳变预期
-    """
+    """Generate next-step intent from memory or LLM."""
 
     def __init__(self, llm_client, memory_manager: MemoryManager):
-        """
-        :param llm_client: LLM 调用客户端 (需有 chat 方法)
-        :param memory_manager: 记忆管理器
-        """
         self.llm = llm_client
         self.memory = memory_manager
-        # 规划调用预算：避免单步多次长调用耗尽任务总时限。
         self._plan_primary_timeout_sec = 18
         self._plan_retry_timeout_sec = 10
         self._plan_retry_min_remaining_sec = 14
         self._plan_min_remaining_sec = 5
-        logger.info("Planner 初始化完成")
+        logger.info("Planner 初始化完成 (V3.1)")
 
     def plan(self, task: str, ui_state: UIState) -> PlanResult:
-        """
-        生成下一个子目标
-        :param task: 最终任务描述
-        :param ui_state: 当前 UI 状态
-        :return: PlanResult
-        """
-        logger.info("开始规划, 任务: '%s'", task[:80])
+        logger.info("开始规划(V3.1), task='%s'", task[:80])
 
-        # 第一步：尝试从长期记忆检索经验
         experience = self.memory.search_experience(task)
         if experience:
-            logger.info("命中长期记忆经验, 将复用历史动作链路")
-            replay_plan = self._plan_from_experience(experience)
-            if replay_plan is not None:
-                return replay_plan
+            replay = self._plan_from_experience(experience)
+            if replay is not None:
+                return replay
 
-        # 第二步：通过 LLM 动态规划
-        return self._plan_with_llm(task, ui_state)
+        try:
+            return self._plan_with_llm(task=task, ui_state=ui_state)
+        except Exception as exc:
+            logger.warning("规划失败，回退启发式策略: %s", exc)
+            return self._heuristic_fallback_plan(task=task, ui_state=ui_state, error=str(exc))
 
     def _plan_from_experience(self, experience) -> Optional[PlanResult]:
-        """从历史经验中复用动作"""
-        if not experience.action_sequence:
-            logger.warning("经验记录中动作序列为空, 回退到 LLM 规划")
+        triplets = list(getattr(experience, "step_triplets", None) or [])
+        if not triplets:
+            logger.info("命中经验但 step_triplets 为空，回退 LLM")
             return None
 
-        progress_idx = self._experience_progress_index()
-        if progress_idx >= len(experience.action_sequence):
-            logger.info(
-                "经验动作已回放完毕(progress=%d, total=%d), 回退 LLM 动态规划",
-                progress_idx,
-                len(experience.action_sequence),
+        progress = self._experience_progress_index()
+        if progress >= len(triplets):
+            logger.info("经验回放结束(progress=%d,total=%d)，回退 LLM", progress, len(triplets))
+            return None
+
+        step = triplets[progress] or {}
+        contract_dict = step.get("contract") or {}
+        action_dict = step.get("action") or {}
+
+        goal = self._safe_parse_goal(contract_dict.get("goal"))
+        if goal is None:
+            goal = GoalSpec(
+                summary=str(step.get("subgoal") or action_dict.get("description") or "按经验执行下一步").strip()[:160],
+                success_definition="完成经验回放步骤",
+                tags=["experience"],
             )
-            return None
 
-        action = experience.action_sequence[progress_idx]
-        target_anchor = action.get("target_anchor", {}) or {}
-        target_widget_text = (
-            action.get("target_widget_text", "")
-            or target_anchor.get("widget_text", "")
-            or target_anchor.get("content_desc", "")
-            or target_anchor.get("resource_id", "")
-            or action.get("target_content_desc", "")
-            or action.get("target_resource_id", "")
-        )
-        subgoal = SubGoal(
-            description=action.get("description", "来自经验的动作"),
-            target_widget_text=target_widget_text,
-            target_widget_id=action.get("target_widget_id", action.get("widget_id")),
-            action_type=action.get("action_type", "tap"),
-            input_text=action.get("input_text", ""),
-            acceptance_criteria=action.get("acceptance_criteria", ""),
-            expected_transition=action.get("expected_transition", "partial_refresh"),
+        target = None
+        target_payload = contract_dict.get("target") or action_dict.get("target")
+        if isinstance(target_payload, dict):
+            try:
+                target = parse_dataclass(target_payload, TargetRef, strict=False)
+            except Exception:
+                target = None
+
+        action_type = str(action_dict.get("type") or action_dict.get("action_type") or "tap").strip().lower()
+        try:
+            action_type = validate_action_type(action_type)
+        except Exception:
+            action_type = "tap"
+
+        input_text = ""
+        if isinstance(action_dict.get("params"), dict):
+            input_text = str(action_dict["params"].get("text") or "")
+        if not input_text:
+            input_text = str(action_dict.get("text") or action_dict.get("input_text") or "")
+
+        plan = PlanResult(
+            goal=goal,
+            target=target,
+            requested_action_type=action_type,
+            input_text=input_text,
+            planning_hints={
+                "source": "experience",
+                "replay_index": progress,
+                "replay_total": len(triplets),
+            },
+            reasoning=f"复用历史经验步骤 {progress + 1}/{len(triplets)}",
             from_experience=True,
         )
-        logger.info(
-            "从经验复用子目标(progress=%d/%d): '%s'",
-            progress_idx + 1,
-            len(experience.action_sequence),
-            subgoal.description,
-        )
 
-        return PlanResult(
-            subgoal=subgoal,
-            reasoning=f"复用长期记忆中的成功经验, progress={progress_idx + 1}",
-        )
+        logger.info("经验回放规划: %s", plan.goal.summary)
+        return plan
 
     def _experience_progress_index(self) -> int:
-        """根据当前任务内已成功复用步数计算经验回放位置。"""
         progress = 0
         for step in self.memory.short_term.history:
-            result = (step.get("result") or "").lower()
+            result = str(step.get("result") or "").lower()
             if step.get("from_experience") and result.startswith("success"):
                 progress += 1
         return progress
 
     def _plan_with_llm(self, task: str, ui_state: UIState) -> PlanResult:
-        """通过 LLM 生成子目标"""
-        history_text = self.memory.short_term.get_context_summary()
-        ui_text = ui_state.to_prompt_text()
         remaining = self._remaining_task_seconds()
         if remaining is not None and remaining < self._plan_min_remaining_sec:
             raise TimeoutError(
                 f"规划阶段剩余预算不足: remaining={remaining}s < {self._plan_min_remaining_sec}s"
             )
 
+        history_text = self.memory.short_term.get_context_summary() or "暂无历史记录"
+        ui_text = ui_state.to_prompt_text()
+
+        planner_schema = {
+            "type": "object",
+            "required": [
+                "is_task_complete",
+                "reasoning",
+                "goal",
+                "requested_action_type",
+                "input_text",
+                "target",
+                "planning_hints",
+            ],
+            "properties": {
+                "is_task_complete": {"type": "boolean"},
+                "reasoning": {"type": "string"},
+                "goal": dataclass_to_json_schema(GoalSpec),
+                "requested_action_type": {
+                    "enum": ["tap", "input", "swipe", "back", "enter", "long_press"],
+                },
+                "input_text": {"type": "string"},
+                "target": {
+                    "anyOf": [
+                        dataclass_to_json_schema(TargetRef),
+                        {"type": "null"},
+                    ]
+                },
+                "planning_hints": {
+                    "type": "object",
+                    "additionalProperties": True,
+                },
+            },
+            "additionalProperties": False,
+        }
+
         prompt = PLANNER_PROMPT.format(
             task=task,
             ui_state=ui_text,
-            history=history_text or "暂无历史记录",
+            history=history_text,
+            schema_json=json.dumps(planner_schema, ensure_ascii=False),
         )
 
-        logger.debug("发送规划请求到 LLM")
-        try:
-            primary_timeout = self._select_llm_timeout(
-                default_timeout=self._plan_primary_timeout_sec,
-                reserve_seconds=8,
-            )
-            response = self.llm.chat(prompt, timeout=primary_timeout)
-            result = self._parse_plan_response(response)
-            used_retry = False
-            if self._is_redundant_subgoal(result.subgoal):
-                if self._can_afford_retry():
-                    logger.info("检测到重复子目标，触发一次去重重规划")
-                    dedupe_prompt = self._build_dedupe_prompt(prompt)
-                    retry_timeout = self._select_llm_timeout(
-                        default_timeout=self._plan_retry_timeout_sec,
-                        reserve_seconds=6,
-                    )
-                    retry_response = self.llm.chat(dedupe_prompt, timeout=retry_timeout)
-                    retry_result = self._parse_plan_response(retry_response)
-                    if not self._is_redundant_subgoal(retry_result.subgoal):
-                        result = retry_result
-                    else:
-                        logger.info("去重重规划仍重复，保留原始规划结果")
-                    used_retry = True
-                else:
-                    logger.info("检测到重复子目标，但剩余时限不足，跳过去重重规划")
-            misaligned, reason = self._is_subgoal_misaligned(task, result.subgoal)
-            if misaligned and not used_retry:
-                if self._can_afford_retry():
-                    logger.info("检测到任务主题偏移，触发一次对齐重规划: %s", reason)
-                    align_prompt = self._build_alignment_prompt(prompt, task, reason)
-                    align_timeout = self._select_llm_timeout(
-                        default_timeout=self._plan_retry_timeout_sec,
-                        reserve_seconds=6,
-                    )
-                    align_response = self.llm.chat(align_prompt, timeout=align_timeout)
-                    align_result = self._parse_plan_response(align_response)
-                    misaligned_retry, _ = self._is_subgoal_misaligned(task, align_result.subgoal)
-                    if not misaligned_retry:
-                        result = align_result
-                    else:
-                        logger.info("主题对齐重规划仍偏移，保留原始规划结果")
-                else:
-                    logger.info("检测到任务主题偏移，但剩余时限不足，使用任务保护子目标: %s", reason)
-                    guard_plan = self._build_topic_guard_plan(task=task, reason=reason)
-                    if guard_plan is not None:
-                        return guard_plan
-            logger.info(
-                "LLM 规划完成: subgoal='%s', action=%s, complete=%s",
-                result.subgoal.description, result.subgoal.action_type, result.is_task_complete,
-            )
-            return result
-        except Exception as e:
-            logger.error("LLM 规划失败: %s", e)
-            return PlanResult(
-            subgoal=SubGoal(description="LLM规划失败，需要重试"),
-            reasoning=f"LLM调用异常: {e}",
+        primary_timeout = self._select_llm_timeout(
+            default_timeout=self._plan_primary_timeout_sec,
+            reserve_seconds=8,
         )
+        response = self.llm.chat(prompt, timeout=primary_timeout)
+        result = self._parse_plan_response(response)
+
+        if self._is_redundant(result):
+            if self._can_afford_retry():
+                logger.info("检测到重复规划，触发一次重规划")
+                retry_prompt = prompt + (
+                    "\n\nRecent output looked redundant. Choose a different concrete action/target from history."
+                )
+                retry_timeout = self._select_llm_timeout(
+                    default_timeout=self._plan_retry_timeout_sec,
+                    reserve_seconds=6,
+                )
+                retry = self.llm.chat(retry_prompt, timeout=retry_timeout)
+                retry_result = self._parse_plan_response(retry)
+                if not self._is_redundant(retry_result):
+                    result = retry_result
+
+        misaligned, reason = self._is_misaligned(task=task, result=result)
+        if misaligned and self._can_afford_retry():
+            logger.info("检测到主题偏移，触发一次纠偏重规划: %s", reason)
+            align_prompt = (
+                prompt
+                + "\n\nYour last output may be off-topic. Keep the next intent strictly aligned with the final task."
+            )
+            align_timeout = self._select_llm_timeout(
+                default_timeout=self._plan_retry_timeout_sec,
+                reserve_seconds=6,
+            )
+            align_resp = self.llm.chat(align_prompt, timeout=align_timeout)
+            align_result = self._parse_plan_response(align_resp)
+            still_misaligned, _ = self._is_misaligned(task=task, result=align_result)
+            if not still_misaligned:
+                result = align_result
+
+        return result
+
+    def _parse_plan_response(self, response: str) -> PlanResult:
+        payload = parse_json_object(response)
+
+        allowed_top_level = {
+            "is_task_complete",
+            "reasoning",
+            "goal",
+            "requested_action_type",
+            "input_text",
+            "target",
+            "planning_hints",
+        }
+        extras = sorted(set(payload.keys()) - allowed_top_level)
+        if extras:
+            raise ContractValidationError(f"Planner response has unexpected fields: {extras}")
+
+        goal = parse_dataclass(payload.get("goal") or {}, GoalSpec, strict=True)
+
+        target_payload = payload.get("target")
+        target: Optional[TargetRef] = None
+        if target_payload is not None:
+            target = parse_dataclass(target_payload, TargetRef, strict=True)
+
+        action_type = validate_action_type(
+            str(payload.get("requested_action_type") or "tap").strip().lower()
+        )
+        if action_type == "launch_app":
+            # 执行器暂不支持 launch_app，规划层先收敛到可执行动作集合。
+            action_type = "tap"
+
+        input_text = payload.get("input_text")
+        if not isinstance(input_text, str):
+            raise ContractValidationError("input_text must be a string")
+
+        planning_hints = payload.get("planning_hints")
+        if not isinstance(planning_hints, dict):
+            raise ContractValidationError("planning_hints must be an object")
+
+        is_task_complete = payload.get("is_task_complete")
+        if not isinstance(is_task_complete, bool):
+            raise ContractValidationError("is_task_complete must be a boolean")
+
+        reasoning = payload.get("reasoning")
+        if not isinstance(reasoning, str):
+            raise ContractValidationError("reasoning must be a string")
+
+        return PlanResult(
+            goal=goal,
+            target=target,
+            requested_action_type=action_type,
+            input_text=input_text,
+            planning_hints=planning_hints,
+            is_task_complete=is_task_complete,
+            reasoning=reasoning.strip(),
+            from_experience=False,
+        )
+
+    def _safe_parse_goal(self, payload: Any) -> Optional[GoalSpec]:
+        if not isinstance(payload, dict):
+            return None
+        try:
+            return parse_dataclass(payload, GoalSpec, strict=False)
+        except Exception:
+            return None
+
+    def _heuristic_fallback_plan(self, task: str, ui_state: UIState, error: str = "") -> PlanResult:
+        lowered = str(task or "").lower()
+        target = self._find_widget_target(task=task, ui_state=ui_state)
+
+        if "返回" in task or "back" in lowered:
+            action_type = "back"
+        elif target and target.resolved and target.resolved.widget_id is not None:
+            action_type = "tap"
+        elif any(token in lowered for token in ("scroll", "swipe", "下滑", "上滑")):
+            action_type = "swipe"
+        else:
+            action_type = "tap"
+
+        reason = "heuristic_fallback"
+        if error:
+            reason = f"{reason}:{error[:80]}"
+
+        return PlanResult(
+            goal=GoalSpec(
+                summary=str(task or "继续下一步").strip()[:160] or "继续下一步",
+                success_definition="观察到任务相关可验证变化",
+                tags=["fallback"],
+            ),
+            target=target,
+            requested_action_type=action_type,
+            input_text="",
+            planning_hints={"fallback_reason": reason},
+            is_task_complete=False,
+            reasoning="LLM 规划失败，使用启发式下一步",
+            from_experience=False,
+        )
+
+    def _find_widget_target(self, task: str, ui_state: UIState) -> Optional[TargetRef]:
+        tokens = [t for t in re.split(r"[^0-9A-Za-z\u4e00-\u9fff]+", str(task or "")) if len(t) >= 2]
+        lowered = [t.lower() for t in tokens]
+
+        best_widget: Optional[WidgetInfo] = None
+        best_score = -1
+        for widget in ui_state.widgets:
+            text_blob = " ".join(
+                [
+                    str(widget.text or ""),
+                    str(widget.content_desc or ""),
+                    str(widget.resource_id or ""),
+                    str(widget.class_name or ""),
+                ]
+            ).lower()
+            score = 0
+            for token in lowered:
+                if token and token in text_blob:
+                    score += 2
+            if widget.clickable:
+                score += 1
+            if widget.enabled:
+                score += 1
+            if score > best_score:
+                best_score = score
+                best_widget = widget
+
+        if best_widget is None or best_score <= 0:
+            return None
+        return self._target_from_widget(best_widget)
+
+    def _target_from_widget(self, widget: WidgetInfo) -> TargetRef:
+        selectors = [Selector(kind="widget_id", operator="equals", value=int(widget.widget_id))]
+        if widget.resource_id:
+            selectors.append(Selector(kind="resource_id", operator="equals", value=widget.resource_id))
+        if widget.text:
+            selectors.append(Selector(kind="text", operator="contains", value=widget.text[:80]))
+        if widget.content_desc:
+            selectors.append(Selector(kind="content_desc", operator="contains", value=widget.content_desc[:80]))
+        if widget.class_name:
+            selectors.append(Selector(kind="class_name", operator="equals", value=widget.class_name))
+        if widget.bounds:
+            selectors.append(Selector(kind="bounds", operator="overlap", value=list(widget.bounds)))
+
+        return TargetRef(
+            ref_id="target:primary",
+            role="primary",
+            selectors=selectors,
+            resolved=TargetResolved(
+                widget_id=int(widget.widget_id),
+                bounds=tuple(int(v) for v in widget.bounds),
+                center=tuple(int(v) for v in widget.center),
+                snapshot={
+                    "text": widget.text,
+                    "resource_id": widget.resource_id,
+                    "content_desc": widget.content_desc,
+                    "class_name": widget.class_name,
+                },
+            ),
+        )
+
+    def _is_redundant(self, result: PlanResult) -> bool:
+        summary = str(result.goal.summary or "").strip().lower()
+        action = str(result.requested_action_type or "").strip().lower()
+        target_hint = ""
+        if result.target and result.target.selectors:
+            for selector in result.target.selectors:
+                if selector.kind in {"text", "resource_id", "widget_id", "content_desc"}:
+                    target_hint = str(selector.value or "").strip().lower()
+                    if target_hint:
+                        break
+
+        for step in reversed(self.memory.short_term.history[-3:]):
+            old_eval = step.get("evaluation") or {}
+            old_action = (step.get("action") or {}).get("type") or ""
+            old_summary = str((step.get("goal") or {}).get("summary") or step.get("subgoal") or "").strip().lower()
+            if old_eval and str(old_eval.get("decision") or "").lower() == "success":
+                continue
+
+            old_target_hint = ""
+            old_target = (step.get("contract") or {}).get("target") or {}
+            if isinstance(old_target, dict):
+                for selector in old_target.get("selectors", []) or []:
+                    if not isinstance(selector, dict):
+                        continue
+                    if selector.get("kind") in {"text", "resource_id", "widget_id", "content_desc"}:
+                        old_target_hint = str(selector.get("value") or "").strip().lower()
+                        if old_target_hint:
+                            break
+
+            same_summary = bool(summary and old_summary and summary == old_summary)
+            same_action = bool(action and old_action and action == str(old_action).lower())
+            same_target = bool(target_hint and old_target_hint and target_hint == old_target_hint)
+            if same_action and (same_summary or same_target):
+                return True
+        return False
+
+    def _is_misaligned(self, task: str, result: PlanResult) -> tuple[bool, str]:
+        task_tokens = {t.lower() for t in re.findall(r"[A-Za-z0-9\u4e00-\u9fff]{2,}", task)}
+        goal_text = " ".join(
+            [
+                str(result.goal.summary or ""),
+                str(result.goal.success_definition or ""),
+            ]
+        )
+        goal_tokens = {t.lower() for t in re.findall(r"[A-Za-z0-9\u4e00-\u9fff]{2,}", goal_text)}
+
+        if not task_tokens or not goal_tokens:
+            return False, ""
+
+        overlap = task_tokens.intersection(goal_tokens)
+        if overlap:
+            return False, ""
+
+        return True, "token_overlap_zero"
 
     def _remaining_task_seconds(self) -> Optional[int]:
         getter = getattr(self.llm, "remaining_seconds", None)
@@ -244,282 +466,3 @@ class Planner:
         if remaining is None:
             return True
         return remaining >= self._plan_retry_min_remaining_sec
-
-    def _build_topic_guard_plan(self, task: str, reason: str) -> Optional[PlanResult]:
-        if not str(task or "").strip():
-            return None
-
-        return PlanResult(
-            subgoal=SubGoal(
-                description="Use Back once to recover from off-topic navigation.",
-                action_type="back",
-                acceptance_criteria="Return to previous relevant screen.",
-                expected_transition="new_page",
-            ),
-            reasoning=f"task_guard({reason})",
-        )
-
-    def _build_dedupe_prompt(self, base_prompt: str) -> str:
-        recent_success = self._recent_success_subgoals(limit=3)
-        recent_failure = self._recent_failure_subgoals(limit=3)
-        return (
-            f"{base_prompt}\n\n"
-            "Additional hard constraints:\n"
-            f"- Recent successful subgoals: {json.dumps(recent_success, ensure_ascii=False)}\n"
-            f"- Recent failed subgoals: {json.dumps(recent_failure, ensure_ascii=False)}\n"
-            "- The next subgoal MUST be different from recent successful subgoals.\n"
-            "- Do not repeat the same field input or same Navigate up/Back style action unless the previous attempt clearly failed.\n"
-            "- Prefer the next unmet requirement toward final task completion.\n"
-        )
-
-    def _recent_success_subgoals(self, limit: int = 3) -> List[str]:
-        values: List[str] = []
-        history = list(getattr(self.memory.short_term, "history", []) or [])
-        for step in reversed(history):
-            result = str(step.get("result") or "").lower()
-            if not result.startswith("success"):
-                continue
-            subgoal = str(step.get("subgoal") or "").strip()
-            if not subgoal:
-                continue
-            values.append(subgoal)
-            if len(values) >= limit:
-                break
-        return values
-
-    def _recent_failure_subgoals(self, limit: int = 3) -> List[str]:
-        values: List[str] = []
-        history = list(getattr(self.memory.short_term, "history", []) or [])
-        for step in reversed(history):
-            result = str(step.get("result") or "").lower()
-            if not result.startswith("failed"):
-                continue
-            subgoal = str(step.get("subgoal") or "").strip()
-            if not subgoal:
-                continue
-            values.append(subgoal)
-            if len(values) >= limit:
-                break
-        return values
-
-    def _normalize_subgoal(self, text: str) -> str:
-        value = str(text or "").strip().lower()
-        if not value:
-            return ""
-        value = re.sub(r"[^a-z0-9\u4e00-\u9fff]+", " ", value)
-        value = re.sub(r"\s+", " ", value).strip()
-        return value[:160]
-
-    def _is_redundant_subgoal(self, subgoal: SubGoal) -> bool:
-        candidate_text = self._normalize_subgoal(subgoal.description)
-        candidate_action = str(subgoal.action_type or "").strip().lower()
-        if not candidate_text:
-            return False
-
-        history = list(getattr(self.memory.short_term, "history", []) or [])
-        success_steps = [
-            step for step in reversed(history)
-            if str(step.get("result") or "").lower().startswith("success")
-        ][:3]
-        if not success_steps:
-            return False
-
-        for step in success_steps:
-            previous_text = self._normalize_subgoal(step.get("subgoal") or "")
-            previous_action = str((step.get("action") or {}).get("action_type") or "").strip().lower()
-            if not previous_text:
-                continue
-            same_action = not candidate_action or not previous_action or candidate_action == previous_action
-            text_overlap = (
-                candidate_text == previous_text
-                or candidate_text in previous_text
-                or previous_text in candidate_text
-            )
-            if same_action and text_overlap:
-                return True
-        return False
-
-    def _build_alignment_prompt(self, base_prompt: str, task: str, reason: str) -> str:
-        return (
-            f"{base_prompt}\n\n"
-            "Additional hard constraints:\n"
-            f"- Final task: {task}\n"
-            f"- Previous candidate was rejected for topic drift: {reason}\n"
-            "- The next subgoal MUST stay strictly on the final task topic.\n"
-            "- Do not touch unrelated features.\n"
-        )
-
-    def _is_subgoal_misaligned(self, task: str, subgoal: SubGoal) -> tuple:
-        task_text = self._normalize_subgoal(task)
-        subgoal_text = self._normalize_subgoal(subgoal.description)
-        if not task_text or not subgoal_text:
-            return False, ""
-
-        task_keywords = self._extract_keywords(task_text)
-        subgoal_keywords = self._extract_keywords(subgoal_text)
-        if len(task_keywords) < 2 or len(subgoal_keywords) < 2:
-            return False, ""
-
-        overlap = task_keywords & subgoal_keywords
-        if overlap:
-            return False, ""
-
-        # 当关键词完全无交集时，认为可能偏题，触发一次对齐重规划。
-        if len(task_keywords) >= 3:
-            return True, "topic_keywords_no_overlap"
-        return False, ""
-
-    def _extract_keywords(self, text: str) -> set:
-        tokens = re.findall(r"[a-z0-9\u4e00-\u9fff]+", str(text or "").lower())
-        stopwords = {
-            "the",
-            "a",
-            "an",
-            "to",
-            "of",
-            "and",
-            "or",
-            "in",
-            "on",
-            "for",
-            "with",
-            "at",
-            "from",
-            "by",
-            "is",
-            "are",
-            "be",
-            "do",
-            "does",
-            "did",
-            "tap",
-            "click",
-            "press",
-            "open",
-            "go",
-            "enter",
-            "into",
-            "page",
-            "screen",
-            "应用",
-            "页面",
-            "点击",
-            "打开",
-            "进入",
-            "返回",
-            "然后",
-            "继续",
-        }
-        return {token for token in tokens if len(token) > 1 and token not in stopwords}
-
-    def _parse_plan_response(self, response: str) -> PlanResult:
-        """解析 LLM 返回的 JSON 规划结果"""
-        # 提取 JSON 块
-        json_str = response
-        if "```json" in response:
-            json_str = response.split("```json")[1].split("```")[0]
-        elif "```" in response:
-            json_str = response.split("```")[1].split("```")[0]
-
-        try:
-            data = json.loads(json_str.strip())
-        except json.JSONDecodeError as e:
-            logger.warning("JSON 解析失败: %s, 原始响应: %s", e, response[:200])
-            return PlanResult(
-                subgoal=SubGoal(description=response[:100]),
-                reasoning="JSON解析失败，使用原始响应",
-            )
-        if not isinstance(data, dict):
-            logger.warning("LLM 规划返回非对象 JSON，回退默认子目标: %r", data)
-            return PlanResult(
-                subgoal=SubGoal(description="LLM规划返回无效结构，需要重试"),
-                reasoning="JSON结构无效",
-            )
-
-        sg_data = data.get("subgoal", {})
-        if not isinstance(sg_data, dict):
-            sg_data = {}
-        subgoal = SubGoal(
-            description=sg_data.get("description", ""),
-            target_widget_text=sg_data.get("target_widget_text", ""),
-            target_widget_id=sg_data.get("target_widget_id"),
-            action_type=sg_data.get("action_type", "tap"),
-            input_text=sg_data.get("input_text", ""),
-            acceptance_criteria=sg_data.get("acceptance_criteria", ""),
-            expected_transition=sg_data.get("expected_transition", "partial_refresh"),
-        )
-        subgoal.action_type = self._normalize_action_type_from_text(subgoal)
-
-        return PlanResult(
-            subgoal=subgoal,
-            is_task_complete=data.get("is_task_complete", False),
-            reasoning=data.get("reasoning", ""),
-        )
-
-    def _normalize_action_type_from_text(self, subgoal: SubGoal) -> str:
-        raw_action = str(getattr(subgoal, "action_type", "") or "").strip().lower()
-        if raw_action in {"longpress", "long-press", "press_hold", "press-and-hold"}:
-            return "long_press"
-        if raw_action in {"scrollup", "scroll-up"}:
-            return "scroll_up"
-        if raw_action in {"scrolldown", "scroll-down"}:
-            return "scroll_down"
-        if raw_action not in {"tap", "input", "swipe", "scroll", "scroll_up", "scroll_down", "back", "enter", "long_press"}:
-            raw_action = "tap"
-
-        text = " ".join(
-            [
-                getattr(subgoal, "description", "") or "",
-                getattr(subgoal, "acceptance_criteria", "") or "",
-                getattr(subgoal, "target_widget_text", "") or "",
-            ]
-        ).lower()
-        if raw_action == "tap":
-            if self._infer_long_press_action(text):
-                return "long_press"
-            motion_action = self._infer_motion_action(text)
-            if motion_action:
-                return motion_action
-        return raw_action
-
-    def _infer_long_press_action(self, text: str) -> bool:
-        value = str(text or "").strip().lower()
-        if not value:
-            return False
-        markers = (
-            "long press",
-            "long-press",
-            "press and hold",
-            "press & hold",
-            "touch and hold",
-            "hold down",
-            "长按",
-            "按住",
-        )
-        return any(marker in value for marker in markers)
-
-    def _infer_motion_action(self, text: str) -> str:
-        value = str(text or "").strip().lower()
-        if not value:
-            return ""
-        if "swipe" in value or "下拉" in value:
-            return "swipe"
-        if (
-            "scroll down" in value
-            or "向下滚" in value
-            or "下滑" in value
-            or "往下滑" in value
-            or "往下滚" in value
-        ):
-            return "scroll_down"
-        if (
-            "scroll up" in value
-            or "向上滚" in value
-            or "上滑" in value
-            or "往上滑" in value
-            or "往上滚" in value
-        ):
-            return "scroll_up"
-        if "scroll" in value:
-            return "scroll"
-        return ""

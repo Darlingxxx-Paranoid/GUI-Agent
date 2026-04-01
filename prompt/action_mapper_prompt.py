@@ -1,27 +1,19 @@
-"""
-Action Mapper Prompt Template
-"""
+"""Action mapper prompt template aligned with ResolvedAction schema."""
 
-ACTION_MAPPER_PROMPT = """You are the action mapping module of a GUI automation Agent.
-Based on the subgoal and the current UI widget list, determine which widget to operate on and what action to take.
+ACTION_MAPPER_PROMPT = """You are the action mapper.
+Map one planning intent to one executable ResolvedAction JSON.
 
-## Subgoal
-{subgoal_description}
+## Planning Intent
+{intent_json}
 
-## Widget List
+## UI Widgets
 {widget_list}
 
-Output in JSON format:
-```json
-{{
-    "target_widget_id": widget_id_number,
-    "action_type": "tap/input/swipe_up/swipe_down/back/enter",
-    "input_text": "Content to input if action is input",
-    "reasoning": "Reason for this choice"
-}}
-```
-Notes:
-1. target_widget_id must be selected from the widget list
-2. For back actions, target_widget_id can be null
-3. If no suitable widget is found, select the most likely one and explain in reasoning
+## JSON Schema
+{schema_json}
+
+Rules:
+1. Output JSON only.
+2. Choose actionable coordinates from the widget list when possible.
+3. Keep params execution-only (x/y/text/duration/key data), no evaluation semantics.
 """

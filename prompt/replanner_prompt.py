@@ -1,32 +1,20 @@
-"""
-Replanner Prompt Template
-"""
+"""Replanner prompt template aligned with StepEvaluation."""
 
-REPLANNER_PROMPT = """You are the failure analysis module of a GUI automation Agent.
-The current subgoal execution has failed. Analyze the cause and suggest next actions.
+REPLANNER_PROMPT = """You are the replanner.
+Given one failed/uncertain StepEvaluation, suggest next control action.
 
-## Subgoal
+## Goal
 {subgoal_description}
 
-## Failure Reason
-{failure_reason}
+## Evaluation
+{evaluation_json}
 
-## Current UI State
+## Current UI
 {ui_state}
 
-## Execution History
-{history}
-
-Output in JSON format:
-```json
-{{
-    "analysis": "Root cause analysis of the failure",
-    "suggestion": "retry/back/replan/abort",
-    "reasoning": "Reason for the suggestion"
-}}
-```
-- retry: Retry the same subgoal (may be a timing issue)
-- back: Go back to the previous page and re-observe (navigated to wrong page)
-- replan: Re-plan the subgoal (wrong direction)
-- abort: Task cannot continue (fundamental error)
+Output JSON only:
+{
+  "suggestion": "retry|back|replan|abort",
+  "reason": "short reason"
+}
 """

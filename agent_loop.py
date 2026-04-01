@@ -1,49 +1,53 @@
-"""
-ReAct 主循环编排器
-协调 感知→规划→执行→评估 的完整 Agent 循环
-"""
+"""Main ReAct loop orchestrator using Oracle V3.1 contracts."""
+
+from __future__ import annotations
+
+import os
 import time
 import logging
 
 from config import AgentConfig
 from utils.llm_client import LLMClient
 
-from Perception.perception_manager import PerceptionManager
-from Planning.planner import Planner
-from Planning.oracle_pre import OraclePre
-from Planning.safety_interceptor import SafetyInterceptor
+from Evaluation.evaluator import Evaluator
+from Evaluation.replanner import Replanner
 from Execution.action_executor import ActionExecutor
 from Execution.action_mapper import ActionMapper
 from Execution.oracle_runtime import OracleRuntime
-from Evaluation.evaluator import Evaluator
-from Evaluation.replanner import Replanner
 from Memory.memory_manager import MemoryManager
+from Oracle.contracts import (
+    ACTION_TYPES,
+    AdviceParams,
+    RecommendedAction,
+    StepEvaluation,
+    to_plain_dict,
+    export_contract_schema,
+)
+from Perception.perception_manager import PerceptionManager
+from Planning.oracle_pre import OraclePre
+from Planning.planner import Planner
+from Planning.safety_interceptor import SafetyInterceptor
 
 logger = logging.getLogger(__name__)
 
 
 class AgentLoop:
-    """
-    基于 Oracle 反馈驱动的 GUI Agent 主循环
-    实现 ReAct 框架：Observe → Think → Act → Evaluate → Loop
-
-    每一轮循环：
-    1. 截屏 + Dump → Perception 感知
-    2. Planning 规划子目标 + 事前约束
-    3. Safety 拦截检查
-    4. ActionMapper 生成动作 + Runtime Oracle 事中检查
-    5. ActionExecutor 执行动作
-    6. 再次截屏 + 感知
-    7. Evaluator 事后评估
-    8. 若失败 → Replanner 重规划 / Back 回溯
-    9. 若成功 → 继续下一子目标
-    """
-
     def __init__(self, config: AgentConfig):
         self.config = config
         config.ensure_dirs()
 
-        # 初始化 LLM 客户端
+        self.contract_schema_path = os.path.join(
+            os.path.dirname(__file__),
+            "data",
+            "contracts",
+            "oracle_contracts_v3_1.json",
+        )
+        os.makedirs(os.path.dirname(self.contract_schema_path), exist_ok=True)
+        try:
+            export_contract_schema(self.contract_schema_path)
+        except Exception as exc:
+            logger.warning("导出 contract schema 失败: %s", exc)
+
         self.llm = LLMClient(
             api_base=config.llm_api_base,
             api_key=config.llm_api_key,
@@ -53,7 +57,6 @@ class AgentLoop:
             timeout=config.llm_timeout,
         )
 
-        # 初始化各模块
         self.perception = PerceptionManager(
             cv_output_dir=config.cv_output_dir,
             resize_height=config.cv_resize_height,
@@ -82,14 +85,9 @@ class AgentLoop:
             dead_end_threshold=config.dead_end_threshold,
         )
 
-        logger.info("AgentLoop 初始化完成, 最大步数=%d", config.max_steps)
+        logger.info("AgentLoop 初始化完成(V3.1), max_steps=%d", config.max_steps)
 
     def run(self, task: str, dry_run: bool = False):
-        """
-        执行任务的主循环
-        :param task: 任务描述（自然语言）
-        :param dry_run: 干跑模式，不实际执行 ADB 命令
-        """
         logger.info("=" * 60)
         logger.info("开始执行任务: '%s'", task)
         logger.info("=" * 60)
@@ -111,8 +109,8 @@ class AgentLoop:
                 try:
                     screen_size = self.executor.get_screen_size()
                     self.executor.stabilize_ui_animations()
-                except Exception as e:
-                    logger.warning("获取屏幕尺寸失败: %s, 使用默认值", e)
+                except Exception as exc:
+                    logger.warning("获取屏幕尺寸失败: %s，使用默认值", exc)
 
             while not task_completed and step < self.config.max_steps:
                 try:
@@ -121,8 +119,8 @@ class AgentLoop:
                         max_task_seconds=max_task_seconds,
                         stage="loop_boundary",
                     )
-                except TimeoutError as e:
-                    logger.warning("%s，跳过该任务", str(e))
+                except TimeoutError as exc:
+                    logger.warning("%s，跳过该任务", exc)
                     break
 
                 step += 1
@@ -139,21 +137,18 @@ class AgentLoop:
                         task_start_ts=task_start_ts,
                         max_task_seconds=max_task_seconds,
                     )
-                    task_completed = result.get("task_completed", False)
-
-                    if result.get("abort", False):
+                    task_completed = bool(result.get("task_completed", False))
+                    if bool(result.get("abort", False)):
                         logger.warning("任务中止: %s", result.get("reason", ""))
                         break
-
-                except TimeoutError as e:
-                    logger.warning("%s，跳过该任务", str(e))
+                except TimeoutError as exc:
+                    logger.warning("%s，跳过该任务", exc)
                     break
                 except KeyboardInterrupt:
                     logger.info("用户中断任务")
                     break
-                except Exception as e:
-                    logger.error("步骤 %d 执行异常: %s", step, e, exc_info=True)
-                    # 尝试恢复
+                except Exception as exc:
+                    logger.error("步骤 %d 执行异常: %s", step, exc, exc_info=True)
                     if step < self.config.max_steps:
                         logger.info("尝试继续执行...")
                         continue
@@ -161,13 +156,12 @@ class AgentLoop:
         finally:
             self.llm.set_deadline(None)
 
-        # 任务结束：沉淀经验
         self.replanner.save_task_experience(task, task_completed)
 
         if task_completed:
-            logger.info("✅ 任务成功完成: '%s'", task)
+            logger.info("任务成功完成: '%s'", task)
         else:
-            logger.warning("❌ 任务未完成: '%s' (步数=%d/%d)", task, step, self.config.max_steps)
+            logger.warning("任务未完成: '%s' (step=%d/%d)", task, step, self.config.max_steps)
 
         return task_completed
 
@@ -180,32 +174,23 @@ class AgentLoop:
         task_start_ts: float,
         max_task_seconds: int,
     ) -> dict:
-        """
-        执行单步 ReAct 循环
-        :return: {"task_completed": bool, "abort": bool, "reason": str}
-        """
-
         self._raise_if_task_timeout(
             task_start_ts=task_start_ts,
             max_task_seconds=max_task_seconds,
             stage=f"step_{step}_start",
         )
 
-        # ========================================
-        # 1. 感知：截屏 + Dump → UIState
-        # ========================================
         logger.info("[Step %d] 阶段1: 环境感知", step)
         if dry_run:
             from Perception.context_builder import UIState
+
             ui_state = UIState(screen_width=screen_size[0], screen_height=screen_size[1])
-            logger.info("[DRY RUN] 使用空 UIState")
         else:
             screenshot_path = self.executor.screenshot(f"step_{step}_before.png")
             dump_path = self.executor.dump_ui(f"step_{step}.xml")
             activity = self.executor.get_current_activity()
             package = self.executor.get_current_package()
             keyboard_visible = self.executor.get_keyboard_visible()
-
             ui_state = self.perception.perceive(
                 screenshot_path=screenshot_path,
                 dump_path=dump_path,
@@ -215,110 +200,98 @@ class AgentLoop:
                 keyboard_visible=keyboard_visible,
             )
 
-        # ========================================
-        # 2. 规划：生成子目标 + 事前约束
-        # ========================================
         self._raise_if_task_timeout(
             task_start_ts=task_start_ts,
             max_task_seconds=max_task_seconds,
             stage=f"step_{step}_planning",
         )
         logger.info("[Step %d] 阶段2: 认知规划", step)
-        plan_result = self.planner.plan(task, ui_state)
+        plan = self.planner.plan(task, ui_state)
 
-        # 检查任务是否已完成
-        if plan_result.is_task_complete:
-            logger.info("LLM 判断任务已完成")
+        if plan.is_task_complete:
+            logger.info("Planner 判断任务已完成")
             return {"task_completed": True}
 
-        subgoal = plan_result.subgoal
-        action_type = str(getattr(subgoal, "action_type", "") or "").strip().lower()
-        if action_type in {"", "none", "unknown", "null"}:
-            failure_reason = (
-                "planner_invalid_action: "
-                f"description='{(subgoal.description or '').strip()[:80]}'"
-            )
-            logger.warning("规划结果动作类型无效，跳过当前步骤并等待下一轮规划: %s", failure_reason)
+        action_type = str(plan.requested_action_type or "").strip().lower()
+        if action_type not in ACTION_TYPES:
+            failure_reason = f"planner_invalid_action_type:{action_type}"
             self.memory.short_term.add_failure(failure_reason)
-            self.memory.short_term.add_step({
-                "step": step,
-                "subgoal": subgoal.description,
-                "result": failure_reason,
-                "from_experience": bool(getattr(subgoal, "from_experience", False)),
-            })
+            self.memory.short_term.add_step(
+                {
+                    "step": step,
+                    "goal": to_plain_dict(plan.goal),
+                    "result": failure_reason,
+                    "from_experience": bool(plan.from_experience),
+                }
+            )
             return {"task_completed": False}
-        subgoal.action_type = action_type
 
-        self.memory.short_term.current_subgoal = subgoal.description
-        logger.info("子目标: '%s' (action=%s)", subgoal.description, subgoal.action_type)
+        self.memory.short_term.current_subgoal = plan.goal.summary
+        logger.info("本步目标: '%s' (action=%s)", plan.goal.summary, plan.requested_action_type)
 
-        # 生成事前约束
-        constraints = self.oracle_pre.generate_constraints(
-            subgoal=subgoal,
-            ui_state=ui_state,
-            task_hint=task,
-        )
-        logger.info("事前约束已生成")
+        contract = self.oracle_pre.generate_contract(plan=plan, ui_state=ui_state, task_hint=task)
 
-        # ========================================
-        # 3. 安全拦截
-        # ========================================
         logger.info("[Step %d] 阶段3: 安全检查", step)
-        if not self.safety.check(subgoal):
-            logger.info("用户拒绝执行高风险操作, 跳过当前子目标")
-            self.memory.short_term.add_step({
-                "step": step,
-                "subgoal": subgoal.description,
-                "result": "user_rejected",
-            })
+        if not self.safety.check(plan=plan, contract=contract):
+            self.memory.short_term.add_step(
+                {
+                    "step": step,
+                    "goal": to_plain_dict(plan.goal),
+                    "contract": to_plain_dict(contract),
+                    "result": "user_rejected",
+                    "from_experience": bool(plan.from_experience),
+                }
+            )
             return {"task_completed": False, "abort": True, "reason": "用户拒绝高风险操作"}
 
-        # ========================================
-        # 4. 动作映射 + 事中检查(执行前)
-        # ========================================
         logger.info("[Step %d] 阶段4: 动作映射", step)
-        action = self.mapper.map_action(subgoal, ui_state)
-        logger.info("映射动作: %s at (%d, %d)", action.action_type, action.x, action.y)
+        action = self.mapper.map_action(plan=plan, ui_state=ui_state, contract=contract)
+        logger.info("映射动作: type=%s, params=%s", action.type, action.params)
 
-        if constraints and getattr(constraints, "action_anchor", None) is not None:
-            anchor = constraints.action_anchor
-            if isinstance(anchor, dict):
-                bounds = tuple(getattr(action, "target_bounds", ()) or (0, 0, 0, 0))
-                if len(bounds) == 4 and bounds != (0, 0, 0, 0):
-                    cx = int((bounds[0] + bounds[2]) / 2)
-                    cy = int((bounds[1] + bounds[3]) / 2)
-                    anchor["target_bounds_before"] = [int(v) for v in bounds]
-                    anchor["target_center_before"] = [cx, cy]
-                else:
-                    anchor["target_bounds_before"] = [0, 0, 0, 0]
-                    anchor["target_center_before"] = [int(getattr(action, "x", 0) or 0), int(getattr(action, "y", 0) or 0)]
+        pre_guard = self.oracle_runtime.pre_guard(action=action, contract=contract, ui_state=ui_state)
+        if not pre_guard.allowed:
+            logger.warning("pre-guard 阻断执行: assessments=%d", len(pre_guard.assessments))
+            eval_result = self._evaluation_from_pre_guard(pre_guard)
+            decision = self.replanner.handle_failure(
+                subgoal_description=plan.goal.summary,
+                evaluation=eval_result,
+                ui_state=ui_state,
+            )
 
-        # 事中 Oracle 执行前检查
-        pre_check = self.oracle_runtime.pre_execution_check(action)
-        if not pre_check["allow"]:
-            logger.warning("事中 Oracle 拒绝执行: %s", pre_check["reason"])
-            self.memory.short_term.add_failure(pre_check["reason"])
-            # 死循环 → 强制重规划
-            self.oracle_runtime.reset()
+            self.memory.short_term.add_step(
+                {
+                    "step": step,
+                    "goal": to_plain_dict(plan.goal),
+                    "contract": to_plain_dict(contract),
+                    "action": to_plain_dict(action),
+                    "evaluation": to_plain_dict(eval_result),
+                    "result": f"failed_pre_guard:{eval_result.decision}",
+                    "replan_decision": decision.action,
+                    "from_experience": bool(plan.from_experience),
+                }
+            )
+
+            if decision.action == "back" and not dry_run:
+                self._execute_adaptive_back(
+                    reference_activity=str(getattr(ui_state, "activity_name", "") or ""),
+                    reference_package=str(getattr(ui_state, "package_name", "") or ""),
+                )
+            if decision.action == "abort":
+                return {"task_completed": False, "abort": True, "reason": decision.reason}
             return {"task_completed": False}
 
-        # ========================================
-        # 5. 执行动作
-        # ========================================
         logger.info("[Step %d] 阶段5: 执行动作", step)
-        old_activity = ui_state.activity_name
-        old_package = ui_state.package_name
+        old_activity = str(getattr(ui_state, "activity_name", "") or "")
+        old_package = str(getattr(ui_state, "package_name", "") or "")
 
         if dry_run:
-            logger.info("[DRY RUN] 跳过实际执行: %s", action.description)
+            logger.info("[DRY RUN] 跳过执行动作: %s", action.description)
         else:
-            self._execute_action(action, ui_state)
+            self._execute_action(action, current_state=ui_state)
 
-        # 记录动作
         self.oracle_runtime.record_action(action)
-        self.memory.short_term.add_action(action.to_dict())
+        self.memory.short_term.add_action(to_plain_dict(action))
 
-        # 等待 UI 响应
         if not dry_run:
             self._sleep_with_task_timeout(
                 seconds=3.0,
@@ -327,22 +300,18 @@ class AgentLoop:
                 stage=f"step_{step}_post_action_wait",
             )
 
-        # ========================================
-        # 6. 再次感知 + 事中检查(执行后)
-        # ========================================
-        logger.info("[Step %d] 阶段6: 执行后感知 + 事中检查", step)
+        logger.info("[Step %d] 阶段6: 执行后感知 + post-guard", step)
         if dry_run:
             from Perception.context_builder import UIState
+
             new_state = UIState(screen_width=screen_size[0], screen_height=screen_size[1])
-            new_activity = ""
-            new_package = ""
+            new_screenshot = ""
         else:
             new_screenshot = self.executor.screenshot(f"step_{step}_after.png")
             new_dump = self.executor.dump_ui(f"step_{step}_after.xml")
             new_activity = self.executor.get_current_activity()
             new_package = self.executor.get_current_package()
             new_keyboard_visible = self.executor.get_keyboard_visible()
-
             new_state = self.perception.perceive(
                 screenshot_path=new_screenshot,
                 dump_path=new_dump,
@@ -352,88 +321,40 @@ class AgentLoop:
                 keyboard_visible=new_keyboard_visible,
             )
 
-            # 事中 Oracle 执行后检查
-            post_check = self.oracle_runtime.post_execution_check(
-                screenshot_path=new_screenshot,
-                old_activity=old_activity,
-                new_activity=new_activity,
-                old_package=old_package,
-                new_package=new_package,
-                constraints=constraints,
-            )
+        post_guard = self.oracle_runtime.post_guard(
+            action=action,
+            contract=contract,
+            old_state=ui_state,
+            new_state=new_state,
+            screenshot_path=new_screenshot,
+        )
 
-            if post_check.get("issues"):
-                logger.warning(
-                    "事中检查问题(severity=%s): %s, 建议: %s",
-                    post_check.get("severity", "none"),
-                    post_check.get("issues", []),
-                    post_check.get("action_needed", "none"),
-                )
-
-            if not post_check["ok"]:
-                action_needed = post_check["action_needed"]
-                severity = str(post_check.get("severity", "hard"))
-                issues = post_check.get("issues", []) or []
-                runtime_reason = f"runtime_{severity}: {'; '.join(str(v) for v in issues if v)}"
-                self.memory.short_term.add_failure(runtime_reason)
-
-                if action_needed == "back":
-                    logger.info("执行自适应拉回操作: Back")
-                    self._execute_adaptive_back(
-                        reference_activity=new_activity,
-                        reference_package=new_package,
-                    )
-                    return {"task_completed": False}
-                if action_needed == "replan":
-                    logger.info("Runtime 建议重规划，跳过当前步骤后续评估")
-                    return {"task_completed": False}
-
-        # ========================================
-        # 7. 事后评估
-        # ========================================
         self._raise_if_task_timeout(
             task_start_ts=task_start_ts,
             max_task_seconds=max_task_seconds,
             stage=f"step_{step}_evaluate",
         )
         logger.info("[Step %d] 阶段7: 事后评估", step)
-        eval_result = self.evaluator.evaluate(
-            subgoal_description=subgoal.description,
-            constraints=constraints,
+        evaluation = self.evaluator.evaluate(
+            subgoal_description=plan.goal.summary,
+            contract=contract,
             old_state=ui_state,
             new_state=new_state,
             action=action,
+            post_guard=post_guard,
         )
 
-        reason_text = str(getattr(eval_result, "reason", "") or "").lower()
-        observe_requested = (
-            getattr(eval_result, "suggested_next_action", "") == "observe_again"
-            or getattr(eval_result, "needs_more_observation", False)
-        )
-        # 仅在“低变化证据”类不确定性时触发二次观测；语义争议类不确定性直接交给重规划。
-        observe_reason_allowed = any(
-            marker in reason_text
-            for marker in (
-                "low_change_evidence",
-                "weak_change_evidence",
-                "observe_again_before",
-            )
-        )
-        if observe_requested and observe_reason_allowed and not dry_run:
-            remaining = self._remaining_task_seconds(
-                task_start_ts=task_start_ts,
-                max_task_seconds=max_task_seconds,
-            )
-            # 二次观测本身需要 sleep + 截图 + dump + 感知，预算不足时直接跳过，避免“观测本身耗尽任务时限”。
-            if remaining is not None and remaining < 6.0:
-                logger.info(
-                    "评估结果不确定，但剩余时限不足(%.1fs)，跳过再次观测",
-                    remaining,
-                )
-            else:
-                logger.info("评估结果不确定，等待并再次观测")
+        if self._should_observe_again(evaluation=evaluation) and not dry_run:
+            remaining = self._remaining_task_seconds(task_start_ts=task_start_ts, max_task_seconds=max_task_seconds)
+            if remaining is None or remaining >= 6.0:
+                delay_ms = 1800
+                params = evaluation.recommended_action.params if evaluation.recommended_action else None
+                if params and params.observe_delay_ms:
+                    delay_ms = max(400, int(params.observe_delay_ms))
+
+                logger.info("评估建议再次观测，等待 %dms", delay_ms)
                 self._sleep_with_task_timeout(
-                    seconds=2.0,
+                    seconds=delay_ms / 1000.0,
                     task_start_ts=task_start_ts,
                     max_task_seconds=max_task_seconds,
                     stage=f"step_{step}_observe_again_wait",
@@ -444,7 +365,6 @@ class AgentLoop:
                 new_activity_2 = self.executor.get_current_activity()
                 new_package_2 = self.executor.get_current_package()
                 new_keyboard_visible_2 = self.executor.get_keyboard_visible()
-
                 new_state_2 = self.perception.perceive(
                     screenshot_path=new_screenshot_2,
                     dump_path=new_dump_2,
@@ -454,172 +374,202 @@ class AgentLoop:
                     keyboard_visible=new_keyboard_visible_2,
                 )
 
-                eval_result = self.evaluator.evaluate(
-                    subgoal_description=subgoal.description,
-                    constraints=constraints,
+                post_guard_2 = self.oracle_runtime.post_guard(
+                    action=action,
+                    contract=contract,
+                    old_state=ui_state,
+                    new_state=new_state_2,
+                    screenshot_path=new_screenshot_2,
+                )
+                evaluation = self.evaluator.evaluate(
+                    subgoal_description=plan.goal.summary,
+                    contract=contract,
                     old_state=ui_state,
                     new_state=new_state_2,
                     action=action,
+                    post_guard=post_guard_2,
                 )
                 new_state = new_state_2
 
-        # ========================================
-        # 8. 根据评估结果决定下一步
-        # ========================================
-        if eval_result.success:
-            logger.info("✓ 子目标完成: '%s'", subgoal.description)
+        if evaluation.decision == "success":
+            logger.info("子目标完成: '%s'", plan.goal.summary)
             self.replanner.handle_success(task)
-            self.memory.short_term.add_step({
-                "step": step,
-                "subgoal": subgoal.description,
-                "action": action.to_dict(),
-                "result": "success",
-                "from_experience": bool(subgoal.from_experience),
-                "acceptance_criteria": subgoal.acceptance_criteria,
-                "expected_transition": subgoal.expected_transition,
-                "eval_reason": eval_result.reason,
-                "activity_after": getattr(new_state, "activity_name", ""),
-                "package_after": getattr(new_state, "package_name", ""),
-                "keyboard_visible_after": bool(getattr(new_state, "keyboard_visible", False)),
-            })
-        else:
-            logger.warning("✗ 子目标失败: '%s', 原因: %s", subgoal.description, eval_result.reason)
-
-            # 重规划决策
-            decision = self.replanner.handle_failure(
-                subgoal_description=subgoal.description,
-                eval_result=eval_result,
-                ui_state=new_state,
+            self.memory.short_term.add_step(
+                {
+                    "step": step,
+                    "goal": to_plain_dict(plan.goal),
+                    "contract": to_plain_dict(contract),
+                    "action": to_plain_dict(action),
+                    "evaluation": to_plain_dict(evaluation),
+                    "result": "success",
+                    "from_experience": bool(plan.from_experience),
+                    "activity_after": str(getattr(new_state, "activity_name", "") or ""),
+                    "package_after": str(getattr(new_state, "package_name", "") or ""),
+                    "keyboard_visible_after": bool(getattr(new_state, "keyboard_visible", False)),
+                }
             )
+            return {"task_completed": False}
 
-            self.memory.short_term.add_step({
+        logger.warning("子目标未通过: decision=%s", evaluation.decision)
+        decision = self.replanner.handle_failure(
+            subgoal_description=plan.goal.summary,
+            evaluation=evaluation,
+            ui_state=new_state,
+        )
+
+        self.memory.short_term.add_step(
+            {
                 "step": step,
-                "subgoal": subgoal.description,
-                "action": action.to_dict(),
-                "result": f"failed: {eval_result.reason}",
+                "goal": to_plain_dict(plan.goal),
+                "contract": to_plain_dict(contract),
+                "action": to_plain_dict(action),
+                "evaluation": to_plain_dict(evaluation),
+                "result": f"failed:{evaluation.decision}",
                 "replan_decision": decision.action,
-                "from_experience": bool(subgoal.from_experience),
-                "acceptance_criteria": subgoal.acceptance_criteria,
-                "expected_transition": subgoal.expected_transition,
-                "eval_reason": eval_result.reason,
-                "activity_after": getattr(new_state, "activity_name", ""),
-                "package_after": getattr(new_state, "package_name", ""),
+                "from_experience": bool(plan.from_experience),
+                "activity_after": str(getattr(new_state, "activity_name", "") or ""),
+                "package_after": str(getattr(new_state, "package_name", "") or ""),
                 "keyboard_visible_after": bool(getattr(new_state, "keyboard_visible", False)),
-            })
+            }
+        )
 
-            if decision.action == "back" and not dry_run:
-                logger.info("执行回溯: 自适应 Back %d 步", decision.back_steps)
-                for _ in range(decision.back_steps):
-                    before_back_activity = self.executor.get_current_activity()
-                    before_back_package = self.executor.get_current_package()
-                    self._execute_adaptive_back(
-                        reference_activity=before_back_activity,
-                        reference_package=before_back_package,
-                    )
-                    self._sleep_with_task_timeout(
-                        seconds=0.5,
-                        task_start_ts=task_start_ts,
-                        max_task_seconds=max_task_seconds,
-                        stage=f"step_{step}_back_wait",
-                    )
+        if decision.action == "back" and not dry_run:
+            logger.info("执行回溯: adaptive back %d 步", decision.back_steps)
+            for _ in range(max(1, int(decision.back_steps or 1))):
+                before_back_activity = self.executor.get_current_activity()
+                before_back_package = self.executor.get_current_package()
+                self._execute_adaptive_back(
+                    reference_activity=before_back_activity,
+                    reference_package=before_back_package,
+                )
+                self._sleep_with_task_timeout(
+                    seconds=0.5,
+                    task_start_ts=task_start_ts,
+                    max_task_seconds=max_task_seconds,
+                    stage=f"step_{step}_back_wait",
+                )
 
-            elif decision.action == "abort":
-                logger.warning("任务中止: %s", decision.reason)
-                return {"task_completed": False, "abort": True, "reason": decision.reason}
+        if decision.action == "abort":
+            logger.warning("任务中止: %s", decision.reason)
+            return {"task_completed": False, "abort": True, "reason": decision.reason}
 
         return {"task_completed": False}
 
+    def _evaluation_from_pre_guard(self, pre_guard) -> StepEvaluation:
+        has_hard = any(item.outcome == "fail" and item.severity == "hard" for item in pre_guard.assessments)
+        recommended = RecommendedAction(
+            kind="backtrack" if has_hard else "replan",
+            params=AdviceParams(backtrack_steps=1 if has_hard else None, reason_tags=["pre_guard_blocked"]),
+        )
+        return StepEvaluation(
+            decision="fail",
+            confidence=0.95 if has_hard else 0.85,
+            recommended_action=recommended,
+            assessments=list(pre_guard.assessments or []),
+            observations=list(pre_guard.observations or []),
+            metrics=[],
+            expectation_matches=[],
+        )
+
+    def _should_observe_again(self, evaluation: StepEvaluation) -> bool:
+        if evaluation.decision != "uncertain":
+            return False
+        rec = evaluation.recommended_action
+        return bool(rec and rec.kind == "observe")
+
     def _execute_action(self, action, current_state=None):
-        """根据 Action 类型执行对应的 ADB 命令"""
-        if action.action_type == "tap":
-            self.executor.tap(action.x, action.y)
+        action_type = str(action.type or "").strip().lower()
+        params = action.params or {}
 
-        elif action.action_type == "input":
-            # 仅在未就绪时才预点击，避免打断已聚焦输入域
+        if action_type == "tap":
+            self.executor.tap(int(params.get("x", 0)), int(params.get("y", 0)))
+            return
+
+        if action_type == "input":
+            x = int(params.get("x", 0))
+            y = int(params.get("y", 0))
+            text = str(params.get("text") or "")
             if not self._is_input_target_ready(action, current_state):
-                self.executor.tap(action.x, action.y)
-                import time as _time
-                _time.sleep(0.5)
-            else:
-                logger.info("输入目标已聚焦且键盘可见，跳过预点击")
-            self.executor.input_text(action.text)
+                self.executor.tap(x, y)
+                time.sleep(0.4)
+            self.executor.input_text(text)
+            return
 
-        elif action.action_type == "swipe":
-            self.executor.swipe(action.x, action.y, action.x2, action.y2)
+        if action_type == "swipe":
+            self.executor.swipe(
+                int(params.get("x", 0)),
+                int(params.get("y", 0)),
+                int(params.get("x2", 0)),
+                int(params.get("y2", 0)),
+                int(params.get("duration_ms", 500)),
+            )
+            return
 
-        elif action.action_type == "back":
+        if action_type == "back":
             self.executor.back()
+            return
 
-        elif action.action_type == "enter":
+        if action_type == "enter":
             self.executor.enter()
+            return
 
-        elif action.action_type == "long_press":
-            self.executor.long_press(action.x, action.y)
+        if action_type == "long_press":
+            self.executor.long_press(
+                int(params.get("x", 0)),
+                int(params.get("y", 0)),
+                int(params.get("duration_ms", 900)),
+            )
+            return
 
-        elif action.action_type == "noop":
-            logger.warning("无效动作: %s", action.description)
-
-        else:
-            logger.warning("未知动作类型: %s, 尝试作为 tap 执行", action.action_type)
-            self.executor.tap(action.x, action.y)
+        logger.warning("未知动作类型: %s，尝试回退 tap", action_type)
+        self.executor.tap(int(params.get("x", 0)), int(params.get("y", 0)))
 
     def _execute_adaptive_back(self, reference_activity: str = "", reference_package: str = "") -> None:
-        """
-        自适应 Back:
-        1) 先执行一次 Back
-        2) 若前台 activity/package 未变化，再补一次 Back
-        """
-        logger.info("执行自适应回退: 先 Back 1 次")
         self.executor.back()
         time.sleep(0.6)
-
         try:
             current_activity = self.executor.get_current_activity()
             current_package = self.executor.get_current_package()
-        except Exception as e:
-            logger.warning("回退后状态探测失败: %s，补发第 2 次 Back", e)
+        except Exception as exc:
+            logger.warning("回退后状态探测失败: %s，补发第二次 Back", exc)
             self.executor.back()
             return
 
         activity_changed = bool(reference_activity) and current_activity != reference_activity
         package_changed = bool(reference_package) and current_package != reference_package
         if activity_changed or package_changed:
-            logger.info(
-                "首次 Back 生效: activity %s -> %s, package %s -> %s",
-                reference_activity or "unknown",
-                current_activity or "unknown",
-                reference_package or "unknown",
-                current_package or "unknown",
-            )
             return
 
-        logger.info("首次 Back 未观察到状态变化，补发第 2 次 Back")
         self.executor.back()
 
     def _is_input_target_ready(self, action, ui_state) -> bool:
-        """判断目标输入域是否已可直接输入。"""
         if ui_state is None:
             return False
-        if not getattr(ui_state, "keyboard_visible", False):
+        if not bool(getattr(ui_state, "keyboard_visible", False)):
             return False
 
-        widgets = getattr(ui_state, "widgets", [])
-        target_bounds = tuple(getattr(action, "target_bounds", ()) or (0, 0, 0, 0))
+        target_widget_id = None
+        target_bounds = None
+        if action.target and action.target.resolved:
+            target_widget_id = action.target.resolved.widget_id
+            target_bounds = action.target.resolved.bounds
 
+        widgets = getattr(ui_state, "widgets", [])
         for widget in widgets:
             same_target = False
-            if action.target_resource_id and action.target_resource_id == getattr(widget, "resource_id", ""):
+            if target_widget_id is not None and int(target_widget_id) == int(getattr(widget, "widget_id", -1)):
                 same_target = True
-            elif action.widget_id is not None and action.widget_id == getattr(widget, "widget_id", None):
-                same_target = True
-            elif target_bounds != (0, 0, 0, 0) and self._bounds_overlap(target_bounds, getattr(widget, "bounds", (0, 0, 0, 0))):
+            elif target_bounds is not None and self._bounds_overlap(target_bounds, getattr(widget, "bounds", (0, 0, 0, 0))):
                 same_target = True
 
-            if same_target and (getattr(widget, "focused", False) or getattr(widget, "editable", False)):
+            if same_target and bool(getattr(widget, "focused", False)) and bool(
+                getattr(widget, "editable", False) or getattr(widget, "focusable", False)
+            ):
                 return True
 
         return any(
-            getattr(widget, "focused", False) and (getattr(widget, "editable", False) or getattr(widget, "focusable", False))
+            bool(getattr(widget, "focused", False))
+            and bool(getattr(widget, "editable", False) or getattr(widget, "focusable", False))
             for widget in widgets
         )
 
@@ -630,26 +580,15 @@ class AgentLoop:
         bx1, by1, bx2, by2 = box_b
         return not (ax2 < bx1 or bx2 < ax1 or ay2 < by1 or by2 < ay1)
 
-    def _raise_if_task_timeout(
-        self,
-        task_start_ts: float,
-        max_task_seconds: int,
-        stage: str = "",
-    ) -> None:
+    def _raise_if_task_timeout(self, task_start_ts: float, max_task_seconds: int, stage: str = "") -> None:
         if max_task_seconds <= 0:
             return
         elapsed = time.time() - task_start_ts
         if elapsed >= max_task_seconds:
             stage_hint = f", stage={stage}" if stage else ""
-            raise TimeoutError(
-                f"任务超时: {elapsed:.1f}s >= {max_task_seconds}s{stage_hint}"
-            )
+            raise TimeoutError(f"任务超时: {elapsed:.1f}s >= {max_task_seconds}s{stage_hint}")
 
-    def _remaining_task_seconds(
-        self,
-        task_start_ts: float,
-        max_task_seconds: int,
-    ):
+    def _remaining_task_seconds(self, task_start_ts: float, max_task_seconds: int):
         if max_task_seconds <= 0:
             return None
         elapsed = time.time() - task_start_ts

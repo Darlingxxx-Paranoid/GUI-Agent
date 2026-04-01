@@ -4,29 +4,253 @@
   "screen_width": 1080,
   "screen_height": 2220,
   "keyboard_visible": false,
-  "editable_widgets_count": 1,
+  "editable_widgets_count": 0,
   "focused_widgets_count": 0,
   "screenshot_path": "/Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/screenshots/step_2_before.png",
   "dump_path": "/Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/dumps/step_2.xml",
-  "widgets_count": 29,
+  "widgets_count": 19,
   "widgets": [
     {
       "id": 0,
       "bounds": [
-        72,
-        85,
-        1008,
-        258
+        39,
+        10,
+        169,
+        56
       ],
       "center": [
-        540,
-        171
+        104,
+        33
+      ],
+      "category": "",
+      "text": "10:22",
+      "resource_id": "com.android.systemui:id/clock",
+      "class": "android.widget.TextView",
+      "content_desc": "10:22 AM",
+      "clickable": false,
+      "scrollable": false,
+      "enabled": true,
+      "focusable": false,
+      "focused": false,
+      "editable": false,
+      "checkable": false,
+      "checked": false,
+      "selected": false,
+      "cv_confidence": 0.0
+    },
+    {
+      "id": 1,
+      "bounds": [
+        169,
+        0,
+        230,
+        66
+      ],
+      "center": [
+        199,
+        33
       ],
       "category": "",
       "text": "",
-      "resource_id": "com.google.android.apps.nexuslauncher:id/search_container_all_apps",
+      "resource_id": "",
+      "class": "android.widget.ImageView",
+      "content_desc": "Clock notification: ",
+      "clickable": false,
+      "scrollable": false,
+      "enabled": true,
+      "focusable": false,
+      "focused": false,
+      "editable": false,
+      "checkable": false,
+      "checked": false,
+      "selected": false,
+      "cv_confidence": 0.0
+    },
+    {
+      "id": 2,
+      "bounds": [
+        230,
+        0,
+        291,
+        66
+      ],
+      "center": [
+        260,
+        33
+      ],
+      "category": "",
+      "text": "",
+      "resource_id": "",
+      "class": "android.widget.ImageView",
+      "content_desc": "Security & privacy notification: ",
+      "clickable": false,
+      "scrollable": false,
+      "enabled": true,
+      "focusable": false,
+      "focused": false,
+      "editable": false,
+      "checkable": false,
+      "checked": false,
+      "selected": false,
+      "cv_confidence": 0.0
+    },
+    {
+      "id": 3,
+      "bounds": [
+        291,
+        0,
+        352,
+        66
+      ],
+      "center": [
+        321,
+        33
+      ],
+      "category": "",
+      "text": "",
+      "resource_id": "",
+      "class": "android.widget.ImageView",
+      "content_desc": "Android System notification: ",
+      "clickable": false,
+      "scrollable": false,
+      "enabled": true,
+      "focusable": false,
+      "focused": false,
+      "editable": false,
+      "checkable": false,
+      "checked": false,
+      "selected": false,
+      "cv_confidence": 0.0
+    },
+    {
+      "id": 4,
+      "bounds": [
+        883,
+        12,
+        924,
+        53
+      ],
+      "center": [
+        903,
+        32
+      ],
+      "category": "",
+      "text": "",
+      "resource_id": "com.android.systemui:id/wifi_signal",
+      "class": "android.widget.ImageView",
+      "content_desc": "Wifi signal full.",
+      "clickable": false,
+      "scrollable": false,
+      "enabled": true,
+      "focusable": false,
+      "focused": false,
+      "editable": false,
+      "checkable": false,
+      "checked": false,
+      "selected": false,
+      "cv_confidence": 0.0
+    },
+    {
+      "id": 5,
+      "bounds": [
+        924,
+        2,
+        965,
+        63
+      ],
+      "center": [
+        944,
+        32
+      ],
+      "category": "",
+      "text": "",
+      "resource_id": "com.android.systemui:id/mobile_combo",
       "class": "android.widget.FrameLayout",
-      "content_desc": "Search",
+      "content_desc": "T-Mobile, signal full.",
+      "clickable": false,
+      "scrollable": false,
+      "enabled": true,
+      "focusable": false,
+      "focused": false,
+      "editable": false,
+      "checkable": false,
+      "checked": false,
+      "selected": false,
+      "cv_confidence": 0.0
+    },
+    {
+      "id": 6,
+      "bounds": [
+        982,
+        14,
+        1003,
+        50
+      ],
+      "center": [
+        992,
+        32
+      ],
+      "category": "",
+      "text": "",
+      "resource_id": "com.android.systemui:id/battery",
+      "class": "android.widget.LinearLayout",
+      "content_desc": "Battery 100 percent.",
+      "clickable": false,
+      "scrollable": false,
+      "enabled": true,
+      "focusable": false,
+      "focused": false,
+      "editable": false,
+      "checkable": false,
+      "checked": false,
+      "selected": false,
+      "cv_confidence": 0.0
+    },
+    {
+      "id": 7,
+      "bounds": [
+        54,
+        67,
+        1026,
+        349
+      ],
+      "center": [
+        540,
+        208
+      ],
+      "category": "",
+      "text": "",
+      "resource_id": "com.google.android.apps.nexuslauncher:id/smartspace_card_pager",
+      "class": "androidx.viewpager.widget.ViewPager",
+      "content_desc": "At a glance",
+      "clickable": false,
+      "scrollable": false,
+      "enabled": true,
+      "focusable": true,
+      "focused": false,
+      "editable": false,
+      "checkable": false,
+      "checked": false,
+      "selected": false,
+      "cv_confidence": 0.0
+    },
+    {
+      "id": 8,
+      "bounds": [
+        54,
+        67,
+        1026,
+        349
+      ],
+      "center": [
+        540,
+        208
+      ],
+      "category": "",
+      "text": "",
+      "resource_id": "",
+      "class": "android.view.ViewGroup",
+      "content_desc": "",
       "clickable": true,
       "scrollable": false,
       "enabled": true,
@@ -39,16 +263,212 @@
       "cv_confidence": 0.0
     },
     {
-      "id": 1,
+      "id": 9,
+      "bounds": [
+        66,
+        132,
+        347,
+        198
+      ],
+      "center": [
+        206,
+        165
+      ],
+      "category": "",
+      "text": "17:44:38",
+      "resource_id": "com.google.android.apps.nexuslauncher:id/title_text",
+      "class": "android.widget.TextView",
+      "content_desc": "Stopwatch, 17:44:38",
+      "clickable": true,
+      "scrollable": false,
+      "enabled": true,
+      "focusable": true,
+      "focused": false,
+      "editable": false,
+      "checkable": false,
+      "checked": false,
+      "selected": false,
+      "cv_confidence": 0.0
+    },
+    {
+      "id": 10,
+      "bounds": [
+        67,
+        1740,
+        210,
+        1901
+      ],
+      "center": [
+        138,
+        1820
+      ],
+      "category": "",
+      "text": "Phone",
+      "resource_id": "",
+      "class": "android.widget.TextView",
+      "content_desc": "Phone",
+      "clickable": true,
+      "scrollable": false,
+      "enabled": true,
+      "focusable": true,
+      "focused": false,
+      "editable": false,
+      "checkable": false,
+      "checked": false,
+      "selected": false,
+      "cv_confidence": 0.0
+    },
+    {
+      "id": 11,
+      "bounds": [
+        268,
+        1740,
+        411,
+        1901
+      ],
+      "center": [
+        339,
+        1820
+      ],
+      "category": "",
+      "text": "Messages",
+      "resource_id": "",
+      "class": "android.widget.TextView",
+      "content_desc": "Messages",
+      "clickable": true,
+      "scrollable": false,
+      "enabled": true,
+      "focusable": true,
+      "focused": false,
+      "editable": false,
+      "checkable": false,
+      "checked": false,
+      "selected": false,
+      "cv_confidence": 0.0
+    },
+    {
+      "id": 12,
+      "bounds": [
+        469,
+        1740,
+        612,
+        1901
+      ],
+      "center": [
+        540,
+        1820
+      ],
+      "category": "",
+      "text": "Settings",
+      "resource_id": "",
+      "class": "android.widget.TextView",
+      "content_desc": "Predicted app: Settings",
+      "clickable": true,
+      "scrollable": false,
+      "enabled": true,
+      "focusable": true,
+      "focused": false,
+      "editable": false,
+      "checkable": false,
+      "checked": false,
+      "selected": false,
+      "cv_confidence": 0.0
+    },
+    {
+      "id": 13,
+      "bounds": [
+        670,
+        1740,
+        813,
+        1901
+      ],
+      "center": [
+        741,
+        1820
+      ],
+      "category": "",
+      "text": "Chrome",
+      "resource_id": "",
+      "class": "android.widget.TextView",
+      "content_desc": "Chrome",
+      "clickable": true,
+      "scrollable": false,
+      "enabled": true,
+      "focusable": true,
+      "focused": false,
+      "editable": false,
+      "checkable": false,
+      "checked": false,
+      "selected": false,
+      "cv_confidence": 0.0
+    },
+    {
+      "id": 14,
+      "bounds": [
+        871,
+        1740,
+        1013,
+        1901
+      ],
+      "center": [
+        942,
+        1820
+      ],
+      "category": "",
+      "text": "Camera",
+      "resource_id": "",
+      "class": "android.widget.TextView",
+      "content_desc": "Camera",
+      "clickable": true,
+      "scrollable": false,
+      "enabled": true,
+      "focusable": true,
+      "focused": false,
+      "editable": false,
+      "checkable": false,
+      "checked": false,
+      "selected": false,
+      "cv_confidence": 0.0
+    },
+    {
+      "id": 15,
+      "bounds": [
+        72,
+        1932,
+        1008,
+        2105
+      ],
+      "center": [
+        540,
+        2018
+      ],
+      "category": "",
+      "text": "",
+      "resource_id": "com.google.android.apps.nexuslauncher:id/search_container_hotseat",
+      "class": "android.widget.FrameLayout",
+      "content_desc": "Google search",
+      "clickable": true,
+      "scrollable": false,
+      "enabled": true,
+      "focusable": true,
+      "focused": false,
+      "editable": false,
+      "checkable": false,
+      "checked": false,
+      "selected": false,
+      "cv_confidence": 0.0
+    },
+    {
+      "id": 16,
       "bounds": [
         83,
-        106,
+        1952,
         215,
-        238
+        2084
       ],
       "center": [
         149,
-        172
+        2018
       ],
       "category": "",
       "text": "",
@@ -67,44 +487,16 @@
       "cv_confidence": 0.0
     },
     {
-      "id": 2,
-      "bounds": [
-        226,
-        96,
-        854,
-        248
-      ],
-      "center": [
-        540,
-        172
-      ],
-      "category": "",
-      "text": "Search web and more",
-      "resource_id": "com.google.android.apps.nexuslauncher:id/input",
-      "class": "android.widget.EditText",
-      "content_desc": "",
-      "clickable": true,
-      "scrollable": false,
-      "enabled": true,
-      "focusable": true,
-      "focused": false,
-      "editable": true,
-      "checkable": false,
-      "checked": false,
-      "selected": false,
-      "cv_confidence": 0.0
-    },
-    {
-      "id": 3,
+      "id": 17,
       "bounds": [
         733,
-        106,
+        1932,
         865,
-        238
+        2105
       ],
       "center": [
         799,
-        172
+        2018
       ],
       "category": "",
       "text": "",
@@ -123,16 +515,16 @@
       "cv_confidence": 0.0
     },
     {
-      "id": 4,
+      "id": 18,
       "bounds": [
         865,
-        106,
+        1932,
         997,
-        238
+        2105
       ],
       "center": [
         931,
-        172
+        2018
       ],
       "category": "",
       "text": "",
@@ -143,678 +535,6 @@
       "scrollable": false,
       "enabled": true,
       "focusable": true,
-      "focused": false,
-      "editable": false,
-      "checkable": false,
-      "checked": false,
-      "selected": false,
-      "cv_confidence": 0.0
-    },
-    {
-      "id": 5,
-      "bounds": [
-        38,
-        653,
-        239,
-        980
-      ],
-      "center": [
-        138,
-        816
-      ],
-      "category": "",
-      "text": "Calendar",
-      "resource_id": "com.google.android.apps.nexuslauncher:id/icon",
-      "class": "android.widget.TextView",
-      "content_desc": "Calendar",
-      "clickable": true,
-      "scrollable": false,
-      "enabled": true,
-      "focusable": true,
-      "focused": false,
-      "editable": false,
-      "checkable": false,
-      "checked": false,
-      "selected": false,
-      "cv_confidence": 0.0
-    },
-    {
-      "id": 6,
-      "bounds": [
-        239,
-        653,
-        440,
-        980
-      ],
-      "center": [
-        339,
-        816
-      ],
-      "category": "",
-      "text": "Camera",
-      "resource_id": "com.google.android.apps.nexuslauncher:id/icon",
-      "class": "android.widget.TextView",
-      "content_desc": "Camera",
-      "clickable": true,
-      "scrollable": false,
-      "enabled": true,
-      "focusable": true,
-      "focused": false,
-      "editable": false,
-      "checkable": false,
-      "checked": false,
-      "selected": false,
-      "cv_confidence": 0.0
-    },
-    {
-      "id": 7,
-      "bounds": [
-        440,
-        653,
-        641,
-        980
-      ],
-      "center": [
-        540,
-        816
-      ],
-      "category": "",
-      "text": "Chrome",
-      "resource_id": "com.google.android.apps.nexuslauncher:id/icon",
-      "class": "android.widget.TextView",
-      "content_desc": "Chrome",
-      "clickable": true,
-      "scrollable": false,
-      "enabled": true,
-      "focusable": true,
-      "focused": false,
-      "editable": false,
-      "checkable": false,
-      "checked": false,
-      "selected": false,
-      "cv_confidence": 0.0
-    },
-    {
-      "id": 8,
-      "bounds": [
-        641,
-        653,
-        842,
-        980
-      ],
-      "center": [
-        741,
-        816
-      ],
-      "category": "",
-      "text": "Clock",
-      "resource_id": "com.google.android.apps.nexuslauncher:id/icon",
-      "class": "android.widget.TextView",
-      "content_desc": "Clock",
-      "clickable": true,
-      "scrollable": false,
-      "enabled": true,
-      "focusable": true,
-      "focused": false,
-      "editable": false,
-      "checkable": false,
-      "checked": false,
-      "selected": false,
-      "cv_confidence": 0.0
-    },
-    {
-      "id": 9,
-      "bounds": [
-        842,
-        653,
-        1042,
-        980
-      ],
-      "center": [
-        942,
-        816
-      ],
-      "category": "",
-      "text": "Contacts",
-      "resource_id": "com.google.android.apps.nexuslauncher:id/icon",
-      "class": "android.widget.TextView",
-      "content_desc": "Contacts",
-      "clickable": true,
-      "scrollable": false,
-      "enabled": true,
-      "focusable": true,
-      "focused": false,
-      "editable": false,
-      "checkable": false,
-      "checked": false,
-      "selected": false,
-      "cv_confidence": 0.0
-    },
-    {
-      "id": 10,
-      "bounds": [
-        38,
-        980,
-        239,
-        1307
-      ],
-      "center": [
-        138,
-        1143
-      ],
-      "category": "",
-      "text": "Drive",
-      "resource_id": "com.google.android.apps.nexuslauncher:id/icon",
-      "class": "android.widget.TextView",
-      "content_desc": "Drive",
-      "clickable": true,
-      "scrollable": false,
-      "enabled": true,
-      "focusable": true,
-      "focused": false,
-      "editable": false,
-      "checkable": false,
-      "checked": false,
-      "selected": false,
-      "cv_confidence": 0.0
-    },
-    {
-      "id": 11,
-      "bounds": [
-        239,
-        980,
-        440,
-        1307
-      ],
-      "center": [
-        339,
-        1143
-      ],
-      "category": "",
-      "text": "Files",
-      "resource_id": "com.google.android.apps.nexuslauncher:id/icon",
-      "class": "android.widget.TextView",
-      "content_desc": "Files",
-      "clickable": true,
-      "scrollable": false,
-      "enabled": true,
-      "focusable": true,
-      "focused": false,
-      "editable": false,
-      "checkable": false,
-      "checked": false,
-      "selected": false,
-      "cv_confidence": 0.0
-    },
-    {
-      "id": 12,
-      "bounds": [
-        440,
-        980,
-        641,
-        1307
-      ],
-      "center": [
-        540,
-        1143
-      ],
-      "category": "",
-      "text": "Gmail",
-      "resource_id": "com.google.android.apps.nexuslauncher:id/icon",
-      "class": "android.widget.TextView",
-      "content_desc": "Gmail",
-      "clickable": true,
-      "scrollable": false,
-      "enabled": true,
-      "focusable": true,
-      "focused": false,
-      "editable": false,
-      "checkable": false,
-      "checked": false,
-      "selected": false,
-      "cv_confidence": 0.0
-    },
-    {
-      "id": 13,
-      "bounds": [
-        641,
-        980,
-        842,
-        1307
-      ],
-      "center": [
-        741,
-        1143
-      ],
-      "category": "",
-      "text": "Google",
-      "resource_id": "com.google.android.apps.nexuslauncher:id/icon",
-      "class": "android.widget.TextView",
-      "content_desc": "Google",
-      "clickable": true,
-      "scrollable": false,
-      "enabled": true,
-      "focusable": true,
-      "focused": false,
-      "editable": false,
-      "checkable": false,
-      "checked": false,
-      "selected": false,
-      "cv_confidence": 0.0
-    },
-    {
-      "id": 14,
-      "bounds": [
-        842,
-        980,
-        1042,
-        1307
-      ],
-      "center": [
-        942,
-        1143
-      ],
-      "category": "",
-      "text": "Maps",
-      "resource_id": "com.google.android.apps.nexuslauncher:id/icon",
-      "class": "android.widget.TextView",
-      "content_desc": "Maps",
-      "clickable": true,
-      "scrollable": false,
-      "enabled": true,
-      "focusable": true,
-      "focused": false,
-      "editable": false,
-      "checkable": false,
-      "checked": false,
-      "selected": false,
-      "cv_confidence": 0.0
-    },
-    {
-      "id": 15,
-      "bounds": [
-        38,
-        1307,
-        239,
-        1634
-      ],
-      "center": [
-        138,
-        1470
-      ],
-      "category": "",
-      "text": "Messages",
-      "resource_id": "com.google.android.apps.nexuslauncher:id/icon",
-      "class": "android.widget.TextView",
-      "content_desc": "Messages",
-      "clickable": true,
-      "scrollable": false,
-      "enabled": true,
-      "focusable": true,
-      "focused": false,
-      "editable": false,
-      "checkable": false,
-      "checked": false,
-      "selected": false,
-      "cv_confidence": 0.0
-    },
-    {
-      "id": 16,
-      "bounds": [
-        239,
-        1307,
-        440,
-        1634
-      ],
-      "center": [
-        339,
-        1470
-      ],
-      "category": "",
-      "text": "Phone",
-      "resource_id": "com.google.android.apps.nexuslauncher:id/icon",
-      "class": "android.widget.TextView",
-      "content_desc": "Phone",
-      "clickable": true,
-      "scrollable": false,
-      "enabled": true,
-      "focusable": true,
-      "focused": false,
-      "editable": false,
-      "checkable": false,
-      "checked": false,
-      "selected": false,
-      "cv_confidence": 0.0
-    },
-    {
-      "id": 17,
-      "bounds": [
-        440,
-        1307,
-        641,
-        1634
-      ],
-      "center": [
-        540,
-        1470
-      ],
-      "category": "",
-      "text": "Photos",
-      "resource_id": "com.google.android.apps.nexuslauncher:id/icon",
-      "class": "android.widget.TextView",
-      "content_desc": "Photos",
-      "clickable": true,
-      "scrollable": false,
-      "enabled": true,
-      "focusable": true,
-      "focused": false,
-      "editable": false,
-      "checkable": false,
-      "checked": false,
-      "selected": false,
-      "cv_confidence": 0.0
-    },
-    {
-      "id": 18,
-      "bounds": [
-        641,
-        1307,
-        842,
-        1634
-      ],
-      "center": [
-        741,
-        1470
-      ],
-      "category": "",
-      "text": "Safety",
-      "resource_id": "com.google.android.apps.nexuslauncher:id/icon",
-      "class": "android.widget.TextView",
-      "content_desc": "Safety",
-      "clickable": true,
-      "scrollable": false,
-      "enabled": true,
-      "focusable": true,
-      "focused": false,
-      "editable": false,
-      "checkable": false,
-      "checked": false,
-      "selected": false,
-      "cv_confidence": 0.0
-    },
-    {
-      "id": 19,
-      "bounds": [
-        842,
-        1307,
-        1042,
-        1634
-      ],
-      "center": [
-        942,
-        1470
-      ],
-      "category": "",
-      "text": "Settings",
-      "resource_id": "com.google.android.apps.nexuslauncher:id/icon",
-      "class": "android.widget.TextView",
-      "content_desc": "Settings",
-      "clickable": true,
-      "scrollable": false,
-      "enabled": true,
-      "focusable": true,
-      "focused": false,
-      "editable": false,
-      "checkable": false,
-      "checked": false,
-      "selected": false,
-      "cv_confidence": 0.0
-    },
-    {
-      "id": 20,
-      "bounds": [
-        38,
-        1634,
-        239,
-        1961
-      ],
-      "center": [
-        138,
-        1797
-      ],
-      "category": "",
-      "text": "TMoble",
-      "resource_id": "com.google.android.apps.nexuslauncher:id/icon",
-      "class": "android.widget.TextView",
-      "content_desc": "TMoble",
-      "clickable": true,
-      "scrollable": false,
-      "enabled": true,
-      "focusable": true,
-      "focused": false,
-      "editable": false,
-      "checkable": false,
-      "checked": false,
-      "selected": false,
-      "cv_confidence": 0.0
-    },
-    {
-      "id": 21,
-      "bounds": [
-        239,
-        1634,
-        440,
-        1961
-      ],
-      "center": [
-        339,
-        1797
-      ],
-      "category": "",
-      "text": "YouTube",
-      "resource_id": "com.google.android.apps.nexuslauncher:id/icon",
-      "class": "android.widget.TextView",
-      "content_desc": "YouTube",
-      "clickable": true,
-      "scrollable": false,
-      "enabled": true,
-      "focusable": true,
-      "focused": false,
-      "editable": false,
-      "checkable": false,
-      "checked": false,
-      "selected": false,
-      "cv_confidence": 0.0
-    },
-    {
-      "id": 22,
-      "bounds": [
-        440,
-        1634,
-        641,
-        1961
-      ],
-      "center": [
-        540,
-        1797
-      ],
-      "category": "",
-      "text": "YT Music",
-      "resource_id": "com.google.android.apps.nexuslauncher:id/icon",
-      "class": "android.widget.TextView",
-      "content_desc": "YT Music",
-      "clickable": true,
-      "scrollable": false,
-      "enabled": true,
-      "focusable": true,
-      "focused": false,
-      "editable": false,
-      "checkable": false,
-      "checked": false,
-      "selected": false,
-      "cv_confidence": 0.0
-    },
-    {
-      "id": 23,
-      "bounds": [
-        38,
-        275,
-        238,
-        534
-      ],
-      "center": [
-        138,
-        404
-      ],
-      "category": "",
-      "text": "YouTube",
-      "resource_id": "com.google.android.apps.nexuslauncher:id/icon",
-      "class": "android.widget.TextView",
-      "content_desc": "YouTube",
-      "clickable": true,
-      "scrollable": false,
-      "enabled": true,
-      "focusable": true,
-      "focused": false,
-      "editable": false,
-      "checkable": false,
-      "checked": false,
-      "selected": false,
-      "cv_confidence": 0.0
-    },
-    {
-      "id": 24,
-      "bounds": [
-        238,
-        275,
-        439,
-        534
-      ],
-      "center": [
-        338,
-        404
-      ],
-      "category": "",
-      "text": "Photos",
-      "resource_id": "com.google.android.apps.nexuslauncher:id/icon",
-      "class": "android.widget.TextView",
-      "content_desc": "Photos",
-      "clickable": true,
-      "scrollable": false,
-      "enabled": true,
-      "focusable": true,
-      "focused": false,
-      "editable": false,
-      "checkable": false,
-      "checked": false,
-      "selected": false,
-      "cv_confidence": 0.0
-    },
-    {
-      "id": 25,
-      "bounds": [
-        439,
-        275,
-        640,
-        534
-      ],
-      "center": [
-        539,
-        404
-      ],
-      "category": "",
-      "text": "Contacts",
-      "resource_id": "com.google.android.apps.nexuslauncher:id/icon",
-      "class": "android.widget.TextView",
-      "content_desc": "Contacts",
-      "clickable": true,
-      "scrollable": false,
-      "enabled": true,
-      "focusable": true,
-      "focused": false,
-      "editable": false,
-      "checkable": false,
-      "checked": false,
-      "selected": false,
-      "cv_confidence": 0.0
-    },
-    {
-      "id": 26,
-      "bounds": [
-        640,
-        275,
-        841,
-        534
-      ],
-      "center": [
-        740,
-        404
-      ],
-      "category": "",
-      "text": "Clock",
-      "resource_id": "com.google.android.apps.nexuslauncher:id/icon",
-      "class": "android.widget.TextView",
-      "content_desc": "Clock",
-      "clickable": true,
-      "scrollable": false,
-      "enabled": true,
-      "focusable": true,
-      "focused": false,
-      "editable": false,
-      "checkable": false,
-      "checked": false,
-      "selected": false,
-      "cv_confidence": 0.0
-    },
-    {
-      "id": 27,
-      "bounds": [
-        841,
-        275,
-        1042,
-        534
-      ],
-      "center": [
-        941,
-        404
-      ],
-      "category": "",
-      "text": "Gmail",
-      "resource_id": "com.google.android.apps.nexuslauncher:id/icon",
-      "class": "android.widget.TextView",
-      "content_desc": "Gmail",
-      "clickable": true,
-      "scrollable": false,
-      "enabled": true,
-      "focusable": true,
-      "focused": false,
-      "editable": false,
-      "checkable": false,
-      "checked": false,
-      "selected": false,
-      "cv_confidence": 0.0
-    },
-    {
-      "id": 28,
-      "bounds": [
-        38,
-        534,
-        1042,
-        653
-      ],
-      "center": [
-        540,
-        593
-      ],
-      "category": "",
-      "text": "",
-      "resource_id": "com.google.android.apps.nexuslauncher:id/apps_divider_view",
-      "class": "android.view.View",
-      "content_desc": "All apps",
-      "clickable": false,
-      "scrollable": false,
-      "enabled": true,
-      "focusable": false,
       "focused": false,
       "editable": false,
       "checkable": false,

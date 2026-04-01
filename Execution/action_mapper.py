@@ -1,502 +1,278 @@
-"""
-动作映射模块
-将抽象的子目标转化为具体的物理动作（坐标 + 类型）
-通过 LLM 解析意图，在控件列表中寻址匹配
-"""
-import json
+"""Map planning intent to executable ResolvedAction."""
+
+from __future__ import annotations
+
 import logging
-from dataclasses import dataclass
 from typing import Optional
 
+from Oracle.contracts import (
+    ResolvedAction,
+    Selector,
+    StepContract,
+    TargetRef,
+    TargetResolved,
+    normalize_subject_ref,
+    validate_action_type,
+)
 from Perception.context_builder import UIState, WidgetInfo
-from Planning.planner import SubGoal
-from prompt.action_mapper_prompt import ACTION_MAPPER_PROMPT
+from Planning.planner import PlanResult
+from utils.utils import calc_iou
 
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class Action:
-    """物理动作描述"""
-
-    action_type: str  # tap / swipe / input / back / scroll_up / scroll_down / enter
-    x: int = 0
-    y: int = 0
-    x2: int = 0
-    y2: int = 0
-    text: str = ""
-    widget_id: Optional[int] = None
-    target_widget_text: str = ""
-    target_resource_id: str = ""
-    target_class_name: str = ""
-    target_content_desc: str = ""
-    target_bounds: tuple = (0, 0, 0, 0)
-    description: str = ""
-
-    def to_dict(self) -> dict:
-        return {
-            "action_type": self.action_type,
-            "x": self.x,
-            "y": self.y,
-            "x2": self.x2,
-            "y2": self.y2,
-            "text": self.text,
-            "input_text": self.text,
-            "widget_id": self.widget_id,
-            "target_widget_text": self.target_widget_text,
-            "target_resource_id": self.target_resource_id,
-            "target_class_name": self.target_class_name,
-            "target_content_desc": self.target_content_desc,
-            "target_bounds": list(self.target_bounds),
-            "description": self.description,
-        }
-
-
 class ActionMapper:
-    """
-    意图→物理动作映射器
-    1. 通过 LLM 解析子目标，得到目标控件描述和动作类型
-    2. 在 UIState 控件列表中寻址匹配，获取精确坐标
-    3. 输出可执行的 Action
-    """
+    """Resolve target and build concrete action parameters."""
 
-    def __init__(self, llm_client):
+    def __init__(self, llm_client=None):
         self.llm = llm_client
-        logger.info("ActionMapper 初始化完成")
+        logger.info("ActionMapper 初始化完成 (V3.1)")
 
-    def map_action(self, subgoal: SubGoal, ui_state: UIState) -> Action:
-        """
-        将子目标映射为物理动作
-        :param subgoal: 当前子目标
-        :param ui_state: 当前 UI 状态
-        :return: 可执行的 Action
-        """
-        logger.info("映射动作: subgoal='%s'", subgoal.description)
-
-        # 简单动作直接映射，无需 LLM
-        if subgoal.action_type == "back":
-            return Action(action_type="back", description="按返回键")
-        if subgoal.action_type == "enter":
-            return Action(action_type="enter", description="按回车键")
-        if subgoal.action_type in ("swipe", "scroll", "scroll_up", "scroll_down") and (
-            self._should_force_default_swipe(subgoal)
-            or (subgoal.target_widget_id is None and not subgoal.target_widget_text)
-        ):
-            return self._create_default_swipe(subgoal, ui_state)
-
-        # 如果子目标已指定控件 ID，直接使用
-        if subgoal.target_widget_id is not None:
-            widget = ui_state.find_widget_by_id(subgoal.target_widget_id)
-            if widget:
-                widget = self._refine_widget_for_subgoal(subgoal, ui_state, widget)
-                return self._create_action_from_widget(subgoal, widget, ui_state)
-
-        # 尝试通过文本匹配控件
-        if subgoal.target_widget_text:
-            widget = ui_state.find_widget_by_text(subgoal.target_widget_text)
-            if widget:
-                widget = self._refine_widget_for_subgoal(subgoal, ui_state, widget)
-                logger.info("通过文本匹配到控件: id=%d, text='%s'", widget.widget_id, widget.text)
-                return self._create_action_from_widget(subgoal, widget, ui_state)
-
-        # 文本匹配失败，使用 LLM 映射
-        return self._map_with_llm(subgoal, ui_state)
-
-    def _create_action_from_widget(self, subgoal: SubGoal, widget: WidgetInfo, ui_state: UIState) -> Action:
-        """基于匹配到的控件创建动作"""
-        cx, cy = widget.center
-        action_type = str(subgoal.action_type or "tap").lower()
-        tap_x, tap_y = self._clamp_to_screen(cx, cy, ui_state)
-
-        if action_type == "input":
-            return Action(
-                action_type="input",
-                x=tap_x,
-                y=tap_y,
-                text=subgoal.input_text,
-                widget_id=widget.widget_id,
-                target_widget_text=widget.text,
-                target_resource_id=widget.resource_id,
-                target_class_name=widget.class_name,
-                target_content_desc=widget.content_desc,
-                target_bounds=widget.bounds,
-                description=f"在 '{widget.text or widget.resource_id}' 中输入 '{subgoal.input_text}'",
-            )
-
-        if action_type in ("scroll_up", "swipe_up"):
-            start_x, start_y = self._clamp_to_screen(cx, cy + 200, ui_state)
-            end_x, end_y = self._clamp_to_screen(cx, cy - 200, ui_state)
-            return Action(
-                action_type="swipe",
-                x=start_x,
-                y=start_y,
-                x2=end_x,
-                y2=end_y,
-                widget_id=widget.widget_id,
-                target_widget_text=widget.text,
-                target_resource_id=widget.resource_id,
-                target_class_name=widget.class_name,
-                target_content_desc=widget.content_desc,
-                target_bounds=widget.bounds,
-                description=f"在 '{widget.text or widget.resource_id}' 上向上滑动",
-            )
-
-        if action_type in ("scroll_down", "swipe_down"):
-            start_x, start_y = self._clamp_to_screen(cx, cy - 200, ui_state)
-            end_x, end_y = self._clamp_to_screen(cx, cy + 200, ui_state)
-            return Action(
-                action_type="swipe",
-                x=start_x,
-                y=start_y,
-                x2=end_x,
-                y2=end_y,
-                widget_id=widget.widget_id,
-                target_widget_text=widget.text,
-                target_resource_id=widget.resource_id,
-                target_class_name=widget.class_name,
-                target_content_desc=widget.content_desc,
-                target_bounds=widget.bounds,
-                description=f"在 '{widget.text or widget.resource_id}' 上向下滑动",
-            )
-
-        if action_type == "scroll":
-            desc = (subgoal.description or "").lower()
-            down_markers = ("scroll down", "swipe down", "pull down", "向下", "下滑", "下拉")
-            if any(marker in desc for marker in down_markers):
-                start_x, start_y = self._clamp_to_screen(cx, cy - 220, ui_state)
-                end_x, end_y = self._clamp_to_screen(cx, cy + 220, ui_state)
-                action_desc = f"在 '{widget.text or widget.resource_id}' 上向下滚动"
-            else:
-                start_x, start_y = self._clamp_to_screen(cx, cy + 220, ui_state)
-                end_x, end_y = self._clamp_to_screen(cx, cy - 220, ui_state)
-                action_desc = f"在 '{widget.text or widget.resource_id}' 上向上滚动"
-            return Action(
-                action_type="swipe",
-                x=start_x,
-                y=start_y,
-                x2=end_x,
-                y2=end_y,
-                widget_id=widget.widget_id,
-                target_widget_text=widget.text,
-                target_resource_id=widget.resource_id,
-                target_class_name=widget.class_name,
-                target_content_desc=widget.content_desc,
-                target_bounds=widget.bounds,
-                description=action_desc,
-            )
-
-        if action_type == "swipe":
-            start_x, start_y = self._clamp_to_screen(cx, cy + 260, ui_state)
-            end_x, end_y = self._clamp_to_screen(cx, max(80, cy - 460), ui_state)
-            return Action(
-                action_type="swipe",
-                x=start_x,
-                y=start_y,
-                x2=end_x,
-                y2=end_y,
-                widget_id=widget.widget_id,
-                target_widget_text=widget.text,
-                target_resource_id=widget.resource_id,
-                target_class_name=widget.class_name,
-                target_content_desc=widget.content_desc,
-                target_bounds=widget.bounds,
-                description=f"在 '{widget.text or widget.resource_id}' 上执行滑动",
-            )
-
-        if action_type in ("long_press", "long-press"):
-            return Action(
-                action_type="long_press",
-                x=tap_x,
-                y=tap_y,
-                widget_id=widget.widget_id,
-                target_widget_text=widget.text,
-                target_resource_id=widget.resource_id,
-                target_class_name=widget.class_name,
-                target_content_desc=widget.content_desc,
-                target_bounds=widget.bounds,
-                description=f"长按 '{widget.text or widget.resource_id}'",
-            )
-
-        return Action(
-            action_type="tap",
-            x=tap_x,
-            y=tap_y,
-            widget_id=widget.widget_id,
-            target_widget_text=widget.text,
-            target_resource_id=widget.resource_id,
-            target_class_name=widget.class_name,
-            target_content_desc=widget.content_desc,
-            target_bounds=widget.bounds,
-            description=f"点击 '{widget.text or widget.resource_id}'",
-        )
-
-    def _map_with_llm(self, subgoal: SubGoal, ui_state: UIState) -> Action:
-        """通过 LLM 映射动作"""
-        widget_list = ui_state.to_prompt_text()
-        prompt = ACTION_MAPPER_PROMPT.format(
-            subgoal_description=subgoal.description,
-            widget_list=widget_list,
-        )
-
+    def map_action(
+        self,
+        plan: PlanResult,
+        ui_state: UIState,
+        contract: Optional[StepContract] = None,
+    ) -> ResolvedAction:
+        requested = str(plan.requested_action_type or "tap").strip().lower()
         try:
-            response = self.llm.chat(prompt)
-            action = self._parse_response(response, ui_state, subgoal)
-            logger.info("LLM 映射结果: %s at (%d, %d)", action.action_type, action.x, action.y)
-            return action
-        except Exception as e:
-            logger.error("LLM 动作映射失败: %s", e)
-            return Action(action_type="noop", description=f"映射失败: {e}")
-
-    def _parse_response(self, response: str, ui_state: UIState, subgoal: SubGoal) -> Action:
-        """解析 LLM 映射结果"""
-        json_str = response
-        if "```json" in response:
-            json_str = response.split("```json")[1].split("```")[0]
-        elif "```" in response:
-            json_str = response.split("```")[1].split("```")[0]
-
-        try:
-            data = json.loads(json_str.strip())
-        except json.JSONDecodeError:
-            logger.warning("动作映射 JSON 解析失败")
-            return Action(action_type="noop", description="JSON解析失败")
-
-        action_type = str(data.get("action_type", "tap") or "tap").strip().lower()
-        if action_type in ("longpress", "long-press", "press_hold", "press-and-hold"):
-            action_type = "long_press"
-        if action_type in ("swipe_up", "scroll_up"):
-            action_type = "scroll_up"
-        elif action_type in ("swipe_down", "scroll_down"):
-            action_type = "scroll_down"
-        allowed_actions = {"tap", "input", "swipe", "scroll", "scroll_up", "scroll_down", "back", "enter", "long_press"}
-        if action_type not in allowed_actions:
+            action_type = validate_action_type(requested)
+        except Exception:
+            action_type = "tap"
+        if action_type == "launch_app":
             action_type = "tap"
 
-        widget_id = data.get("target_widget_id")
-        input_text = data.get("input_text", "")
+        target = self._resolve_target(
+            target=(contract.target if contract and contract.target is not None else plan.target),
+            ui_state=ui_state,
+        )
 
         if action_type == "back":
-            return Action(action_type="back", description="按返回键")
+            return ResolvedAction(type="back", params={}, target=target, description="按返回键")
+
         if action_type == "enter":
-            return Action(action_type="enter", description="按回车键")
+            return ResolvedAction(type="enter", params={}, target=target, description="按回车键")
 
-        if action_type in {"swipe", "scroll", "scroll_up", "scroll_down"} and self._should_force_default_swipe(subgoal):
-            return self._create_default_swipe(
-                SubGoal(
-                    description=subgoal.description,
-                    action_type=action_type,
-                    input_text=input_text,
-                ),
-                ui_state,
+        if action_type == "swipe":
+            params, desc = self._build_swipe_params(plan=plan, target=target, ui_state=ui_state)
+            return ResolvedAction(type="swipe", params=params, target=target, description=desc)
+
+        if action_type in {"tap", "input", "long_press"}:
+            x, y = self._pick_point(target=target, ui_state=ui_state)
+            params = {"x": x, "y": y}
+            if action_type == "input":
+                params["text"] = str(plan.input_text or "")
+                desc = f"在({x},{y})输入文本"
+            elif action_type == "long_press":
+                params["duration_ms"] = 900
+                desc = f"长按({x},{y})"
+            else:
+                desc = f"点击({x},{y})"
+            return ResolvedAction(type=action_type, params=params, target=target, description=desc)
+
+        # fallback
+        x, y = self._pick_point(target=target, ui_state=ui_state)
+        return ResolvedAction(
+            type="tap",
+            params={"x": x, "y": y},
+            target=target,
+            description=f"未知动作回退为点击({x},{y})",
+        )
+
+    def _resolve_target(self, target: TargetRef | None, ui_state: UIState) -> TargetRef | None:
+        if target is None:
+            return None
+
+        resolved_widget = None
+
+        selectors = list(target.selectors or [])
+        for selector in selectors:
+            resolved_widget = self._match_selector(selector, ui_state)
+            if resolved_widget is not None:
+                break
+
+        if resolved_widget is None:
+            # final fallback: reuse resolved widget id if still valid
+            if target.resolved and target.resolved.widget_id is not None:
+                resolved_widget = ui_state.find_widget_by_id(int(target.resolved.widget_id))
+
+        ref_id = normalize_subject_ref(
+            target.ref_id,
+            fallback_widget_id=(resolved_widget.widget_id if resolved_widget else None),
+        )
+
+        resolved = None
+        if resolved_widget is not None:
+            resolved = TargetResolved(
+                widget_id=int(resolved_widget.widget_id),
+                bounds=tuple(int(v) for v in resolved_widget.bounds),
+                center=tuple(int(v) for v in resolved_widget.center),
+                snapshot={
+                    "text": resolved_widget.text,
+                    "resource_id": resolved_widget.resource_id,
+                    "content_desc": resolved_widget.content_desc,
+                    "class_name": resolved_widget.class_name,
+                    "clickable": bool(resolved_widget.clickable),
+                    "enabled": bool(resolved_widget.enabled),
+                },
             )
 
-        if widget_id is not None:
-            widget = ui_state.find_widget_by_id(widget_id)
-            if widget:
-                sub = SubGoal(
-                    description=subgoal.description,
-                    action_type=action_type,
-                    input_text=input_text,
-                )
-                widget = self._refine_widget_for_subgoal(sub, ui_state, widget)
-                return self._create_action_from_widget(sub, widget, ui_state)
+        return TargetRef(
+            ref_id=ref_id,
+            role=target.role or "primary",
+            selectors=selectors,
+            resolved=resolved,
+        )
 
-        if action_type in {"swipe", "scroll", "scroll_up", "scroll_down"}:
-            return self._create_default_swipe(
-                SubGoal(
-                    description=subgoal.description,
-                    action_type=action_type,
-                    input_text=input_text,
-                ),
-                ui_state,
+    def _match_selector(self, selector: Selector, ui_state: UIState) -> Optional[WidgetInfo]:
+        kind = str(selector.kind or "").strip().lower()
+        operator = str(selector.operator or "").strip().lower()
+        value = selector.value
+
+        if kind == "widget_id":
+            try:
+                return ui_state.find_widget_by_id(int(value))
+            except Exception:
+                return None
+
+        if kind == "text":
+            token = str(value or "").strip()
+            if not token:
+                return None
+            return ui_state.find_widget_by_text(token)
+
+        if kind == "resource_id":
+            token = str(value or "").strip().lower()
+            if not token:
+                return None
+            return self._best_match(
+                ui_state.widgets,
+                lambda w: token in str(w.resource_id or "").lower(),
             )
 
-        return Action(
-            action_type=action_type,
-            x=int(ui_state.screen_width // 2),
-            y=int(ui_state.screen_height // 2),
-            text=input_text,
-            target_widget_text=subgoal.target_widget_text,
-            description=data.get("reasoning", "LLM映射结果"),
+        if kind == "content_desc":
+            token = str(value or "").strip().lower()
+            if not token:
+                return None
+            return self._best_match(
+                ui_state.widgets,
+                lambda w: token in str(w.content_desc or "").lower(),
+            )
+
+        if kind == "class_name":
+            token = str(value or "").strip().lower()
+            if not token:
+                return None
+            return self._best_match(
+                ui_state.widgets,
+                lambda w: str(w.class_name or "").lower() == token,
+            )
+
+        if kind == "bounds" and isinstance(value, (list, tuple)) and len(value) == 4:
+            try:
+                bounds = tuple(int(v) for v in value)
+            except Exception:
+                return None
+            best = None
+            best_iou = 0.0
+            for widget in ui_state.widgets:
+                iou = calc_iou(bounds, widget.bounds)
+                if iou > best_iou:
+                    best = widget
+                    best_iou = iou
+            if best is not None and (best_iou > 0.1 or operator in {"near", "overlap"}):
+                return best
+            return None
+
+        if kind == "point" and isinstance(value, (list, tuple)) and len(value) == 2:
+            try:
+                x = int(value[0])
+                y = int(value[1])
+            except Exception:
+                return None
+            for widget in ui_state.widgets:
+                x1, y1, x2, y2 = widget.bounds
+                if x1 <= x <= x2 and y1 <= y <= y2:
+                    return widget
+            # point near fallback
+            return self._best_match(
+                ui_state.widgets,
+                lambda w: abs(w.center[0] - x) + abs(w.center[1] - y) <= 120,
+            )
+
+        return None
+
+    def _best_match(self, widgets: list[WidgetInfo], cond) -> Optional[WidgetInfo]:
+        scored: list[tuple[int, WidgetInfo]] = []
+        for widget in widgets:
+            try:
+                ok = bool(cond(widget))
+            except Exception:
+                ok = False
+            if not ok:
+                continue
+            score = 0
+            if widget.enabled:
+                score += 1
+            if widget.clickable:
+                score += 2
+            if widget.focusable:
+                score += 1
+            if widget.editable:
+                score += 1
+            scored.append((score, widget))
+
+        if not scored:
+            return None
+        scored.sort(key=lambda item: item[0], reverse=True)
+        return scored[0][1]
+
+    def _pick_point(self, target: TargetRef | None, ui_state: UIState) -> tuple[int, int]:
+        if target and target.resolved and target.resolved.center:
+            x, y = target.resolved.center
+            return self._clamp(x, y, ui_state)
+
+        # fallback to middle area to reduce top status bar tapping.
+        x = int((ui_state.screen_width or 1080) * 0.5)
+        y = int((ui_state.screen_height or 1920) * 0.58)
+        return self._clamp(x, y, ui_state)
+
+    def _build_swipe_params(self, plan: PlanResult, target: TargetRef | None, ui_state: UIState) -> tuple[dict, str]:
+        base_x, base_y = self._pick_point(target=target, ui_state=ui_state)
+        width = int(ui_state.screen_width or 1080)
+        height = int(ui_state.screen_height or 1920)
+
+        desc = str(plan.goal.summary or "").lower()
+        hints = str((plan.planning_hints or {}).get("direction") or "").lower()
+        down_markers = ("down", "下", "pull", "refresh")
+        is_down = any(marker in desc for marker in down_markers) or any(
+            marker in hints for marker in down_markers
         )
 
-    def _create_default_swipe(self, subgoal: SubGoal, ui_state: UIState) -> Action:
-        """无目标控件时的通用滑动映射。"""
-        action_type = (subgoal.action_type or "").lower()
-        desc = (subgoal.description or "").lower()
-        x = int(ui_state.screen_width * 0.5)
-
-        explicit_up_markers = (
-            "swipe up",
-            "scroll up",
-            "pull up",
-            "upward",
-            "上滑",
-            "向上滑",
-            "向上",
-        )
-        explicit_down_markers = (
-            "swipe down",
-            "scroll down",
-            "pull down",
-            "downward",
-            "from the top",
-            "top edge",
-            "下滑",
-            "下拉",
-            "向下滑",
-            "向下",
-        )
-
-        force_up = action_type in ("scroll_up", "swipe_up") or any(marker in desc for marker in explicit_up_markers)
-        force_down = action_type in ("scroll_down", "swipe_down") or any(marker in desc for marker in explicit_down_markers)
-
-        if force_down:
-            y_start = int(ui_state.screen_height * 0.2)
-            y_end = int(ui_state.screen_height * 0.78)
-            action_desc = "默认向下滑动"
+        delta = max(180, int(height * 0.18))
+        if is_down:
+            start_x, start_y = self._clamp(base_x, base_y - delta, ui_state)
+            end_x, end_y = self._clamp(base_x, base_y + delta, ui_state)
+            action_desc = "向下滑动"
         else:
-            y_start = int(ui_state.screen_height * 0.82)
-            y_end = int(ui_state.screen_height * 0.28)
-            action_desc = "默认向上滑动"
+            start_x, start_y = self._clamp(base_x, base_y + delta, ui_state)
+            end_x, end_y = self._clamp(base_x, base_y - delta, ui_state)
+            action_desc = "向上滑动"
 
-        start_x, start_y = self._clamp_to_screen(x, y_start, ui_state)
-        end_x, end_y = self._clamp_to_screen(x, y_end, ui_state)
-        return Action(
-            action_type="swipe",
-            x=start_x,
-            y=start_y,
-            x2=end_x,
-            y2=end_y,
-            description=action_desc,
-        )
+        params = {
+            "x": start_x,
+            "y": start_y,
+            "x2": end_x,
+            "y2": end_y,
+            "duration_ms": 420,
+            "screen_width": width,
+            "screen_height": height,
+        }
+        return params, action_desc
 
-    def _should_force_default_swipe(self, subgoal: SubGoal) -> bool:
-        desc = (subgoal.description or "").lower()
-        markers = (
-            "from the bottom",
-            "bottom of the screen",
-            "from the top",
-            "top edge",
-            "screen edge",
-            "上滑",
-            "从底部",
-            "下拉",
-            "从顶部",
-        )
-        return any(marker in desc for marker in markers)
-
-    def _refine_widget_for_subgoal(
-        self,
-        subgoal: SubGoal,
-        ui_state: UIState,
-        widget: WidgetInfo,
-    ) -> WidgetInfo:
-        """针对输入/聚焦子目标，避免点到标签文本而非实际输入域。"""
-        action = (subgoal.action_type or "").lower()
-        desc = (subgoal.description or "").lower()
-
-        is_toggle_like = action == "tap" and any(marker in desc for marker in ("switch", "toggle", "开关"))
-        if is_toggle_like:
-            widget_cls = (getattr(widget, "class_name", "") or "").lower()
-            widget_rid = (getattr(widget, "resource_id", "") or "").lower()
-            if bool(getattr(widget, "checkable", False)) or "switch" in widget_cls or "switch" in widget_rid:
-                return widget
-
-            toggle_candidate = self._find_nearby_toggle_widget(widget, ui_state)
-            if toggle_candidate and toggle_candidate.widget_id != widget.widget_id:
-                logger.info("开关型子目标重定向控件: %s -> %s", widget.widget_id, toggle_candidate.widget_id)
-                return toggle_candidate
-
-        is_focus_like = action in ("input", "tap") and (
-            action == "input"
-            or "focus" in desc
-            or "输入" in desc
-            or "聚焦" in desc
-        )
-        if not is_focus_like:
-            return widget
-
-        if getattr(widget, "editable", False) or getattr(widget, "focused", False):
-            return widget
-
-        candidate = self._find_nearby_editable_widget(widget, ui_state)
-        if candidate and candidate.widget_id != widget.widget_id:
-            logger.info("聚焦型子目标重定向控件: %s -> %s", widget.widget_id, candidate.widget_id)
-            return candidate
-        return widget
-
-    def _find_nearby_toggle_widget(self, anchor: WidgetInfo, ui_state: UIState) -> Optional[WidgetInfo]:
-        candidates = [
-            w
-            for w in ui_state.widgets
-            if getattr(w, "enabled", True)
-            and (
-                bool(getattr(w, "checkable", False))
-                or "switch" in (getattr(w, "class_name", "") or "").lower()
-                or "switch" in (getattr(w, "resource_id", "") or "").lower()
-            )
-        ]
-        if not candidates:
-            return None
-
-        best = None
-        best_score = float("-inf")
-        for w in candidates:
-            y_overlap = self._y_overlap_ratio(anchor.bounds, w.bounds)
-            if y_overlap < 0.18:
-                continue
-
-            dx = abs(anchor.center[0] - w.center[0])
-            dy = abs(anchor.center[1] - w.center[1])
-            right_bonus = 120 if w.center[0] >= anchor.center[0] else 0
-            checkable_bonus = 160 if bool(getattr(w, "checkable", False)) else 0
-            score = y_overlap * 1000 - (dx + dy) + right_bonus + checkable_bonus
-            if score > best_score:
-                best = w
-                best_score = score
-        return best
-
-    def _find_nearby_editable_widget(self, anchor: WidgetInfo, ui_state: UIState) -> Optional[WidgetInfo]:
-        """查找与锚点同一行附近的可编辑控件。"""
-        candidates = [
-            w
-            for w in ui_state.widgets
-            if getattr(w, "enabled", True)
-            and (getattr(w, "editable", False) or getattr(w, "focusable", False))
-        ]
-        if not candidates:
-            return None
-
-        best = None
-        best_score = float("-inf")
-        for w in candidates:
-            y_overlap = self._y_overlap_ratio(anchor.bounds, w.bounds)
-            if y_overlap < 0.2:
-                continue
-
-            dx = abs(anchor.center[0] - w.center[0])
-            dy = abs(anchor.center[1] - w.center[1])
-            left_penalty = 250 if w.center[0] + 20 < anchor.center[0] else 0
-            score = y_overlap * 1000 - (dx + dy + left_penalty)
-            if score > best_score:
-                best = w
-                best_score = score
-
-        return best
-
-    def _y_overlap_ratio(self, box_a: tuple, box_b: tuple) -> float:
-        ay1, ay2 = box_a[1], box_a[3]
-        by1, by2 = box_b[1], box_b[3]
-        overlap = max(0, min(ay2, by2) - max(ay1, by1))
-        if overlap <= 0:
-            return 0.0
-        min_height = max(1, min(ay2 - ay1, by2 - by1))
-        return overlap / min_height
-
-    def _clamp_to_screen(self, x: int, y: int, ui_state: UIState) -> tuple:
-        width = max(1, int(getattr(ui_state, "screen_width", 1080) or 1080))
-        height = max(1, int(getattr(ui_state, "screen_height", 1920) or 1920))
-        x_i = max(0, min(width - 1, int(x)))
-        y_i = max(0, min(height - 1, int(y)))
-        return x_i, y_i
+    def _clamp(self, x: int, y: int, ui_state: UIState) -> tuple[int, int]:
+        width = max(1, int(ui_state.screen_width or 1080))
+        height = max(1, int(ui_state.screen_height or 1920))
+        safe_x = min(max(1, int(x)), width - 1)
+        safe_y = min(max(1, int(y)), height - 1)
+        return safe_x, safe_y

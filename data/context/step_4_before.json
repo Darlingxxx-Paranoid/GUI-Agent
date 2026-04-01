@@ -1,32 +1,32 @@
 {
-  "activity_name": "com.google.android.gms/.auth.uiflows.minutemaid.MinuteMaidActivity",
-  "package_name": "com.google.android.gms",
+  "activity_name": "com.google.android.apps.nexuslauncher/.NexusLauncherActivity",
+  "package_name": "com.google.android.apps.nexuslauncher",
   "screen_width": 1080,
   "screen_height": 2220,
   "keyboard_visible": false,
-  "editable_widgets_count": 1,
-  "focused_widgets_count": 1,
+  "editable_widgets_count": 0,
+  "focused_widgets_count": 0,
   "screenshot_path": "/Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/screenshots/step_4_before.png",
   "dump_path": "/Users/bytedance/Desktop/Darlingxxx/GUI-Agent/data/dumps/step_4.xml",
-  "widgets_count": 22,
+  "widgets_count": 19,
   "widgets": [
     {
       "id": 0,
       "bounds": [
-        305,
-        516,
-        341,
-        552
+        39,
+        10,
+        169,
+        56
       ],
       "center": [
-        323,
-        534
+        104,
+        33
       ],
-      "category": "Compo",
-      "text": "",
-      "resource_id": "",
-      "class": "",
-      "content_desc": "",
+      "category": "",
+      "text": "10:22",
+      "resource_id": "com.android.systemui:id/clock",
+      "class": "android.widget.TextView",
+      "content_desc": "10:22 AM",
       "clickable": false,
       "scrollable": false,
       "enabled": true,
@@ -41,20 +41,20 @@
     {
       "id": 1,
       "bounds": [
-        799,
-        521,
-        838,
-        552
+        169,
+        0,
+        230,
+        66
       ],
       "center": [
-        818,
-        536
+        199,
+        33
       ],
-      "category": "Compo",
+      "category": "",
       "text": "",
       "resource_id": "",
-      "class": "",
-      "content_desc": "",
+      "class": "android.widget.ImageView",
+      "content_desc": "Clock notification: ",
       "clickable": false,
       "scrollable": false,
       "enabled": true,
@@ -69,20 +69,20 @@
     {
       "id": 2,
       "bounds": [
-        851,
-        516,
-        954,
-        552
+        230,
+        0,
+        291,
+        66
       ],
       "center": [
-        902,
-        534
+        260,
+        33
       ],
-      "category": "Compo",
+      "category": "",
       "text": "",
       "resource_id": "",
-      "class": "",
-      "content_desc": "",
+      "class": "android.widget.ImageView",
+      "content_desc": "Security & privacy notification: ",
       "clickable": false,
       "scrollable": false,
       "enabled": true,
@@ -97,20 +97,20 @@
     {
       "id": 3,
       "bounds": [
-        160,
-        649,
-        230,
-        682
+        291,
+        0,
+        352,
+        66
       ],
       "center": [
-        195,
-        665
+        321,
+        33
       ],
-      "category": "Compo",
+      "category": "",
       "text": "",
       "resource_id": "",
-      "class": "",
-      "content_desc": "",
+      "class": "android.widget.ImageView",
+      "content_desc": "Android System notification: ",
       "clickable": false,
       "scrollable": false,
       "enabled": true,
@@ -125,20 +125,20 @@
     {
       "id": 4,
       "bounds": [
-        402,
-        649,
-        516,
-        682
+        883,
+        12,
+        924,
+        53
       ],
       "center": [
-        459,
-        665
+        903,
+        32
       ],
-      "category": "Combined",
+      "category": "",
       "text": "",
-      "resource_id": "",
-      "class": "",
-      "content_desc": "",
+      "resource_id": "com.android.systemui:id/wifi_signal",
+      "class": "android.widget.ImageView",
+      "content_desc": "Wifi signal full.",
       "clickable": false,
       "scrollable": false,
       "enabled": true,
@@ -153,20 +153,20 @@
     {
       "id": 5,
       "bounds": [
-        530,
-        649,
-        638,
-        693
+        924,
+        2,
+        965,
+        63
       ],
       "center": [
-        584,
-        671
+        944,
+        32
       ],
-      "category": "Combined",
+      "category": "",
       "text": "",
-      "resource_id": "",
-      "class": "",
-      "content_desc": "",
+      "resource_id": "com.android.systemui:id/mobile_combo",
+      "class": "android.widget.FrameLayout",
+      "content_desc": "T-Mobile, three bars.",
       "clickable": false,
       "scrollable": false,
       "enabled": true,
@@ -181,24 +181,24 @@
     {
       "id": 6,
       "bounds": [
-        790,
-        2003,
-        1010,
-        2106
+        982,
+        14,
+        1003,
+        50
       ],
       "center": [
-        900,
-        2054
+        992,
+        32
       ],
-      "category": "Compo",
-      "text": "NEXT",
-      "resource_id": "",
-      "class": "android.widget.Button",
-      "content_desc": "",
-      "clickable": true,
+      "category": "",
+      "text": "",
+      "resource_id": "com.android.systemui:id/battery",
+      "class": "android.widget.LinearLayout",
+      "content_desc": "Battery 100 percent.",
+      "clickable": false,
       "scrollable": false,
       "enabled": true,
-      "focusable": true,
+      "focusable": false,
       "focused": false,
       "editable": false,
       "checkable": false,
@@ -209,24 +209,24 @@
     {
       "id": 7,
       "bounds": [
-        122,
-        516,
-        166,
-        552
+        54,
+        67,
+        1026,
+        349
       ],
       "center": [
-        144,
-        534
+        540,
+        208
       ],
-      "category": "Combined",
+      "category": "",
       "text": "",
-      "resource_id": "",
-      "class": "",
-      "content_desc": "",
+      "resource_id": "com.google.android.apps.nexuslauncher:id/smartspace_card_pager",
+      "class": "androidx.viewpager.widget.ViewPager",
+      "content_desc": "At a glance",
       "clickable": false,
       "scrollable": false,
       "enabled": true,
-      "focusable": false,
+      "focusable": true,
       "focused": false,
       "editable": false,
       "checkable": false,
@@ -237,24 +237,24 @@
     {
       "id": 8,
       "bounds": [
-        172,
-        516,
-        241,
-        552
+        54,
+        67,
+        1026,
+        349
       ],
       "center": [
-        206,
-        534
+        540,
+        208
       ],
-      "category": "Combined",
+      "category": "",
       "text": "",
       "resource_id": "",
-      "class": "",
+      "class": "android.view.ViewGroup",
       "content_desc": "",
-      "clickable": false,
+      "clickable": true,
       "scrollable": false,
       "enabled": true,
-      "focusable": false,
+      "focusable": true,
       "focused": false,
       "editable": false,
       "checkable": false,
@@ -265,24 +265,24 @@
     {
       "id": 9,
       "bounds": [
-        707,
-        527,
-        727,
-        552
+        66,
+        132,
+        347,
+        198
       ],
       "center": [
-        717,
-        539
+        206,
+        165
       ],
-      "category": "Compo",
-      "text": "",
-      "resource_id": "",
-      "class": "",
-      "content_desc": "",
-      "clickable": false,
+      "category": "",
+      "text": "17:44:59",
+      "resource_id": "com.google.android.apps.nexuslauncher:id/title_text",
+      "class": "android.widget.TextView",
+      "content_desc": "Stopwatch, 17:44:59",
+      "clickable": true,
       "scrollable": false,
       "enabled": true,
-      "focusable": false,
+      "focusable": true,
       "focused": false,
       "editable": false,
       "checkable": false,
@@ -293,24 +293,24 @@
     {
       "id": 10,
       "bounds": [
-        732,
-        516,
-        788,
-        552
+        67,
+        1740,
+        210,
+        1901
       ],
       "center": [
-        760,
-        534
+        138,
+        1820
       ],
-      "category": "Combined",
-      "text": "",
+      "category": "",
+      "text": "Phone",
       "resource_id": "",
-      "class": "",
-      "content_desc": "",
-      "clickable": false,
+      "class": "android.widget.TextView",
+      "content_desc": "Phone",
+      "clickable": true,
       "scrollable": false,
       "enabled": true,
-      "focusable": false,
+      "focusable": true,
       "focused": false,
       "editable": false,
       "checkable": false,
@@ -321,24 +321,24 @@
     {
       "id": 11,
       "bounds": [
-        427,
-        127,
-        654,
-        213
+        268,
+        1740,
+        411,
+        1901
       ],
       "center": [
-        540,
-        170
+        339,
+        1820
       ],
-      "category": "Text",
-      "text": "Google",
+      "category": "",
+      "text": "Messages",
       "resource_id": "",
-      "class": "",
-      "content_desc": "",
-      "clickable": false,
+      "class": "android.widget.TextView",
+      "content_desc": "Messages",
+      "clickable": true,
       "scrollable": false,
       "enabled": true,
-      "focusable": false,
+      "focusable": true,
       "focused": false,
       "editable": false,
       "checkable": false,
@@ -349,24 +349,24 @@
     {
       "id": 12,
       "bounds": [
-        430,
-        219,
-        657,
-        338
+        469,
+        1740,
+        612,
+        1901
       ],
       "center": [
-        543,
-        278
+        540,
+        1820
       ],
-      "category": "Combined",
-      "text": "Sign in",
+      "category": "",
+      "text": "Settings",
       "resource_id": "",
-      "class": "",
-      "content_desc": "",
-      "clickable": false,
+      "class": "android.widget.TextView",
+      "content_desc": "Predicted app: Settings",
+      "clickable": true,
       "scrollable": false,
       "enabled": true,
-      "focusable": false,
+      "focusable": true,
       "focused": false,
       "editable": false,
       "checkable": false,
@@ -377,24 +377,24 @@
     {
       "id": 13,
       "bounds": [
-        66,
-        357,
-        1023,
-        485
+        670,
+        1740,
+        813,
+        1901
       ],
       "center": [
-        544,
-        421
+        741,
+        1820
       ],
-      "category": "Text",
-      "text": "Use your Google Account. The account will be\nadded to this device and available to other",
+      "category": "",
+      "text": "Chrome",
       "resource_id": "",
-      "class": "",
-      "content_desc": "",
-      "clickable": false,
+      "class": "android.widget.TextView",
+      "content_desc": "Chrome",
+      "clickable": true,
       "scrollable": false,
       "enabled": true,
-      "focusable": false,
+      "focusable": true,
       "focused": false,
       "editable": false,
       "checkable": false,
@@ -405,24 +405,24 @@
     {
       "id": 14,
       "bounds": [
-        399,
-        496,
-        690,
-        557
+        871,
+        1740,
+        1013,
+        1901
       ],
       "center": [
-        544,
-        526
+        942,
+        1820
       ],
-      "category": "Text",
-      "text": "Google apps.",
+      "category": "",
+      "text": "Camera",
       "resource_id": "",
-      "class": "",
-      "content_desc": "",
-      "clickable": false,
+      "class": "android.widget.TextView",
+      "content_desc": "Camera",
+      "clickable": true,
       "scrollable": false,
       "enabled": true,
-      "focusable": false,
+      "focusable": true,
       "focused": false,
       "editable": false,
       "checkable": false,
@@ -433,24 +433,24 @@
     {
       "id": 15,
       "bounds": [
-        138,
-        521,
-        954,
-        632
+        72,
+        1932,
+        1008,
+        2105
       ],
       "center": [
-        546,
-        576
+        540,
+        2018
       ],
-      "category": "Combined",
-      "text": "Use your Google Account. The account will be added to this device and available to other Google apps.",
-      "resource_id": "",
-      "class": "android.widget.TextView",
-      "content_desc": "",
-      "clickable": false,
+      "category": "",
+      "text": "",
+      "resource_id": "com.google.android.apps.nexuslauncher:id/search_container_hotseat",
+      "class": "android.widget.FrameLayout",
+      "content_desc": "Google search",
+      "clickable": true,
       "scrollable": false,
       "enabled": true,
-      "focusable": false,
+      "focusable": true,
       "focused": false,
       "editable": false,
       "checkable": false,
@@ -461,26 +461,26 @@
     {
       "id": 16,
       "bounds": [
-        33,
-        790,
-        1012,
-        971
+        83,
+        1952,
+        215,
+        2084
       ],
       "center": [
-        522,
-        880
+        149,
+        2018
       ],
-      "category": "Combined",
-      "text": "Forgot email?",
-      "resource_id": "identifierId",
-      "class": "android.widget.EditText",
-      "content_desc": "",
+      "category": "",
+      "text": "",
+      "resource_id": "com.google.android.apps.nexuslauncher:id/g_icon",
+      "class": "android.widget.ImageView",
+      "content_desc": "Google app",
       "clickable": true,
       "scrollable": false,
       "enabled": true,
       "focusable": true,
-      "focused": true,
-      "editable": true,
+      "focused": false,
+      "editable": false,
       "checkable": false,
       "checked": false,
       "selected": false,
@@ -489,20 +489,20 @@
     {
       "id": 17,
       "bounds": [
-        30,
-        1168,
-        338,
-        1223
+        733,
+        1932,
+        865,
+        2105
       ],
       "center": [
-        184,
-        1195
+        799,
+        2018
       ],
-      "category": "Text",
-      "text": "Create account",
-      "resource_id": "",
-      "class": "android.widget.Button",
-      "content_desc": "",
+      "category": "",
+      "text": "",
+      "resource_id": "com.google.android.apps.nexuslauncher:id/mic_icon",
+      "class": "android.widget.ImageView",
+      "content_desc": "Voice search",
       "clickable": true,
       "scrollable": false,
       "enabled": true,
@@ -517,104 +517,20 @@
     {
       "id": 18,
       "bounds": [
-        0,
-        66,
-        1080,
-        1958
+        865,
+        1932,
+        997,
+        2105
       ],
       "center": [
-        540,
-        1012
+        931,
+        2018
       ],
       "category": "",
-      "text": "Sign in Use your Google Account. The account will be added to this device and available to other Google apps.Learn more about using your account",
-      "resource_id": "",
-      "class": "android.webkit.WebView",
-      "content_desc": "",
-      "clickable": false,
-      "scrollable": false,
-      "enabled": true,
-      "focusable": true,
-      "focused": false,
-      "editable": false,
-      "checkable": false,
-      "checked": false,
-      "selected": false,
-      "cv_confidence": 0.0
-    },
-    {
-      "id": 19,
-      "bounds": [
-        440,
-        330,
-        640,
-        415
-      ],
-      "center": [
-        540,
-        372
-      ],
-      "category": "",
-      "text": "Sign in",
-      "resource_id": "",
-      "class": "android.widget.TextView",
-      "content_desc": "",
-      "clickable": false,
-      "scrollable": false,
-      "enabled": true,
-      "focusable": false,
-      "focused": false,
-      "editable": false,
-      "checkable": false,
-      "checked": false,
-      "selected": false,
-      "cv_confidence": 0.0
-    },
-    {
-      "id": 20,
-      "bounds": [
-        151,
-        635,
-        929,
-        701
-      ],
-      "center": [
-        540,
-        668
-      ],
-      "category": "",
-      "text": "Learn more about using your account",
-      "resource_id": "learnMore",
-      "class": "android.widget.Button",
-      "content_desc": "",
-      "clickable": true,
-      "scrollable": false,
-      "enabled": true,
-      "focusable": true,
-      "focused": false,
-      "editable": false,
-      "checkable": false,
-      "checked": false,
-      "selected": false,
-      "cv_confidence": 0.0
-    },
-    {
-      "id": 21,
-      "bounds": [
-        55,
-        968,
-        319,
-        1028
-      ],
-      "center": [
-        187,
-        998
-      ],
-      "category": "",
-      "text": "Forgot email?",
-      "resource_id": "",
-      "class": "android.widget.Button",
-      "content_desc": "",
+      "text": "",
+      "resource_id": "com.google.android.apps.nexuslauncher:id/lens_icon",
+      "class": "android.widget.ImageButton",
+      "content_desc": "Google Lens",
       "clickable": true,
       "scrollable": false,
       "enabled": true,
