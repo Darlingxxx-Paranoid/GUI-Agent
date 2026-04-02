@@ -2,7 +2,14 @@
 LLM 客户端模块
 封装与大语言模型的 API 交互，使用 OpenAI 兼容接口
 """
+from __future__ import annotations
+
+import base64
+import json
 import logging
+import mimetypes
+from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
@@ -14,6 +21,17 @@ except ImportError:
     logger.warning("openai 包未安装, LLM 功能将不可用; 请运行 pip install openai")
 
 from utils.audit_recorder import AuditRecorder
+
+
+@dataclass
+class LLMRequest:
+    """结构化多模态请求。"""
+
+    system: str = ""
+    user: str = ""
+    images: list[str] = field(default_factory=list)
+    response_format: Any = None
+    audit_meta: Optional[dict[str, Any]] = None
 
 
 class LLMClient:
@@ -50,27 +68,83 @@ class LLMClient:
 
     def chat(
         self,
-        prompt: str,
+        prompt: str | LLMRequest,
         system_prompt: Optional[str] = None,
         audit_meta: Optional[dict[str, Any]] = None,
-    ) -> str:
+    ) -> Any:
         """
-        发送单轮对话请求
-        :param prompt: 用户 prompt
+        统一对话接口：
+        - chat(prompt="...", system_prompt="...")
+        - chat(LLMRequest(...))
+        :param prompt: 用户 prompt 或 LLMRequest
         :param system_prompt: 系统 prompt（可选）
-        :return: LLM 响应文本
+        :return: 文本响应或结构化解析对象
         """
         if self.client is None:
             raise RuntimeError("LLM 客户端未初始化, 请安装 openai 包并正确配置 API")
+        if isinstance(prompt, LLMRequest):
+            request = prompt
+        else:
+            request = LLMRequest(
+                system=str(system_prompt or ""),
+                user=str(prompt or ""),
+                images=[],
+                response_format=None,
+                audit_meta=audit_meta,
+            )
 
-        messages = []
-        if system_prompt:
-            messages.append({"role": "system", "content": system_prompt})
-        messages.append({"role": "user", "content": prompt})
+        messages: list[dict[str, Any]] = []
+        if request.system:
+            messages.append({"role": "system", "content": str(request.system)})
 
-        logger.debug("发送 LLM 请求: model=%s, prompt_len=%d", self.model, len(prompt))
+        if request.images:
+            user_parts: list[dict[str, Any]] = [{"type": "text", "text": str(request.user or "")}]
+            for image_path in request.images:
+                image_url = self._local_image_to_data_url(image_path)
+                user_parts.append(
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": image_url},
+                    }
+                )
+            messages.append({"role": "user", "content": user_parts})
+        else:
+            messages.append({"role": "user", "content": str(request.user or "")})
 
+        logger.info(
+            "发送 LLM 请求: model=%s, user_len=%d, images=%d, structured=%s",
+            self.model,
+            len(request.user or ""),
+            len(request.images),
+            bool(request.response_format),
+        )
+
+        meta = request.audit_meta or {}
         try:
+            if request.response_format is not None:
+                response = self.client.chat.completions.parse(
+                    model=self.model,
+                    messages=messages,
+                    response_format=request.response_format,
+                    temperature=self.temperature,
+                    max_completion_tokens=self.max_tokens,
+                )
+                message = response.choices[0].message
+                parsed = getattr(message, "parsed", None)
+                if parsed is None:
+                    refusal = getattr(message, "refusal", None)
+                    if refusal:
+                        raise RuntimeError(f"模型拒绝响应: {refusal}")
+                    raise RuntimeError("模型返回无法解析为 response_format 的内容")
+                self._save_audit_record(
+                    artifact_kind=str((meta or {}).get("artifact_kind") or ""),
+                    step=(meta or {}).get("step"),
+                    stage=str((meta or {}).get("stage") or "chat_structured"),
+                    llm_response=self._serialize_parsed(parsed),
+                    error="",
+                )
+                return parsed
+
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
@@ -78,25 +152,54 @@ class LLMClient:
                 max_completion_tokens=self.max_tokens,
             )
             content = response.choices[0].message.content
-            logger.debug("LLM 响应: len=%d", len(content) if content else 0)
             self._save_audit_record(
-                artifact_kind=str((audit_meta or {}).get("artifact_kind") or ""),
-                step=(audit_meta or {}).get("step"),
-                stage=str((audit_meta or {}).get("stage") or "chat"),
+                artifact_kind=str((meta or {}).get("artifact_kind") or ""),
+                step=(meta or {}).get("step"),
+                stage=str((meta or {}).get("stage") or "chat"),
                 llm_response=content or "",
                 error="",
             )
             return content or ""
         except Exception as e:
             logger.error("LLM 请求失败: %s", e)
+            stage = "chat_structured_error" if request.response_format is not None else "chat_error"
             self._save_audit_record(
-                artifact_kind=str((audit_meta or {}).get("artifact_kind") or ""),
-                step=(audit_meta or {}).get("step"),
-                stage=str((audit_meta or {}).get("stage") or "chat_error"),
+                artifact_kind=str((meta or {}).get("artifact_kind") or ""),
+                step=(meta or {}).get("step"),
+                stage=str((meta or {}).get("stage") or stage),
                 llm_response="",
                 error=str(e),
             )
             raise
+
+    def _local_image_to_data_url(self, image_path: str) -> str:
+        text = str(image_path or "").strip()
+        if not text:
+            raise ValueError("截图路径不能为空")
+
+        path = Path(text).expanduser()
+        if not path.is_absolute():
+            path = (Path.cwd() / path).resolve()
+        if not path.exists():
+            raise FileNotFoundError(f"截图文件不存在: {path}")
+        if not path.is_file():
+            raise ValueError(f"截图路径不是文件: {path}")
+
+        mime = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+        raw = path.read_bytes()
+        encoded = base64.b64encode(raw).decode("ascii")
+        return f"data:{mime};base64,{encoded}"
+
+    def _serialize_parsed(self, value: Any) -> str:
+        if hasattr(value, "model_dump"):
+            try:
+                return json.dumps(value.model_dump(), ensure_ascii=False)
+            except Exception:
+                pass
+        try:
+            return json.dumps(value, ensure_ascii=False)
+        except Exception:
+            return str(value)
 
     def _save_audit_record(
         self,
