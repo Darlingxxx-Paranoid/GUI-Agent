@@ -7,6 +7,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from prompt.planner_prompt import PLANNER_SYSTEM_PROMPT, PLANNER_USER_PROMPT
 from utils.llm_client import LLMRequest
 
 logger = logging.getLogger(__name__)
@@ -82,20 +83,8 @@ class Planner:
             screenshot_path,
         )
 
-        system_prompt = (
-            "You are the Plan module of an Android GUI agent. "
-            "Use only the task text and the screenshot image to produce one next-step plan."
-        )
-        user_prompt = (
-            "Task:\n"
-            f"{task_text}\n\n"
-            "Rules:\n"
-            "1) Output must follow the provided response schema exactly.\n"
-            "2) If the task is already complete in the screenshot, set is_task_complete=true, action_type=wait, and input_text=''.\n"
-            "3) If the task is not complete, set is_task_complete=false and choose action_type from tap/input/swipe/back/enter/long_press/launch_app.\n"
-            "4) goal must describe one concrete next step only.\n"
-            "5) reasoning must be concise and grounded in the screenshot.\n"
-        )
+        system_prompt = PLANNER_SYSTEM_PROMPT
+        user_prompt = PLANNER_USER_PROMPT.format(task=task_text)
 
         request = LLMRequest(
             system=system_prompt,

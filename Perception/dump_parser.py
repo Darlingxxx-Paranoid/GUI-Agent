@@ -117,6 +117,7 @@ class DumpParser:
 
     def __init__(self):
         logger.debug("DumpParser 初始化完成")
+        self._raw_node_counter = 0
 
     def parse(self, dump_path: str) -> List[UIElement]:
         """
@@ -150,6 +151,39 @@ class DumpParser:
         self._traverse(root, elements)
         logger.info("Dump 解析完成, 提取 %d 个控件", len(elements))
         return elements
+
+    def parse_tree(self, dump_path: str) -> Dict[str, Any]:
+        """
+        解析 dump XML 为原始树结构。
+        - 保留 XML 节点原始属性字段
+        - 仅新增 node_id 和 children
+        """
+        logger.info("解析 UI Dump 原始树: %s", dump_path)
+        try:
+            tree = ET.parse(dump_path)
+            root = tree.getroot()
+        except ET.ParseError as e:
+            logger.error("XML 解析失败: %s", e)
+            return {}
+
+        self._raw_node_counter = 0
+        raw_tree = self._build_raw_tree_node(root)
+        logger.info("Dump 原始树解析完成, 节点数=%d", self._raw_node_counter)
+        return raw_tree
+
+    def parse_tree_from_string(self, xml_string: str) -> Dict[str, Any]:
+        """从 XML 字符串解析原始树结构。"""
+        logger.info("从字符串解析 UI Dump 原始树")
+        try:
+            root = ET.fromstring(xml_string)
+        except ET.ParseError as e:
+            logger.error("XML 字符串解析失败: %s", e)
+            return {}
+
+        self._raw_node_counter = 0
+        raw_tree = self._build_raw_tree_node(root)
+        logger.info("Dump 原始树解析完成, 节点数=%d", self._raw_node_counter)
+        return raw_tree
 
     def _traverse(self, node: ET.Element, elements: List[UIElement]):
         """递归遍历 XML 节点树"""
@@ -203,3 +237,13 @@ class DumpParser:
             int(match.group(3)),
             int(match.group(4)),
         )
+
+    def _build_raw_tree_node(self, node: ET.Element) -> Dict[str, Any]:
+        """构建保留原始字段的树节点，仅增加 node_id 和 children。"""
+        self._raw_node_counter += 1
+        current_id = self._raw_node_counter
+
+        payload: Dict[str, Any] = dict(node.attrib)
+        payload["node_id"] = current_id
+        payload["children"] = [self._build_raw_tree_node(child) for child in list(node)]
+        return payload

@@ -1,25 +1,15 @@
-"""Planner prompt template aligned with Oracle contracts."""
+"""Prompt template for Planner module (task + screenshot)."""
 
-PLANNER_PROMPT = """You are the planning module of an Android GUI automation agent.
-Return exactly one next-step intent.
+PLANNER_SYSTEM_PROMPT = """You are the Plan module of an Android GUI agent.
+Use only the task text and the screenshot image to produce one next-step plan.
+"""
 
-## Final Task
+PLANNER_USER_PROMPT = """Task:
 {task}
 
-## Current UI State
-{ui_state}
-
-## Recent History
-{history}
-
-## Output Contract (strict JSON schema)
-{schema_json}
-
 Rules:
-1. Output JSON only, no markdown.
-2. `goal.summary` must be one executable short step.
-3. If task is already finished, set `is_task_complete=true` and still provide a non-empty goal summary.
-4. `requested_action_type` must be one of: tap/input/swipe/back/enter/long_press/launch_app.
-5. If an obvious target widget exists, fill `target.selectors` with high-value selectors.
-6. Put only planning hints in `planning_hints`; do not invent extra top-level keys.
+1) If task is already complete in screenshot, set is_task_complete=true, action_type=wait, input_text=''.
+2) If task is not complete, set is_task_complete=false and choose action_type from tap/input/swipe/back/enter/long_press/launch_app.
+3) goal must describe one concrete next step only.
+4) reasoning must be concise and grounded in the screenshot.
 """

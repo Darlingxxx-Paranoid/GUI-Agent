@@ -6,9 +6,8 @@ import json
 import os
 import re
 import threading
+import dataclasses
 from typing import Any
-
-from Oracle.contracts import to_plain_dict
 
 
 class AuditRecorder:
@@ -37,7 +36,7 @@ class AuditRecorder:
 
         suffix = "_llm" if llm else ""
         path = os.path.join(folder, f"step_{step_num}{suffix}.json")
-        body = to_plain_dict(payload)
+        body = _to_plain_dict(payload)
 
         if append:
             with self._lock:
@@ -80,3 +79,26 @@ class AuditRecorder:
         text = re.sub(r"[^0-9A-Za-z_.-]+", "_", text)
         text = text.strip("._-")
         return text or "default"
+
+
+def _to_plain_dict(value: Any) -> Any:
+    """Best-effort serialization for dataclass/pydantic/native types."""
+    if dataclasses.is_dataclass(value):
+        output: dict[str, Any] = {}
+        for item in dataclasses.fields(value):
+            output[item.name] = _to_plain_dict(getattr(value, item.name))
+        return output
+
+    if hasattr(value, "model_dump"):
+        try:
+            return _to_plain_dict(value.model_dump())
+        except Exception:
+            pass
+
+    if isinstance(value, dict):
+        return {str(k): _to_plain_dict(v) for k, v in value.items()}
+
+    if isinstance(value, (list, tuple, set)):
+        return [_to_plain_dict(v) for v in value]
+
+    return value
