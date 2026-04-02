@@ -64,7 +64,11 @@ class AgentLoop:
             resize_height=config.cv_resize_height,
         )
         self.memory = MemoryManager()
-        self.planner = Planner(llm_client=self.llm, memory_manager=self.memory)
+        self.planner = Planner(
+            llm_client=self.llm,
+            cv_output_dir=config.cv_output_dir,
+            cv_resize_height=config.cv_resize_height,
+        )
         self.oracle_pre = OraclePre(llm_client=self.llm)
         self.safety = SafetyInterceptor(high_risk_keywords=config.high_risk_keywords)
         self.executor = ActionExecutor(
@@ -169,7 +173,10 @@ class AgentLoop:
             )
 
         logger.info("[Step %d] 阶段2: 认知规划", step)
-        plan = self.planner.plan(task, ui_state, step=step)
+        planner_screenshot = str(getattr(ui_state, "screenshot_path", "") or "")
+        if not planner_screenshot:
+            raise RuntimeError("Planner 需要 screenshot_path，但当前 UIState 未提供")
+        plan = self.planner.plan(task, planner_screenshot)
         self._record_step_artifact(
             artifact_kind="PlanResult",
             step=step,
