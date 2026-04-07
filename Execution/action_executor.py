@@ -3,13 +3,14 @@ ADB 指令执行模块
 将坐标和动作类型转化为物理 ADB 指令执行
 """
 import base64
+from dataclasses import dataclass
 import os
 import re
 import shutil
 import subprocess
 import time
 import logging
-from typing import Any, List, Optional, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Tuple
 
 try:
     import uiautomator2 as u2
@@ -17,6 +18,19 @@ except Exception:  # pragma: no cover - import check at runtime
     u2 = None
 
 logger = logging.getLogger(__name__)
+
+
+class ActionExecutionError(RuntimeError):
+    """Raised when an action cannot be executed safely."""
+
+
+@dataclass
+class ActionSpec:
+    """Normalized action payload accepted by ActionExecutor.execute."""
+
+    action_type: str
+    params: Dict[str, Any]
+    target: Any = None
 
 
 class ActionExecutor:
@@ -146,6 +160,196 @@ class ActionExecutor:
             logger.error("未找到 adb 命令, 请确保 adb 在 PATH 中")
             raise
 
+    def _adb_cmd_expect_ok(
+        self,
+        *args,
+        timeout_sec: int = 30,
+        op_name: str = "adb_command",
+    ) -> subprocess.CompletedProcess:
+        """执行 ADB 命令并要求返回码为 0。"""
+        result = self._adb_cmd(*args, timeout_sec=timeout_sec)
+        if result.returncode != 0:
+            raise ActionExecutionError(
+                f"{op_name} failed: rc={result.returncode}, stderr={(result.stderr or '').strip()}"
+            )
+        return result
+
+    def execute(self, action: Any, current_state: Any = None) -> str:
+        """
+        统一动作执行入口（兼容对象与 dict）。
+
+        参数格式:
+        - object: action.type / action.params / action.target
+        - dict: {"type": "...", "params": {...}, "target": ...}
+
+        :return: 实际执行的动作类型（未知类型会回退为 tap）
+        """
+        spec = self._normalize_action(action)
+        handlers = {
+            "tap": self._handle_tap,
+            "input": self._handle_input,
+            "swipe": self._handle_swipe,
+            "back": self._handle_back,
+            "enter": self._handle_enter,
+            "launch_app": self._handle_launch_app,
+            "long_press": self._handle_long_press,
+        }
+        handler = handlers.get(spec.action_type)
+        if handler is None:
+            logger.warning("未知动作类型: %s，回退为 tap", spec.action_type)
+            self._handle_tap(spec, current_state=current_state)
+            return "tap"
+
+        handler(spec, current_state=current_state)
+        return spec.action_type
+
+    def _normalize_action(self, action: Any) -> ActionSpec:
+        if isinstance(action, Mapping):
+            action_type = str(action.get("type") or "").strip().lower()
+            raw_params = action.get("params", {})
+            target = action.get("target")
+        else:
+            action_type = str(getattr(action, "type", "") or "").strip().lower()
+            raw_params = getattr(action, "params", {})
+            target = getattr(action, "target", None)
+
+        params: Dict[str, Any]
+        if isinstance(raw_params, Mapping):
+            params = dict(raw_params)
+        else:
+            params = {}
+
+        return ActionSpec(action_type=action_type, params=params, target=target)
+
+    def _get_int_param(self, params: Mapping[str, Any], key: str, default: int) -> int:
+        value = params.get(key, default)
+        try:
+            return int(value)
+        except Exception:
+            logger.debug("动作参数转换失败，使用默认值: key=%s value=%s default=%s", key, value, default)
+            return int(default)
+
+    def _get_text_param(self, params: Mapping[str, Any], key: str = "text") -> str:
+        value = params.get(key, "")
+        return str(value or "")
+
+    def _handle_tap(self, spec: ActionSpec, current_state: Any = None) -> None:
+        x = self._get_int_param(spec.params, "x", 0)
+        y = self._get_int_param(spec.params, "y", 0)
+        self.tap(x, y)
+
+    def _handle_input(self, spec: ActionSpec, current_state: Any = None) -> None:
+        x = self._get_int_param(spec.params, "x", 0)
+        y = self._get_int_param(spec.params, "y", 0)
+        text = self._get_text_param(spec.params, key="text")
+        if not self._is_input_target_ready(target=spec.target, ui_state=current_state):
+            self.tap(x, y)
+            time.sleep(0.4)
+        self.input_text(text)
+
+    def _handle_swipe(self, spec: ActionSpec, current_state: Any = None) -> None:
+        self.swipe(
+            self._get_int_param(spec.params, "x", 0),
+            self._get_int_param(spec.params, "y", 0),
+            self._get_int_param(spec.params, "x2", 0),
+            self._get_int_param(spec.params, "y2", 0),
+            self._get_int_param(spec.params, "duration_ms", 500),
+        )
+
+    def _handle_back(self, spec: ActionSpec, current_state: Any = None) -> None:
+        self.back()
+
+    def _handle_enter(self, spec: ActionSpec, current_state: Any = None) -> None:
+        self.enter()
+
+    def _handle_launch_app(self, spec: ActionSpec, current_state: Any = None) -> None:
+        package = str(spec.params.get("package") or "").strip()
+        activity = str(spec.params.get("activity") or "").strip()
+        self.launch_app(package=package, activity=activity)
+
+    def _handle_long_press(self, spec: ActionSpec, current_state: Any = None) -> None:
+        self.long_press(
+            self._get_int_param(spec.params, "x", 0),
+            self._get_int_param(spec.params, "y", 0),
+            self._get_int_param(spec.params, "duration_ms", 900),
+        )
+
+    def _is_input_target_ready(self, target: Any, ui_state: Any) -> bool:
+        """
+        判断输入焦点是否已就绪（用于 input 动作，避免重复 tap）。
+        """
+        if ui_state is None:
+            return False
+        if not bool(getattr(ui_state, "keyboard_visible", False)):
+            return False
+
+        target_widget_id, target_bounds = self._extract_target_identity(target)
+        widgets = getattr(ui_state, "widgets", []) or []
+        for widget in widgets:
+            same_target = False
+            widget_id = getattr(widget, "widget_id", -1)
+            widget_bounds = getattr(widget, "bounds", (0, 0, 0, 0))
+
+            if target_widget_id is not None and int(target_widget_id) == int(widget_id):
+                same_target = True
+            elif target_bounds is not None and self._bounds_overlap(target_bounds, widget_bounds):
+                same_target = True
+
+            if same_target and bool(getattr(widget, "focused", False)) and bool(
+                getattr(widget, "editable", False) or getattr(widget, "focusable", False)
+            ):
+                return True
+
+        return any(
+            bool(getattr(widget, "focused", False))
+            and bool(getattr(widget, "editable", False) or getattr(widget, "focusable", False))
+            for widget in widgets
+        )
+
+    def _extract_target_identity(self, target: Any) -> Tuple[Optional[int], Optional[Tuple[int, int, int, int]]]:
+        if target is None:
+            return None, None
+
+        if isinstance(target, Mapping):
+            resolved = target.get("resolved")
+        else:
+            resolved = getattr(target, "resolved", None)
+
+        if resolved is None:
+            return None, None
+
+        if isinstance(resolved, Mapping):
+            raw_widget_id = resolved.get("widget_id")
+            raw_bounds = resolved.get("bounds")
+        else:
+            raw_widget_id = getattr(resolved, "widget_id", None)
+            raw_bounds = getattr(resolved, "bounds", None)
+
+        widget_id: Optional[int]
+        if raw_widget_id is None:
+            widget_id = None
+        else:
+            try:
+                widget_id = int(raw_widget_id)
+            except Exception:
+                widget_id = None
+
+        bounds: Optional[Tuple[int, int, int, int]] = None
+        if isinstance(raw_bounds, (list, tuple)) and len(raw_bounds) == 4:
+            try:
+                bounds = tuple(int(v) for v in raw_bounds)  # type: ignore[assignment]
+            except Exception:
+                bounds = None
+
+        return widget_id, bounds
+
+    def _bounds_overlap(self, box_a: tuple, box_b: tuple) -> bool:
+        if not box_a or not box_b or len(box_a) != 4 or len(box_b) != 4:
+            return False
+        ax1, ay1, ax2, ay2 = box_a
+        bx1, by1, bx2, by2 = box_b
+        return not (ax2 < bx1 or bx2 < ax1 or ay2 < by1 or by2 < ay1)
+
     def tap(self, x: int, y: int):
         """点击指定坐标"""
         logger.info("执行点击: (%d, %d)", x, y)
@@ -270,13 +474,11 @@ class ActionExecutor:
 
     def back(self):
         """按返回键"""
-        logger.info("执行返回键")
-        self._adb_cmd("shell", "input", "keyevent", "KEYCODE_BACK")
+        self.send_keyevent("KEYCODE_BACK", action_name="返回键")
 
     def home(self):
         """按 Home 键"""
-        logger.info("执行 Home 键")
-        self._adb_cmd("shell", "input", "keyevent", "KEYCODE_HOME")
+        self.send_keyevent("KEYCODE_HOME", action_name="Home 键")
 
     def launch_app(self, package: str, activity: str = ""):
         """启动应用（优先 am start，失败时回退 monkey）。"""
@@ -328,8 +530,12 @@ class ActionExecutor:
 
     def enter(self):
         """按回车键"""
-        logger.info("执行回车键")
-        self._adb_cmd("shell", "input", "keyevent", "KEYCODE_ENTER")
+        self.send_keyevent("KEYCODE_ENTER", action_name="回车键")
+
+    def send_keyevent(self, keycode: str, action_name: str = "") -> None:
+        label = action_name or keycode
+        logger.info("执行按键: %s", label)
+        self._adb_cmd("shell", "input", "keyevent", str(keycode or "").strip())
 
     def screenshot(self, filename: Optional[str] = None) -> str:
         """
@@ -344,9 +550,29 @@ class ActionExecutor:
         local_path = os.path.join(self.screenshot_dir, filename)
 
         logger.info("截屏: %s", local_path)
-        self._adb_cmd("shell", "screencap", "-p", device_path)
-        self._adb_cmd("pull", device_path, local_path)
-        self._adb_cmd("shell", "rm", device_path)
+        self._adb_cmd_expect_ok(
+            "shell",
+            "screencap",
+            "-p",
+            device_path,
+            timeout_sec=20,
+            op_name="screencap",
+        )
+        try:
+            self._adb_cmd_expect_ok(
+                "pull",
+                device_path,
+                local_path,
+                timeout_sec=20,
+                op_name="pull_screenshot",
+            )
+        finally:
+            cleanup = self._adb_cmd("shell", "rm", device_path, timeout_sec=8)
+            if cleanup.returncode != 0:
+                logger.debug("删除设备临时截图失败: %s", (cleanup.stderr or "").strip())
+
+        if not os.path.exists(local_path) or os.path.getsize(local_path) <= 32:
+            raise ActionExecutionError(f"screenshot invalid or empty: {local_path}")
 
         return local_path
 
