@@ -349,7 +349,49 @@ def compo_filter(compos, min_area, img_shape):
                 (min(compo.height, compo.width) < 8 and max(ratio_h, ratio_w) > 10):
             continue
         compos_new.append(compo)
-    return compos_new
+
+    # Suppress text-like tiny component clusters in content area (common OCR-like
+    # character fragments), while preserving small icons in top/bottom toolbars.
+    if len(compos_new) < 6:
+        return compos_new
+
+    img_h, img_w = img_shape[:2]
+    tiny_max_w = max(40, int(img_w * 0.11))
+    tiny_max_h = max(32, int(img_h * 0.05))
+    tiny_max_area = max(1200, int(img_h * img_w * 0.004))
+    mid_top = int(img_h * 0.12)
+    mid_bottom = int(img_h * 0.90)
+    row_eps = max(8, int(img_h * 0.015))
+    col_eps = max(80, int(img_w * 0.22))
+
+    tiny_indices = []
+    centers = []
+    for idx, compo in enumerate(compos_new):
+        cx = (compo.bbox.col_min + compo.bbox.col_max) // 2
+        cy = (compo.bbox.row_min + compo.bbox.row_max) // 2
+        centers.append((cx, cy))
+        if compo.width <= tiny_max_w and compo.height <= tiny_max_h and compo.area <= tiny_max_area:
+            tiny_indices.append(idx)
+
+    remove_indices = set()
+    for i in tiny_indices:
+        cx, cy = centers[i]
+        if cy <= mid_top or cy >= mid_bottom:
+            continue
+        neighbors = 0
+        for j in tiny_indices:
+            if i == j:
+                continue
+            cx2, cy2 = centers[j]
+            if abs(cy - cy2) <= row_eps and abs(cx - cx2) <= col_eps:
+                neighbors += 1
+                if neighbors >= 2:
+                    remove_indices.add(i)
+                    break
+
+    if not remove_indices:
+        return compos_new
+    return [compo for idx, compo in enumerate(compos_new) if idx not in remove_indices]
 
 
 def is_block(clip, thread=0.15):
@@ -361,13 +403,13 @@ def is_block(clip, thread=0.15):
     # top border - scan top down
     blank_count = 0
     for i in range(1, 5):
-        if sum(clip[side + i]) / 255 > thread * clip.shape[1]:
+        if np.count_nonzero(clip[side + i]) > thread * clip.shape[1]:
             blank_count += 1
     if blank_count > 2: return False
     # left border - scan left to right
     blank_count = 0
     for i in range(1, 5):
-        if sum(clip[:, side + i]) / 255 > thread * clip.shape[0]:
+        if np.count_nonzero(clip[:, side + i]) > thread * clip.shape[0]:
             blank_count += 1
     if blank_count > 2: return False
 
@@ -375,13 +417,13 @@ def is_block(clip, thread=0.15):
     # bottom border - scan bottom up
     blank_count = 0
     for i in range(-1, -5, -1):
-        if sum(clip[side + i]) / 255 > thread * clip.shape[1]:
+        if np.count_nonzero(clip[side + i]) > thread * clip.shape[1]:
             blank_count += 1
     if blank_count > 2: return False
     # right border - scan right to left
     blank_count = 0
     for i in range(-1, -5, -1):
-        if sum(clip[:, side + i]) / 255 > thread * clip.shape[0]:
+        if np.count_nonzero(clip[:, side + i]) > thread * clip.shape[0]:
             blank_count += 1
     if blank_count > 2: return False
     return True

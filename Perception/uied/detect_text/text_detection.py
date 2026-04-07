@@ -147,13 +147,29 @@ def text_cvt_orc_format_paddle(paddle_result):
     return texts
 
 
-def text_filter_noise(texts):
+def text_filter_noise(texts, img_shape=None):
     valid_texts = []
+    img_h = int(img_shape[0]) if img_shape is not None and len(img_shape) > 0 else 0
     for text in texts:
-        if len(text.content) <= 1 and text.content.lower() not in ['a', ',', '.', '!', '?', '$', '%', ':', '&', '+']:
+        content = str(text.content or "").strip()
+        if not content:
             continue
-        if remove_punctuation(text.content, more_punc=["+"]) == "Q":
+
+        # Drop symbolic one-char OCR artifacts (status icons / separators), while
+        # keeping meaningful one-char alnum labels.
+        if len(content) <= 1 and not content.isalnum():
             continue
+
+        if remove_punctuation(content, more_punc=["+"]) == "Q":
+            continue
+
+        # Suppress tiny status-bar text fragments near the very top.
+        if img_h > 0:
+            top_noise_h = max(24, int(img_h * 0.03))
+            top_noise_bottom = int(img_h * 0.08)
+            if text.height <= top_noise_h and text.location["bottom"] <= top_noise_bottom:
+                continue
+
         valid_texts.append(text)
     return valid_texts
 
@@ -181,7 +197,7 @@ def text_detection(input_file, output_file, show=False):
     texts = merge_intersected_texts(texts)
     logger.debug("After merge: %d", len(texts))
 
-    texts = text_filter_noise(texts)
+    texts = text_filter_noise(texts, img_shape=img.shape)
     logger.debug("After filter: %d", len(texts))
 
     texts = text_sentences_recognition(texts)

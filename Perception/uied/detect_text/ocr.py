@@ -59,7 +59,15 @@ class OCRModelWrapper:
 class OCRDetector:
     def __init__(self):
         self.threshold = 0.8
-        self.model = PaddleOCR(lang='ch')
+        # For GUI screenshots, document pre-processing (orientation/unwarping) can
+        # shift box coordinates away from the original frame. Disable it to keep
+        # OCR boxes in native screenshot coordinates.
+        self.model = PaddleOCR(
+            lang='ch',
+            use_doc_orientation_classify=False,
+            use_doc_unwarping=False,
+            use_textline_orientation=False,
+        )
         self.wrapper = OCRModelWrapper(self.model)
         logger.info("OCRDetector initialized successfully")
 

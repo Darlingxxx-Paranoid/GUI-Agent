@@ -147,7 +147,7 @@ def merge_text_line_to_paragraph(elements, max_line_gap=10, max_col_gap=10, img_
     return non_texts + texts
 
 
-def refine_elements(compos, texts, intersection_bias=(2, 2), containment_ratio=0.8):
+def refine_elements(compos, texts, intersection_bias=(2, 2), containment_ratio=0.8, img_shape=None):
     """
     1. remove compos contained in text
     2. remove compos containing text area that"s too large
@@ -155,6 +155,28 @@ def refine_elements(compos, texts, intersection_bias=(2, 2), containment_ratio=0
     """
     elements = []
     contained_texts = []
+    img_h = int(img_shape[0]) if img_shape and len(img_shape) >= 1 else 0
+    img_w = int(img_shape[1]) if img_shape and len(img_shape) >= 2 else 0
+
+    def should_keep_contained_text(compo, text):
+        # Keep action-like labels inside lower wide strips (e.g. transient bars)
+        # so they remain independently tappable.
+        if img_h <= 0 or img_w <= 0:
+            return False
+        c_w = compo.width
+        c_h = compo.height
+        t_w = text.width
+        t_h = text.height
+        if c_w / img_w < 0.65 or c_h / img_h > 0.12:
+            return False
+        if compo.row_min / img_h < 0.55:
+            return False
+        if t_w / img_w > 0.30 or t_h / img_h > 0.05:
+            return False
+        t_center_x = (text.col_min + text.col_max) / 2.0
+        t_center_x_ratio = t_center_x / img_w
+        return t_center_x_ratio <= 0.28 or t_center_x_ratio >= 0.72
+
     for compo in compos:
         # if compo.area > 10000:
         #     continue
@@ -170,7 +192,8 @@ def refine_elements(compos, texts, intersection_bias=(2, 2), containment_ratio=0
                 text_area += inter
                 # the text is contained in the non-text compo
                 if iob >= containment_ratio and compo.category != "Block":
-                    contained_texts.append(text)
+                    if not should_keep_contained_text(compo, text):
+                        contained_texts.append(text)
         if is_valid and text_area / compo.area < containment_ratio:
             # for t in contained_texts:
             #     t.parent_id = compo.id
@@ -185,6 +208,13 @@ def refine_elements(compos, texts, intersection_bias=(2, 2), containment_ratio=0
 
 
 def remove_fragments(elements, img_path):
+    """
+    Remove obvious noise while preserving actionable low-texture controls.
+
+    Historically we removed any element with low HSV variance. In real mobile UIs,
+    many tappable icons/buttons are intentionally low-texture, so this caused severe
+    false negatives (e.g. toolbar actions such as send/attach).
+    """
     fragments = []
     screen = cv2.imread(img_path)
     if screen is None:
@@ -204,7 +234,7 @@ def remove_fragments(elements, img_path):
     if target_w != screen.shape[1] or target_h != screen.shape[0]:
         screen = cv2.resize(screen, (target_w, target_h))
 
-    # elements contained in text blocks
+    # Remove non-text elements fully contained in text blocks.
     for i in range(len(elements) - 1):
         for j in range(i + 1, len(elements)):
             relation = elements[i].element_relation(elements[j], bias=(2, 2))
@@ -216,31 +246,16 @@ def remove_fragments(elements, img_path):
     for element in elements:
         if element.height > element.width * 10 or element.width > element.height * 30:  # over-thin elements
             fragments.append(element)
-        # elif element.area > screen.shape[1] * screen.shape[0] // 9:  # over-large elements
-        #     fragments.append(element)
-        elif element.category == "Block":  # remove block-elements
+            continue
+        if element.category == "Block":  # remove block-elements
             fragments.append(element)
-        # elif element.area < screen.shape[1] * screen.shape[0] // 14400:  # over-small elements
-        #     fragments.append(element)
-        else:  # blank elements
-            x1, y1, x2, y2 = element.put_bbox()
-            ele = screen[y1:y2, x1:x2]
-            if ele.size == 0:
-                fragments.append(element)
-                continue
-            ele_hsv = cv2.cvtColor(ele, cv2.COLOR_BGR2HSV)
-            hue_var = np.var(ele_hsv[:, :, 0])
-            sat_var = np.var(ele_hsv[:, :, 1])
-            val_var = np.var(ele_hsv[:, :, 2])
-            total_var = hue_var + sat_var + val_var
-            if total_var < 10:
-                fragments.append(element)
-            # ele_gray = cv2.cvtColor(ele, cv2.COLOR_BGR2GRAY)
-            # ele_gray = cv2.GaussianBlur(ele_gray, (3, 3), 1)
-            # ele_gray = np.array(ele_gray)
-            # std = np.std(ele_gray)
-            # if std < 1:
-            #     fragments.append(element)
+            continue
+
+        # Keep low-texture controls; only drop invalid empty crops.
+        x1, y1, x2, y2 = element.put_bbox()
+        ele = screen[y1:y2, x1:x2]
+        if ele.size == 0:
+            fragments.append(element)
 
     new_elements = [ele for ele in elements if ele not in fragments]
     return new_elements
@@ -350,10 +365,51 @@ def merge_list_rows(elements, img_shape):
 
         b_w = bx2 - bx1
         b_h = by2 - by1
+        # Keep top toolbar/status bands as separate controls for precise actions.
+        if by2 / img_h < 0.20:
+            continue
         if b_w / img_w < 0.62:
             continue
         if b_h / img_h > 0.24:
             continue
+
+        # Avoid merging list rows with lower overlay actions (e.g., floating
+        # action chips). They often introduce multiple right-side short texts
+        # (label + badge/count), which should remain independent controls.
+        if by1 / img_h >= 0.68:
+            right_texts = []
+            wide_right_texts = 0
+            for e in band:
+                if e.category not in ["Text", "Combined"]:
+                    continue
+                e_w = e.col_max - e.col_min
+                e_h = e.row_max - e.row_min
+                cx = (e.col_min + e.col_max) / 2.0
+                if cx / img_w < 0.62:
+                    continue
+                if e_h / img_h > 0.06 or e_w / img_w > 0.45:
+                    continue
+                right_texts.append(e)
+                if e_w / img_w >= 0.14:
+                    wide_right_texts += 1
+            if len(right_texts) >= 2 and wide_right_texts >= 1:
+                continue
+
+        # Avoid merging list rows with bottom fixed controls (navigation/floating
+        # actions). In lower screen area, multiple compact elements are a strong
+        # signal of persistent UI chrome rather than one content row.
+        lower_micro_count = 0
+        lower_top = int(0.82 * img_h)
+        max_micro_w = int(0.45 * img_w)
+        max_micro_h = int(0.08 * img_h)
+        if by2 >= lower_top:
+            for e in band:
+                e_w = e.col_max - e.col_min
+                e_h = e.row_max - e.row_min
+                if e.row_max >= lower_top and e_w <= max_micro_w and e_h <= max_micro_h:
+                    lower_micro_count += 1
+            if lower_micro_count >= 3:
+                continue
 
         band_texts = sum(1 for e in band if e.category in ["Text", "Combined"])
         if not (len(band) >= 6 or (len(band) >= 4 and band_texts >= 2)):
@@ -451,8 +507,17 @@ def compos_clip_and_fill(clip_root, org, compos):
     cv2.imwrite(p_join(clip_root, "bkg.png"), bkg)
 
 
-def merge(img_path, compo_path, text_path, merge_root=None, is_paragraph=False, is_remove_bar=True, show=False,
-          wait_key=0):
+def merge(
+        img_path,
+        compo_path,
+        text_path,
+        merge_root=None,
+        is_paragraph=False,
+        is_remove_bar=True,
+        show=False,
+        wait_key=0,
+        enable_related_merge=False,
+):
 
     if merge_root is not None:
         os.makedirs(merge_root, exist_ok=True)
@@ -495,7 +560,7 @@ def merge(img_path, compo_path, text_path, merge_root=None, is_paragraph=False, 
 
     # refine elements
     # texts = refine_texts(texts, compo_json["img_shape"])
-    elements = refine_elements(compos, texts)
+    elements = refine_elements(compos, texts, img_shape=compo_json.get("img_shape"))
     if is_remove_bar:
         elements = remove_top_bar(elements, img_height=compo_json["img_shape"][0])
         elements = remove_bottom_bar(elements, img_height=compo_json["img_shape"][0])
@@ -506,8 +571,9 @@ def merge(img_path, compo_path, text_path, merge_root=None, is_paragraph=False, 
 
     elements = remove_fragments(elements, img_path)
     show_elements(img_resize, elements, show=show, win_name="2", wait_key=wait_key)
-    elements = merge_related_elements(elements)
-    show_elements(img_resize, elements, show=show, win_name="3", wait_key=wait_key)
+    if enable_related_merge:
+        elements = merge_related_elements(elements)
+        show_elements(img_resize, elements, show=show, win_name="3", wait_key=wait_key)
     elements = merge_list_rows(elements, img_shape=compo_json.get("img_shape"))
     show_elements(img_resize, elements, show=show, win_name="4", wait_key=wait_key)
     reassign_ids(elements)

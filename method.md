@@ -1,3 +1,12 @@
+## Perception
+### OCR+CV
+- 输入：截图
+- 输出：OCR结果+候选控件列表
+
+### Dump解析
+- 输入：dump文件
+- 输出：完整Dump树
+
 ## Planner（LLM）
 ### 输入
 - Task: 任务描述
@@ -24,6 +33,6 @@ PlanResult:
   - `Target`: 目标(如果是`widget`，则为控件ID+控件指定属性字段(必须基于完整Dump树)；如果是`activity`和`package`，则为空)
     - `node_id`: 控件ID
     - `resource_id`: 控件资源ID
-    - `field`: 控件属性字段（text, class, content-desc, checked, enabled, focused, selected）
+    - `field`: 控件属性字段（text, class, content-desc, checked, enabled, focused, selected），用来和目标内容进行关系运算
   - `Relation`: 关系类型（包括`exact_match`、`contains`）
   - `content`: 目标内容(如果是`exact_match`，则为固定值；如果是`contains`，则为包含关系的字符串)
