@@ -1,56 +1,62 @@
-"""Main ReAct loop orchestrator using Oracle V3.1 contracts."""
+"""Main ReAct loop orchestrator using current minimal modules."""
 
 from __future__ import annotations
 
-import os
-import time
 import logging
+import re
+import time
+from dataclasses import dataclass
+from typing import Any
 
 from config import AgentConfig
-from utils.llm_client import LLMClient
-
-from Evaluation.evaluator import Evaluator
-from Evaluation.replanner import Replanner
 from Execution.action_executor import ActionExecutor
-from Execution.action_mapper import ActionMapper, MappingFailure
-from Execution.oracle_runtime import OracleRuntime
+from Oracle.post_oracle import PostOracle
 from Oracle.pre_oracle import OraclePre
-from Oracle.running_oracle import RunningOracle
-from Memory.memory_manager import MemoryManager
-from Oracle.contracts import (
-    ACTION_TYPES,
-    AdviceParams,
-    Assessment,
-    RecommendedAction,
-    StepEvaluation,
-    to_plain_dict,
-    export_contract_schema,
-)
-from Perception.perception_manager import PerceptionManager
-from Planning.planner import Planner
-from Planning.safety_interceptor import SafetyInterceptor
+from Oracle.running_oracle import RunningOracle, RunningOracleResult
+from Perception.dump_parser import DumpParser
+from Perception.uied_controls import get_uied_visible_widgets_list
+from Planning.planner import PlanResult, Planner
 from utils.audit_recorder import AuditRecorder
+from utils.llm_client import LLMClient
 
 logger = logging.getLogger(__name__)
 
 
+@dataclass
+class StepObservation:
+    screenshot_path: str
+    dump_path: str
+    dump_tree: dict[str, Any]
+    dump_elements: list[Any]
+    widgets: list[dict[str, Any]]
+    activity: str
+    package: str
+    keyboard_visible: bool
+
+
 class AgentLoop:
+    """A minimal yet complete loop: observe -> plan -> pre-oracle -> act -> post-oracle."""
+
+    _APP_ALIAS_MAP = {
+        "gmail": "com.google.android.gm",
+        "chrome": "com.android.chrome",
+        "settings": "com.android.settings",
+        "clock": "com.google.android.deskclock",
+        "youtube": "com.google.android.youtube",
+        "maps": "com.google.android.apps.maps",
+        "photos": "com.google.android.apps.photos",
+        "play store": "com.android.vending",
+        "camera": "com.android.camera2",
+        "wechat": "com.tencent.mm",
+        "微信": "com.tencent.mm",
+        "短信": "com.google.android.apps.messaging",
+        "messages": "com.google.android.apps.messaging",
+    }
+
     def __init__(self, config: AgentConfig):
         self.config = config
         config.ensure_dirs()
         self.audit = AuditRecorder(component="agent_loop")
-
-        self.contract_schema_path = os.path.join(
-            os.path.dirname(__file__),
-            "data",
-            "contracts",
-            "oracle_contracts_v4_0.json",
-        )
-        os.makedirs(os.path.dirname(self.contract_schema_path), exist_ok=True)
-        try:
-            export_contract_schema(self.contract_schema_path)
-        except Exception as exc:
-            logger.warning("导出 contract schema 失败: %s", exc)
 
         self.llm = LLMClient(
             api_base=config.llm_api_base,
@@ -59,164 +65,115 @@ class AgentLoop:
             temperature=config.llm_temperature,
             max_tokens=config.llm_max_tokens,
         )
-
-        self.perception = PerceptionManager(
-            cv_output_dir=config.cv_output_dir,
-            resize_height=config.cv_resize_height,
+        self.executor = ActionExecutor(
+            serial=config.adb_serial,
+            screenshot_dir=config.screenshot_dir,
+            dump_dir=config.dump_dir,
         )
-        self.memory = MemoryManager()
+        self.dump_parser = DumpParser()
         self.planner = Planner(
             llm_client=self.llm,
             cv_output_dir=config.cv_output_dir,
             cv_resize_height=config.cv_resize_height,
         )
         self.oracle_pre = OraclePre(llm_client=self.llm)
-        self.safety = SafetyInterceptor(high_risk_keywords=config.high_risk_keywords)
-        self.executor = ActionExecutor(
-            serial=config.adb_serial,
-            screenshot_dir=config.screenshot_dir,
-            dump_dir=config.dump_dir,
-        )
-        self.mapper = ActionMapper(llm_client=self.llm)
-        self.oracle_runtime = OracleRuntime(
-            dead_loop_threshold=config.dead_loop_threshold,
-            screen_variance_threshold=config.screen_variance_threshold,
-        )
+        self.post_oracle = PostOracle()
         self.running_oracle = RunningOracle(
             screen_variance_threshold=config.screen_variance_threshold,
         )
-        self.evaluator = Evaluator(llm_client=self.llm)
-        self.replanner = Replanner(
-            llm_client=self.llm,
-            memory_manager=self.memory,
-            dead_end_threshold=config.dead_end_threshold,
-        )
+
         self.pending_runtime_replan_hint = ""
+        self.action_history: list[dict[str, Any]] = []
+        self.consecutive_post_failures = 0
+        logger.info("AgentLoop 初始化完成(最小闭环), max_steps=%d", config.max_steps)
 
-        logger.info("AgentLoop 初始化完成(V4), max_steps=%d", config.max_steps)
-
-    def run(self, task: str, dry_run: bool = False):
+    def run(self, task: str, dry_run: bool = False) -> bool:
         logger.info("=" * 60)
         logger.info("开始执行任务: '%s'", task)
         logger.info("=" * 60)
 
-        self.memory.reset_short_term()
-        self.oracle_runtime.reset()
         self.running_oracle.reset()
-        self.replanner.reset()
         self.pending_runtime_replan_hint = ""
+        self.action_history = []
+        self.consecutive_post_failures = 0
 
-        step = 0
-        task_completed = False
         screen_size = (1080, 1920)
-        if not dry_run:
-            try:
-                screen_size = self.executor.get_screen_size()
-                self.executor.stabilize_ui_animations()
-            except Exception as exc:
-                logger.warning("获取屏幕尺寸失败: %s，使用默认值", exc)
+        try:
+            screen_size = self.executor.get_screen_size()
+            self.executor.stabilize_ui_animations()
+        except Exception as exc:
+            logger.warning("初始化设备状态失败，使用默认分辨率: %s", exc)
 
-        while not task_completed and step < self.config.max_steps:
-            step += 1
+        task_completed = False
+        for step in range(1, int(self.config.max_steps) + 1):
             logger.info("=" * 40)
             logger.info("第 %d 步 (最大 %d)", step, self.config.max_steps)
             logger.info("=" * 40)
-
             try:
-                result = self._execute_one_step(
+                step_done, task_completed = self._run_one_step(
                     task=task,
                     step=step,
                     screen_size=screen_size,
                     dry_run=dry_run,
                 )
-                task_completed = bool(result.get("task_completed", False))
-                if bool(result.get("abort", False)):
-                    logger.warning("任务中止: %s", result.get("reason", ""))
+                if task_completed:
                     break
+                if not step_done:
+                    # 当前步失败，继续下一步重规划。
+                    continue
             except KeyboardInterrupt:
                 logger.info("用户中断任务")
                 break
             except Exception as exc:
                 logger.error("步骤 %d 执行异常: %s", step, exc, exc_info=True)
-                if step < self.config.max_steps:
-                    logger.info("尝试继续执行...")
-                    continue
-                break
-
-        self.replanner.save_task_experience(task, task_completed)
+                continue
 
         if task_completed:
             logger.info("任务成功完成: '%s'", task)
         else:
-            logger.warning("任务未完成: '%s' (step=%d/%d)", task, step, self.config.max_steps)
-
+            logger.warning(
+                "任务未完成: '%s' (step<=%d)",
+                task,
+                self.config.max_steps,
+            )
         return task_completed
 
-    def _execute_one_step(
+    def _run_one_step(
         self,
         task: str,
         step: int,
-        screen_size: tuple,
+        screen_size: tuple[int, int],
         dry_run: bool,
-    ) -> dict:
-        logger.info("[Step %d] 阶段1: 环境感知", step)
-        if dry_run:
-            from Perception.context_builder import UIState
-
-            ui_state = UIState(screen_width=screen_size[0], screen_height=screen_size[1])
-        else:
-            screenshot_path = self.executor.screenshot(f"step_{step}_before.png")
-            dump_path = self.executor.dump_ui(f"step_{step}.xml")
-            activity = self.executor.get_current_activity()
-            package = self.executor.get_current_package()
-            keyboard_visible = self.executor.get_keyboard_visible()
-            ui_state = self.perception.perceive(
-                screenshot_path=screenshot_path,
-                dump_path=dump_path,
-                screen_size=screen_size,
-                activity_name=activity,
-                package_name=package,
-                keyboard_visible=keyboard_visible,
-            )
-            runtime_before = self._run_running_oracle(
+    ) -> tuple[bool, bool]:
+        before = self._observe(step=step, phase="before", screen_size=screen_size)
+        if before is None:
+            self._record_step_artifact(
+                artifact_kind="StepResult",
                 step=step,
-                phase="before_action",
-                screenshot_path=screenshot_path,
+                payload={"phase": "before", "status": "observe_failed"},
             )
-            if runtime_before and runtime_before.has_runtime_exception:
-                self._set_runtime_replan_hint(action_text="unknown")
-                logger.warning("Running-Oracle 异常: 执行 back 尝试回退，并触发重规划")
-                self._execute_adaptive_back(
-                    reference_activity=str(activity or ""),
-                    reference_package=str(package or ""),
-                )
-                # 回退后重采样当前界面，继续进入规划流程。
-                screenshot_path = self.executor.screenshot(f"step_{step}_before_recovered.png")
-                dump_path = self.executor.dump_ui(f"step_{step}_before_recovered.xml")
-                activity = self.executor.get_current_activity()
-                package = self.executor.get_current_package()
-                keyboard_visible = self.executor.get_keyboard_visible()
-                ui_state = self.perception.perceive(
-                    screenshot_path=screenshot_path,
-                    dump_path=dump_path,
-                    screen_size=screen_size,
-                    activity_name=activity,
-                    package_name=package,
-                    keyboard_visible=keyboard_visible,
-                )
+            return False, False
 
-        logger.info("[Step %d] 阶段2: 认知规划", step)
-        planner_screenshot = str(getattr(ui_state, "screenshot_path", "") or "")
-        if not planner_screenshot:
-            raise RuntimeError("Planner 需要 screenshot_path，但当前 UIState 未提供")
-        runtime_replan_hint = str(self.pending_runtime_replan_hint or "").strip()
-        plan = self.planner.plan(
-            task,
-            planner_screenshot,
-            runtime_exception_hint=runtime_replan_hint,
+        runtime_before = self._run_running_oracle(
+            step=step,
+            phase="before_action",
+            screenshot_path=before.screenshot_path,
         )
-        if runtime_replan_hint:
-            self.pending_runtime_replan_hint = ""
+        if runtime_before and runtime_before.has_runtime_exception:
+            self._set_runtime_replan_hint(
+                action_text=f"before_action_runtime_exception:{','.join(runtime_before.tags or [])}"
+            )
+            if not dry_run:
+                logger.warning("Running-Oracle 告警，执行 back 尝试恢复")
+                self.executor.back()
+            return False, False
+
+        plan = self.planner.plan(
+            task=task,
+            screenshot=before.screenshot_path,
+            runtime_exception_hint=str(self.pending_runtime_replan_hint or ""),
+        )
+        self.pending_runtime_replan_hint = ""
         self._record_step_artifact(
             artifact_kind="PlanResult",
             step=step,
@@ -225,29 +182,16 @@ class AgentLoop:
 
         if plan.is_task_complete:
             logger.info("Planner 判断任务已完成")
-            return {"task_completed": True}
-
-        action_type = str(plan.requested_action_type or "").strip().lower()
-        if action_type not in ACTION_TYPES:
-            failure_reason = f"planner_invalid_action_type:{action_type}"
-            self.memory.short_term.add_failure(failure_reason)
-            self.memory.short_term.add_step(
-                {
-                    "step": step,
-                    "goal": to_plain_dict(plan.goal),
-                    "result": failure_reason,
-                    "from_experience": bool(plan.from_experience),
-                }
+            self._record_step_artifact(
+                artifact_kind="StepResult",
+                step=step,
+                payload={"phase": "plan", "status": "task_complete"},
             )
-            return {"task_completed": False}
-
-        self.memory.short_term.current_subgoal = plan.goal.summary
-        logger.info("本步目标: '%s' (action=%s)", plan.goal.summary, plan.requested_action_type)
+            return True, True
 
         contract = self.oracle_pre.generate_contract(
             plan=plan,
-            ui_state=ui_state,
-            task_hint=task,
+            dump_tree=before.dump_tree,
             step=step,
         )
         self._record_step_artifact(
@@ -256,83 +200,11 @@ class AgentLoop:
             payload=contract,
         )
 
-        self._record_step_artifact(
-            artifact_kind="UIState",
-            step=step,
-            payload={
-                "phase": "before_action",
-                "state": ui_state,
-            },
-            append=True,
-        )
-
-        logger.info("[Step %d] 阶段3: 安全检查", step)
-        if not self.safety.check(plan=plan, contract=contract):
-            self.memory.short_term.add_step(
-                {
-                    "step": step,
-                    "goal": to_plain_dict(plan.goal),
-                    "contract": to_plain_dict(contract),
-                    "result": "user_rejected",
-                    "from_experience": bool(plan.from_experience),
-                }
-            )
-            return {"task_completed": False, "abort": True, "reason": "用户拒绝高风险操作"}
-
-        logger.info("[Step %d] 阶段4: 动作映射", step)
-        try:
-            action = self.mapper.map_action(plan=plan, ui_state=ui_state, contract=contract)
-        except MappingFailure as exc:
-            logger.warning("动作映射失败: %s", exc)
-            eval_result = self._evaluation_from_mapper_failure(exc)
-            self._record_step_artifact(
-                artifact_kind="StepEvaluation",
-                step=step,
-                payload={
-                    "phase": "mapper_failure",
-                    "value": eval_result,
-                },
-                append=True,
-            )
-            decision = self.replanner.handle_failure(
-                subgoal_description=plan.goal.summary,
-                evaluation=eval_result,
-                ui_state=ui_state,
-            )
-            self._record_step_artifact(
-                artifact_kind="ReplanDecision",
-                step=step,
-                payload={
-                    "phase": "mapper_failure",
-                    "value": decision,
-                },
-                append=True,
-            )
-            self.memory.short_term.add_step(
-                {
-                    "step": step,
-                    "goal": to_plain_dict(plan.goal),
-                    "contract": to_plain_dict(contract),
-                    "evaluation": to_plain_dict(eval_result),
-                    "result": f"failed_mapper:{exc.reason_code}",
-                    "replan_decision": decision.action,
-                    "from_experience": bool(plan.from_experience),
-                }
-            )
-            if decision.action == "back" and not dry_run:
-                self._execute_adaptive_back(
-                    reference_activity=str(getattr(ui_state, "activity_name", "") or ""),
-                    reference_package=str(getattr(ui_state, "package_name", "") or ""),
-                )
-            if decision.action == "abort":
-                return {"task_completed": False, "abort": True, "reason": decision.reason}
-            return {"task_completed": False}
-
-        logger.info("映射动作: type=%s, params=%s", action.type, action.params)
-        self._record_step_artifact(
-            artifact_kind="action",
-            step=step,
-            payload=action,
+        action = self._build_action_from_plan(
+            plan=plan,
+            widgets=before.widgets,
+            screen_size=screen_size,
+            task=task,
         )
         self._record_step_artifact(
             artifact_kind="ResolvedAction",
@@ -340,421 +212,375 @@ class AgentLoop:
             payload=action,
         )
 
-        pre_guard = self.oracle_runtime.pre_guard(action=action, contract=contract, ui_state=ui_state)
-        self._record_step_artifact(
-            artifact_kind="GuardResult",
-            step=step,
-            payload={
-                "phase": "pre",
-                "value": pre_guard,
-            },
-            append=True,
-        )
-        self._record_step_artifact(
-            artifact_kind="ObservationFact",
-            step=step,
-            payload={
-                "phase": "pre",
-                "facts": list(pre_guard.observations or []),
-            },
-            append=True,
-        )
-        self._record_step_artifact(
-            artifact_kind="Assessment",
-            step=step,
-            payload={
-                "phase": "pre",
-                "items": list(pre_guard.assessments or []),
-            },
-            append=True,
-        )
-        if not pre_guard.allowed:
-            logger.warning("pre-guard 阻断执行: assessments=%d", len(pre_guard.assessments))
-            eval_result = self._evaluation_from_pre_guard(pre_guard)
-            self._record_step_artifact(
-                artifact_kind="StepEvaluation",
-                step=step,
-                payload={
-                    "phase": "pre_guard_blocked",
-                    "value": eval_result,
-                },
-                append=True,
-            )
-            decision = self.replanner.handle_failure(
-                subgoal_description=plan.goal.summary,
-                evaluation=eval_result,
-                ui_state=ui_state,
-            )
-            self._record_step_artifact(
-                artifact_kind="ReplanDecision",
-                step=step,
-                payload={
-                    "phase": "pre_guard_blocked",
-                    "value": decision,
-                },
-                append=True,
-            )
-
-            self.memory.short_term.add_step(
-                {
-                    "step": step,
-                    "goal": to_plain_dict(plan.goal),
-                    "contract": to_plain_dict(contract),
-                    "action": to_plain_dict(action),
-                    "evaluation": to_plain_dict(eval_result),
-                    "result": f"failed_pre_guard:{eval_result.decision}",
-                    "replan_decision": decision.action,
-                    "from_experience": bool(plan.from_experience),
-                }
-            )
-
-            if decision.action == "back" and not dry_run:
-                self._execute_adaptive_back(
-                    reference_activity=str(getattr(ui_state, "activity_name", "") or ""),
-                    reference_package=str(getattr(ui_state, "package_name", "") or ""),
-                )
-            if decision.action == "abort":
-                return {"task_completed": False, "abort": True, "reason": decision.reason}
-            return {"task_completed": False}
-
-        logger.info("[Step %d] 阶段5: 执行动作", step)
-        old_activity = str(getattr(ui_state, "activity_name", "") or "")
-        old_package = str(getattr(ui_state, "package_name", "") or "")
+        action_record: dict[str, Any] = {
+            "step": step,
+            "goal": plan.goal,
+            "action_type": action.get("type"),
+            "action_params": dict(action.get("params") or {}),
+            "dry_run": bool(dry_run),
+        }
+        self.action_history.append(action_record)
 
         if dry_run:
-            logger.info("[DRY RUN] 跳过执行动作: %s", action.description)
+            logger.info("[DRY RUN] 跳过执行动作: %s", action)
         else:
-            self._execute_action(action, current_state=ui_state)
+            self.executor.execute(action)
+        time.sleep(1.8)
 
-        self.oracle_runtime.record_action(action)
-        self.memory.short_term.add_action(to_plain_dict(action))
+        after = self._observe(step=step, phase="after", screen_size=screen_size)
+        if after is None:
+            action_record["post_oracle"] = {"is_goal_complete": False, "reason": "observe_after_failed"}
+            self._set_runtime_replan_hint(action_text="observe_after_failed")
+            return False, False
 
-        if not dry_run:
-            time.sleep(3.0)
-
-        logger.info("[Step %d] 阶段6: 执行后感知 + post-guard", step)
-        if dry_run:
-            from Perception.context_builder import UIState
-
-            new_state = UIState(screen_width=screen_size[0], screen_height=screen_size[1])
-            new_screenshot = ""
-        else:
-            new_screenshot = self.executor.screenshot(f"step_{step}_after.png")
-            new_dump = self.executor.dump_ui(f"step_{step}_after.xml")
-            new_activity = self.executor.get_current_activity()
-            new_package = self.executor.get_current_package()
-            new_keyboard_visible = self.executor.get_keyboard_visible()
-            new_state = self.perception.perceive(
-                screenshot_path=new_screenshot,
-                dump_path=new_dump,
-                screen_size=screen_size,
-                activity_name=new_activity,
-                package_name=new_package,
-                keyboard_visible=new_keyboard_visible,
-            )
-            runtime_after = self._run_running_oracle(
-                step=step,
-                phase="after_action",
-                screenshot_path=new_screenshot,
-            )
-            if runtime_after and runtime_after.has_runtime_exception:
-                action_text = self._describe_action_for_replan(action)
-                self._set_runtime_replan_hint(action_text=action_text)
-                logger.warning("Running-Oracle 异常: 执行 back 尝试回退，并触发重规划")
-                self._execute_adaptive_back(
-                    reference_activity=old_activity,
-                    reference_package=old_package,
-                )
-                self.memory.short_term.add_failure("running_oracle_exception_after_action")
-                self.memory.short_term.add_step(
-                    {
-                        "step": step,
-                        "goal": to_plain_dict(plan.goal),
-                        "contract": to_plain_dict(contract),
-                        "action": to_plain_dict(action),
-                        "result": "running_oracle_exception_after_action",
-                        "running_oracle_tags": list(runtime_after.tags or []),
-                        "from_experience": bool(plan.from_experience),
-                    }
-                )
-                return {"task_completed": False}
-
-        post_guard = self.oracle_runtime.post_guard(
-            action=action,
-            contract=contract,
-            old_state=ui_state,
-            new_state=new_state,
-            screenshot_path=new_screenshot,
-        )
-        self._record_step_artifact(
-            artifact_kind="GuardResult",
+        runtime_after = self._run_running_oracle(
             step=step,
-            payload={
-                "phase": "post",
-                "value": post_guard,
-            },
-            append=True,
+            phase="after_action",
+            screenshot_path=after.screenshot_path,
         )
-        self._record_step_artifact(
-            artifact_kind="ObservationFact",
-            step=step,
-            payload={
-                "phase": "post",
-                "facts": list(post_guard.observations or []),
-            },
-            append=True,
-        )
-        self._record_step_artifact(
-            artifact_kind="Assessment",
-            step=step,
-            payload={
-                "phase": "post",
-                "items": list(post_guard.assessments or []),
-            },
-            append=True,
-        )
-        self._record_step_artifact(
-            artifact_kind="UIState",
-            step=step,
-            payload={
-                "phase": "after_action",
-                "state": new_state,
-            },
-            append=True,
-        )
-
-        logger.info("[Step %d] 阶段7: 事后评估", step)
-        evaluation = self.evaluator.evaluate(
-            subgoal_description=plan.goal.summary,
-            contract=contract,
-            old_state=ui_state,
-            new_state=new_state,
-            action=action,
-            post_guard=post_guard,
-        )
-
-        if self._should_observe_again(evaluation=evaluation) and not dry_run:
-            delay_ms = 1800
-            params = evaluation.recommended_action.params if evaluation.recommended_action else None
-            if params and params.observe_delay_ms:
-                delay_ms = max(400, int(params.observe_delay_ms))
-
-            logger.info("评估建议再次观测，等待 %dms", delay_ms)
-            time.sleep(delay_ms / 1000.0)
-
-            new_screenshot_2 = self.executor.screenshot(f"step_{step}_after2.png")
-            new_dump_2 = self.executor.dump_ui(f"step_{step}_after2.xml")
-            new_activity_2 = self.executor.get_current_activity()
-            new_package_2 = self.executor.get_current_package()
-            new_keyboard_visible_2 = self.executor.get_keyboard_visible()
-            new_state_2 = self.perception.perceive(
-                screenshot_path=new_screenshot_2,
-                dump_path=new_dump_2,
-                screen_size=screen_size,
-                activity_name=new_activity_2,
-                package_name=new_package_2,
-                keyboard_visible=new_keyboard_visible_2,
+        if runtime_after and runtime_after.has_runtime_exception:
+            self._set_runtime_replan_hint(
+                action_text=f"after_action_runtime_exception:{','.join(runtime_after.tags or [])}"
             )
-            runtime_after_2 = self._run_running_oracle(
-                step=step,
-                phase="after_observe_again",
-                screenshot_path=new_screenshot_2,
-            )
-            if runtime_after_2 and runtime_after_2.has_runtime_exception:
-                action_text = self._describe_action_for_replan(action)
-                self._set_runtime_replan_hint(action_text=action_text)
-                logger.warning("Running-Oracle 异常: 执行 back 尝试回退，并触发重规划")
-                self._execute_adaptive_back(
-                    reference_activity=old_activity,
-                    reference_package=old_package,
-                )
-                self.memory.short_term.add_failure("running_oracle_exception_after_observe_again")
-                self.memory.short_term.add_step(
-                    {
-                        "step": step,
-                        "goal": to_plain_dict(plan.goal),
-                        "contract": to_plain_dict(contract),
-                        "action": to_plain_dict(action),
-                        "result": "running_oracle_exception_after_observe_again",
-                        "running_oracle_tags": list(runtime_after_2.tags or []),
-                        "from_experience": bool(plan.from_experience),
-                    }
-                )
-                return {"task_completed": False}
-
-            post_guard_2 = self.oracle_runtime.post_guard(
-                action=action,
-                contract=contract,
-                old_state=ui_state,
-                new_state=new_state_2,
-                screenshot_path=new_screenshot_2,
-            )
-            evaluation = self.evaluator.evaluate(
-                subgoal_description=plan.goal.summary,
-                contract=contract,
-                old_state=ui_state,
-                new_state=new_state_2,
-                action=action,
-                post_guard=post_guard_2,
-            )
-            self._record_step_artifact(
-                artifact_kind="GuardResult",
-                step=step,
-                payload={
-                    "phase": "post_observe_again",
-                    "value": post_guard_2,
-                },
-                append=True,
-            )
-            self._record_step_artifact(
-                artifact_kind="ObservationFact",
-                step=step,
-                payload={
-                    "phase": "post_observe_again",
-                    "facts": list(post_guard_2.observations or []),
-                },
-                append=True,
-            )
-            self._record_step_artifact(
-                artifact_kind="Assessment",
-                step=step,
-                payload={
-                    "phase": "post_observe_again",
-                    "items": list(post_guard_2.assessments or []),
-                },
-                append=True,
-            )
-            self._record_step_artifact(
-                artifact_kind="UIState",
-                step=step,
-                payload={
-                    "phase": "after_observe_again",
-                    "state": new_state_2,
-                },
-                append=True,
-            )
-            new_state = new_state_2
-
-        self._record_step_artifact(
-            artifact_kind="StepEvaluation",
-            step=step,
-            payload={
-                "phase": "post",
-                "value": evaluation,
-            },
-            append=True,
-        )
-        self._record_step_artifact(
-            artifact_kind="ObservationFact",
-            step=step,
-            payload={
-                "phase": "evaluation",
-                "facts": list(evaluation.observations or []),
-            },
-            append=True,
-        )
-        self._record_step_artifact(
-            artifact_kind="Assessment",
-            step=step,
-            payload={
-                "phase": "evaluation",
-                "items": list(evaluation.assessments or []),
-            },
-            append=True,
-        )
-
-        if evaluation.decision == "success":
-            logger.info("子目标完成: '%s'", plan.goal.summary)
-            self.replanner.handle_success(task)
-            self.memory.short_term.add_step(
-                {
-                    "step": step,
-                    "goal": to_plain_dict(plan.goal),
-                    "contract": to_plain_dict(contract),
-                    "action": to_plain_dict(action),
-                    "evaluation": to_plain_dict(evaluation),
-                    "result": "success",
-                    "from_experience": bool(plan.from_experience),
-                    "activity_after": str(getattr(new_state, "activity_name", "") or ""),
-                    "package_after": str(getattr(new_state, "package_name", "") or ""),
-                    "keyboard_visible_after": bool(getattr(new_state, "keyboard_visible", False)),
-                }
-            )
-            return {"task_completed": False}
-
-        logger.warning("子目标未通过: decision=%s", evaluation.decision)
-        decision = self.replanner.handle_failure(
-            subgoal_description=plan.goal.summary,
-            evaluation=evaluation,
-            ui_state=new_state,
-        )
-        self._record_step_artifact(
-            artifact_kind="ReplanDecision",
-            step=step,
-            payload={
-                "phase": "post_evaluation_failure",
-                "value": decision,
-            },
-            append=True,
-        )
-
-        self.memory.short_term.add_step(
-            {
-                "step": step,
-                "goal": to_plain_dict(plan.goal),
-                "contract": to_plain_dict(contract),
-                "action": to_plain_dict(action),
-                "evaluation": to_plain_dict(evaluation),
-                "result": f"failed:{evaluation.decision}",
-                "replan_decision": decision.action,
-                "from_experience": bool(plan.from_experience),
-                "activity_after": str(getattr(new_state, "activity_name", "") or ""),
-                "package_after": str(getattr(new_state, "package_name", "") or ""),
-                "keyboard_visible_after": bool(getattr(new_state, "keyboard_visible", False)),
+            action_record["runtime_oracle"] = {
+                "phase": runtime_after.phase,
+                "tags": list(runtime_after.tags or []),
             }
+            if not dry_run:
+                logger.warning("Running-Oracle 告警，执行 back 尝试恢复")
+                self.executor.back()
+            return False, False
+
+        post_result = self.post_oracle.evaluate(
+            dump_tree=after.dump_tree,
+            expectations=contract.Expectations,
+            action_history=self.action_history,
+            step=step,
+        )
+        post_output = self.post_oracle.to_output(post_result)
+        action_record["post_oracle"] = dict(post_output)
+        self._record_step_artifact(
+            artifact_kind="PostOracle",
+            step=step,
+            payload={"phase": "post", "value": post_output},
+            append=True,
         )
 
-        if decision.action == "back" and not dry_run:
-            logger.info("执行回溯: adaptive back %d 步", decision.back_steps)
-            for _ in range(max(1, int(decision.back_steps or 1))):
-                before_back_activity = self.executor.get_current_activity()
-                before_back_package = self.executor.get_current_package()
-                self._execute_adaptive_back(
-                    reference_activity=before_back_activity,
-                    reference_package=before_back_package,
-                )
-                time.sleep(0.5)
+        if post_result.is_goal_complete:
+            self.consecutive_post_failures = 0
+            logger.info("Post-Oracle 通过，子目标完成: %s", plan.goal)
+            self._record_step_artifact(
+                artifact_kind="StepResult",
+                step=step,
+                payload={"status": "subgoal_success", "goal": plan.goal},
+            )
+            return True, False
 
-        if decision.action == "abort":
-            logger.warning("任务中止: %s", decision.reason)
-            return {"task_completed": False, "abort": True, "reason": decision.reason}
-
-        return {"task_completed": False}
-
-    def _evaluation_from_pre_guard(self, pre_guard) -> StepEvaluation:
-        has_hard = any(item.outcome == "fail" and item.severity == "hard" for item in pre_guard.assessments)
-        recommended = RecommendedAction(
-            kind="backtrack" if has_hard else "replan",
-            params=AdviceParams(backtrack_steps=1 if has_hard else None, reason_tags=["pre_guard_blocked"]),
+        self.consecutive_post_failures += 1
+        self._set_runtime_replan_hint(action_text=f"post_oracle_not_complete:{plan.goal}")
+        logger.warning(
+            "Post-Oracle 未通过(step=%d, consecutive_failures=%d)",
+            step,
+            self.consecutive_post_failures,
         )
-        return StepEvaluation(
-            decision="fail",
-            confidence=0.95 if has_hard else 0.85,
-            recommended_action=recommended,
-            assessments=list(pre_guard.assessments or []),
-            observations=list(pre_guard.observations or []),
-            metrics=[],
-            expectation_matches=[],
+        if self.consecutive_post_failures >= int(max(2, self.config.max_retries_per_subgoal)):
+            logger.warning("连续失败达到阈值，尝试 back 脱困")
+            if not dry_run:
+                self.executor.back()
+            self.consecutive_post_failures = 0
+        return False, False
+
+    def _observe(
+        self,
+        step: int,
+        phase: str,
+        screen_size: tuple[int, int],
+    ) -> StepObservation | None:
+        screenshot_name = f"step_{step}_{phase}.png"
+        dump_name = f"step_{step}_{phase}.xml"
+        try:
+            screenshot_path = self.executor.screenshot(screenshot_name)
+            dump_path = self.executor.dump_ui(dump_name)
+            activity = self.executor.get_current_activity()
+            package = self.executor.get_current_package()
+            keyboard_visible = self.executor.get_keyboard_visible()
+        except Exception as exc:
+            logger.warning("环境观测失败(step=%d, phase=%s): %s", step, phase, exc)
+            return None
+
+        dump_tree: dict[str, Any] = {}
+        dump_elements: list[Any] = []
+        if dump_path:
+            dump_elements = self.dump_parser.parse(dump_path)
+            dump_tree = self.dump_parser.parse_tree(dump_path)
+
+        if not dump_tree:
+            # 保证 Pre/Post-Oracle 至少能拿到结构化根节点。
+            dump_tree = {"node_id": 1, "children": []}
+        if activity:
+            dump_tree["activity"] = str(activity)
+        if package:
+            dump_tree["package"] = str(package)
+
+        widgets = self._extract_widgets(
+            screenshot_path=screenshot_path,
+        )
+        self._record_step_artifact(
+            artifact_kind="Observation",
+            step=step,
+            payload={
+                "phase": phase,
+                "screenshot_path": screenshot_path,
+                "dump_path": dump_path,
+                "activity": activity,
+                "package": package,
+                "keyboard_visible": bool(keyboard_visible),
+                "dump_node_count": self._count_nodes(dump_tree),
+                "widget_count": len(widgets),
+            },
+            append=True,
+        )
+
+        return StepObservation(
+            screenshot_path=screenshot_path,
+            dump_path=dump_path,
+            dump_tree=dump_tree,
+            dump_elements=dump_elements,
+            widgets=widgets,
+            activity=str(activity or ""),
+            package=str(package or ""),
+            keyboard_visible=bool(keyboard_visible),
+        )
+
+    def _extract_widgets(
+        self,
+        screenshot_path: str,
+    ) -> list[dict[str, Any]]:
+        try:
+            widgets = get_uied_visible_widgets_list(
+                screenshot_path=screenshot_path,
+                cv_output_dir=self.config.cv_output_dir,
+                resize_height=self.config.cv_resize_height,
+            )
+            return list(widgets or [])
+        except Exception as exc:
+            logger.warning("UIED 可见控件提取失败，降级为空列表: %s", exc)
+            return []
+
+    def _build_action_from_plan(
+        self,
+        plan: PlanResult,
+        widgets: list[dict[str, Any]],
+        screen_size: tuple[int, int],
+        task: str,
+    ) -> dict[str, Any]:
+        action_type = str(plan.action_type or "").strip().lower()
+        widget = self._find_widget_by_id(widgets, int(plan.target_widget_id))
+        center = self._widget_center(widget=widget, screen_size=screen_size)
+        bounds = self._widget_bounds(widget=widget)
+
+        if action_type == "tap":
+            return {"type": "tap", "params": {"x": center[0], "y": center[1]}}
+
+        if action_type == "long_press":
+            return {
+                "type": "long_press",
+                "params": {"x": center[0], "y": center[1], "duration_ms": 900},
+            }
+
+        if action_type == "input":
+            return {
+                "type": "input",
+                "params": {"x": center[0], "y": center[1], "text": str(plan.input_text or "")},
+            }
+
+        if action_type == "swipe":
+            x1, y1, x2, y2 = self._infer_swipe_points(
+                hint_text=f"{task} {plan.goal}",
+                bounds=bounds,
+                screen_size=screen_size,
+            )
+            return {
+                "type": "swipe",
+                "params": {
+                    "x": x1,
+                    "y": y1,
+                    "x2": x2,
+                    "y2": y2,
+                    "duration_ms": 500,
+                },
+            }
+
+        if action_type == "back":
+            return {"type": "back", "params": {}}
+
+        if action_type == "enter":
+            return {"type": "enter", "params": {}}
+
+        if action_type == "launch_app":
+            package = self._infer_package_name(f"{task} {plan.goal}")
+            if package:
+                return {"type": "launch_app", "params": {"package": package}}
+            logger.warning("launch_app 无法推断包名，降级为 tap 中心点")
+            return {"type": "tap", "params": {"x": center[0], "y": center[1]}}
+
+        logger.warning("未知 action_type=%s，降级为 tap 中心点", action_type)
+        return {"type": "tap", "params": {"x": center[0], "y": center[1]}}
+
+    def _find_widget_by_id(self, widgets: list[dict[str, Any]], widget_id: int) -> dict[str, Any] | None:
+        for item in widgets:
+            try:
+                if int(item.get("widget_id")) == int(widget_id):
+                    return item
+            except Exception:
+                continue
+        return None
+
+    def _widget_center(self, widget: dict[str, Any] | None, screen_size: tuple[int, int]) -> tuple[int, int]:
+        sw, sh = int(screen_size[0]), int(screen_size[1])
+        default = (max(0, sw // 2), max(0, sh // 2))
+        if not widget:
+            return default
+        center = widget.get("center")
+        if isinstance(center, (list, tuple)) and len(center) == 2:
+            try:
+                x = int(center[0])
+                y = int(center[1])
+                return (x, y)
+            except Exception:
+                return default
+        return default
+
+    def _widget_bounds(self, widget: dict[str, Any] | None) -> tuple[int, int, int, int] | None:
+        if not widget:
+            return None
+        bounds = widget.get("bounds")
+        if isinstance(bounds, (list, tuple)) and len(bounds) == 4:
+            try:
+                return (int(bounds[0]), int(bounds[1]), int(bounds[2]), int(bounds[3]))
+            except Exception:
+                return None
+        return None
+
+    def _infer_swipe_points(
+        self,
+        hint_text: str,
+        bounds: tuple[int, int, int, int] | None,
+        screen_size: tuple[int, int],
+    ) -> tuple[int, int, int, int]:
+        direction = self._infer_direction(hint_text)
+        sw, sh = int(screen_size[0]), int(screen_size[1])
+
+        if bounds is None:
+            cx = sw // 2
+            cy = sh // 2
+            dx = max(120, sw // 5)
+            dy = max(180, sh // 5)
+        else:
+            x1, y1, x2, y2 = bounds
+            cx = (x1 + x2) // 2
+            cy = (y1 + y2) // 2
+            dx = max(80, int((x2 - x1) * 0.6))
+            dy = max(120, int((y2 - y1) * 0.7))
+
+        if direction == "down":
+            start = (cx, cy - dy // 2)
+            end = (cx, cy + dy // 2)
+        elif direction == "left":
+            start = (cx + dx // 2, cy)
+            end = (cx - dx // 2, cy)
+        elif direction == "right":
+            start = (cx - dx // 2, cy)
+            end = (cx + dx // 2, cy)
+        else:  # up (default)
+            start = (cx, cy + dy // 2)
+            end = (cx, cy - dy // 2)
+
+        sx = min(max(0, int(start[0])), max(0, sw - 1))
+        sy = min(max(0, int(start[1])), max(0, sh - 1))
+        ex = min(max(0, int(end[0])), max(0, sw - 1))
+        ey = min(max(0, int(end[1])), max(0, sh - 1))
+        return sx, sy, ex, ey
+
+    def _infer_direction(self, text: str) -> str:
+        token = str(text or "").lower()
+        down_hits = ["swipe down", "pull down", "向下", "下滑", "往下", "下拉", "down"]
+        up_hits = ["swipe up", "向上", "上滑", "往上", "up"]
+        left_hits = ["向左", "左滑", "往左", "swipe left", "left"]
+        right_hits = ["向右", "右滑", "往右", "swipe right", "right"]
+
+        for key in down_hits:
+            if key in token:
+                return "down"
+        for key in up_hits:
+            if key in token:
+                return "up"
+        for key in left_hits:
+            if key in token:
+                return "left"
+        for key in right_hits:
+            if key in token:
+                return "right"
+        return "up"
+
+    def _infer_package_name(self, text: str) -> str:
+        token = str(text or "").strip().lower()
+        if not token:
+            return ""
+        for alias, package in self._APP_ALIAS_MAP.items():
+            if str(alias).lower() in token:
+                return package
+        m = re.search(r"\b([a-z][a-z0-9_]*(?:\.[a-z0-9_]+)+)\b", token)
+        if m:
+            return str(m.group(1))
+        return ""
+
+    def _count_nodes(self, tree: Any) -> int:
+        if not isinstance(tree, dict):
+            return 0
+        count = 1
+        children = tree.get("children")
+        if isinstance(children, list):
+            for child in children:
+                count += self._count_nodes(child)
+        return count
+
+    def _run_running_oracle(
+        self,
+        step: int,
+        phase: str,
+        screenshot_path: str,
+    ) -> RunningOracleResult | None:
+        try:
+            result = self.running_oracle.check(
+                screenshot_path=screenshot_path,
+                phase=phase,
+            )
+            self._record_step_artifact(
+                artifact_kind="RunningOracle",
+                step=step,
+                payload={"phase": phase, "value": result},
+                append=True,
+            )
+            return result
+        except Exception as exc:
+            logger.warning("Running-Oracle 执行失败(step=%d, phase=%s): %s", step, phase, exc)
+            return None
+
+    def _set_runtime_replan_hint(self, action_text: str) -> None:
+        action_desc = str(action_text or "").strip() or "unknown"
+        self.pending_runtime_replan_hint = (
+            f"刚刚遇到了异常或未达成目标，最近操作为{action_desc}，请重规划下一步。"
         )
 
     def _record_step_artifact(
         self,
         artifact_kind: str,
         step: int,
-        payload,
+        payload: Any,
         append: bool = False,
     ) -> None:
-        if step <= 0:
+        if int(step) <= 0:
             return
         try:
             self.audit.record_step(
@@ -764,179 +590,4 @@ class AgentLoop:
                 append=append,
             )
         except Exception as exc:
-            logger.warning("写入 %s 审计记录失败(step=%s): %s", artifact_kind, step, exc)
-
-    def _run_running_oracle(self, step: int, phase: str, screenshot_path: str):
-        """运行时异常检测（仅观测，不参与任务成败判定）。"""
-        try:
-            result = self.running_oracle.check(
-                screenshot_path=screenshot_path,
-                phase=phase,
-            )
-            self._record_step_artifact(
-                artifact_kind="RunningOracle",
-                step=step,
-                payload={
-                    "phase": phase,
-                    "value": result,
-                },
-                append=True,
-            )
-            if result.has_runtime_exception:
-                logger.warning(
-                    "Running-Oracle 告警(step=%d, phase=%s): tags=%s",
-                    step,
-                    phase,
-                    ",".join(result.tags or []),
-                )
-            return result
-        except Exception as exc:
-            logger.warning("Running-Oracle 执行失败(step=%d, phase=%s): %s", step, phase, exc)
-            return None
-
-    def _set_runtime_replan_hint(self, action_text: str) -> None:
-        action_desc = str(action_text or "").strip() or "unknown"
-        self.pending_runtime_replan_hint = f"刚刚遇到了异常，执行操作为{action_desc}，请重新规划"
-
-    def _describe_action_for_replan(self, action) -> str:
-        action_type = str(getattr(action, "type", "") or "").strip() or "unknown"
-        params = getattr(action, "params", {}) or {}
-        return f"{action_type} {params}".strip()
-
-    def _evaluation_from_mapper_failure(self, error: MappingFailure) -> StepEvaluation:
-        assessment = Assessment(
-            name="mapper_failure_check",
-            source="runtime",
-            applies_to="runtime_guard",
-            outcome="fail",
-            severity="soft",
-            reason_code=str(error.reason_code or "mapper_failure"),
-            message=str(error.message or "动作映射失败"),
-            evidence_refs=[],
-            score=None,
-            remedy_hint=AdviceParams(reason_tags=["mapper_failure"]),
-        )
-        return StepEvaluation(
-            decision="fail",
-            confidence=0.9,
-            recommended_action=RecommendedAction(kind="replan", params=AdviceParams(reason_tags=["mapper_failure"])),
-            assessments=[assessment],
-            observations=[],
-            metrics=[],
-            expectation_matches=[],
-        )
-
-    def _should_observe_again(self, evaluation: StepEvaluation) -> bool:
-        if evaluation.decision != "uncertain":
-            return False
-        rec = evaluation.recommended_action
-        return bool(rec and rec.kind == "observe")
-
-    def _execute_action(self, action, current_state=None):
-        action_type = str(action.type or "").strip().lower()
-        params = action.params or {}
-
-        if action_type == "tap":
-            self.executor.tap(int(params.get("x", 0)), int(params.get("y", 0)))
-            return
-
-        if action_type == "input":
-            x = int(params.get("x", 0))
-            y = int(params.get("y", 0))
-            text = str(params.get("text") or "")
-            if not self._is_input_target_ready(action, current_state):
-                self.executor.tap(x, y)
-                time.sleep(0.4)
-            self.executor.input_text(text)
-            return
-
-        if action_type == "swipe":
-            self.executor.swipe(
-                int(params.get("x", 0)),
-                int(params.get("y", 0)),
-                int(params.get("x2", 0)),
-                int(params.get("y2", 0)),
-                int(params.get("duration_ms", 500)),
-            )
-            return
-
-        if action_type == "back":
-            self.executor.back()
-            return
-
-        if action_type == "enter":
-            self.executor.enter()
-            return
-
-        if action_type == "launch_app":
-            package = str(params.get("package") or "").strip()
-            activity = str(params.get("activity") or "").strip()
-            self.executor.launch_app(package=package, activity=activity)
-            return
-
-        if action_type == "long_press":
-            self.executor.long_press(
-                int(params.get("x", 0)),
-                int(params.get("y", 0)),
-                int(params.get("duration_ms", 900)),
-            )
-            return
-
-        logger.warning("未知动作类型: %s，尝试回退 tap", action_type)
-        self.executor.tap(int(params.get("x", 0)), int(params.get("y", 0)))
-
-    def _execute_adaptive_back(self, reference_activity: str = "", reference_package: str = "") -> None:
-        self.executor.back()
-        time.sleep(0.6)
-        try:
-            current_activity = self.executor.get_current_activity()
-            current_package = self.executor.get_current_package()
-        except Exception as exc:
-            logger.warning("回退后状态探测失败: %s，补发第二次 Back", exc)
-            self.executor.back()
-            return
-
-        activity_changed = bool(reference_activity) and current_activity != reference_activity
-        package_changed = bool(reference_package) and current_package != reference_package
-        if activity_changed or package_changed:
-            return
-
-        self.executor.back()
-
-    def _is_input_target_ready(self, action, ui_state) -> bool:
-        if ui_state is None:
-            return False
-        if not bool(getattr(ui_state, "keyboard_visible", False)):
-            return False
-
-        target_widget_id = None
-        target_bounds = None
-        if action.target and action.target.resolved:
-            target_widget_id = action.target.resolved.widget_id
-            target_bounds = action.target.resolved.bounds
-
-        widgets = getattr(ui_state, "widgets", [])
-        for widget in widgets:
-            same_target = False
-            if target_widget_id is not None and int(target_widget_id) == int(getattr(widget, "widget_id", -1)):
-                same_target = True
-            elif target_bounds is not None and self._bounds_overlap(target_bounds, getattr(widget, "bounds", (0, 0, 0, 0))):
-                same_target = True
-
-            if same_target and bool(getattr(widget, "focused", False)) and bool(
-                getattr(widget, "editable", False) or getattr(widget, "focusable", False)
-            ):
-                return True
-
-        return any(
-            bool(getattr(widget, "focused", False))
-            and bool(getattr(widget, "editable", False) or getattr(widget, "focusable", False))
-            for widget in widgets
-        )
-
-    def _bounds_overlap(self, box_a: tuple, box_b: tuple) -> bool:
-        if not box_a or not box_b or len(box_a) != 4 or len(box_b) != 4:
-            return False
-        ax1, ay1, ax2, ay2 = box_a
-        bx1, by1, bx2, by2 = box_b
-        return not (ax2 < bx1 or bx2 < ax1 or ay2 < by1 or by2 < ay1)
+            logger.warning("写入 %s 审计记录失败(step=%d): %s", artifact_kind, step, exc)

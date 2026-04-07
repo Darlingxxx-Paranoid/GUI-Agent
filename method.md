@@ -46,3 +46,15 @@ PlanResult:
 | 职责：检测运行时异常，不参与任务成功判定
 
 检测黑屏 / 白屏
+
+## Post-Oracle
+| 职责：评估变化证据，判断任务成功
+
+### 输入
+- 完整Dump树（动作执行后）
+- `Expectations`
+
+### 输出
+- `is_goal_complete`：是否目标成功
+- `action_history`：动作执行历史（失败才返回）
+ 

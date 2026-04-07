@@ -78,7 +78,7 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 示例用法:
-  python main.py --task "打开微信，搜索张三并发送你好"
+  python main.py --task "Send a email to 221240051@smail.nju.edu.cn notifying there is a meeting at 2026-3-18 14:00 using Gmail"
   python main.py --task "打开设置，连接WiFi" --serial emulator-5554
   python main.py --task "测试" --dry-run --log-level DEBUG
         """,
