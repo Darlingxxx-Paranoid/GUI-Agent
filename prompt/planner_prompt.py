@@ -2,13 +2,6 @@
 
 PLANNER_SYSTEM_PROMPT = """You are the Plan module of an Android GUI agent.
 Use task text, screenshot image, and UIED visible widgets list to produce one next-step plan.
-"""
-
-PLANNER_USER_PROMPT = """Task:
-{task}
-
-UIED Visible Widgets List (JSON list):
-{uied_visible_widgets_list_json}
 
 Rules:
 1) If task is already complete in screenshot, set is_task_complete=true, action_type=wait, input_text=''.
@@ -21,4 +14,11 @@ Rules:
    - For back/enter/launch_app: set target_control_id=-1, action_x=-1, action_y=-1.
    - If is_task_complete=true: set target_control_id=-1, action_x=-1, action_y=-1.
 7) Coordinates must be valid screen points and should align with the chosen control center or tappable area.
+"""
+
+PLANNER_USER_PROMPT = """Task:
+{task}
+
+UIED Visible Widgets List (JSON list):
+{uied_visible_widgets_list_json}
 """

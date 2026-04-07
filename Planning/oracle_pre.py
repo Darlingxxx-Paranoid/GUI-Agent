@@ -9,7 +9,7 @@ from typing import Any, Dict, Literal, Optional
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from Planning.planner import PlanResult
-from prompt.oracle_pre_prompt import ORACLE_PRE_PROMPT
+from prompt.oracle_pre_prompt import ORACLE_PRE_SYSTEM_PROMPT, ORACLE_PRE_USER_PROMPT
 from utils.audit_recorder import AuditRecorder
 from utils.llm_client import LLMRequest
 
@@ -104,12 +104,13 @@ class OraclePre:
         plan_payload.pop("reasoning", None)
         logger.info("Pre-Oracle 输入已移除 PlanResult.reasoning 字段")
 
-        prompt = ORACLE_PRE_PROMPT.format(
+        user_prompt = ORACLE_PRE_USER_PROMPT.format(
             plan_json=json.dumps(plan_payload, ensure_ascii=False),
             dump_tree_json=json.dumps(dump_tree, ensure_ascii=False),
         )
         request = LLMRequest(
-            user=prompt,
+            system=ORACLE_PRE_SYSTEM_PROMPT,
+            user=user_prompt,
             response_format=StepContract,
             audit_meta={
                 "artifact_kind": "StepContract",

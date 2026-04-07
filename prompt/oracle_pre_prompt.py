@@ -1,13 +1,7 @@
 """Pre-Oracle prompt template for raw-dump StepContract generation."""
 
-ORACLE_PRE_PROMPT = """You are the Pre-Oracle module of an Android GUI agent.
+ORACLE_PRE_SYSTEM_PROMPT = """You are the Pre-Oracle module of an Android GUI agent.
 Generate one StepContract object for success verification.
-
-## PlanResult
-{plan_json}
-
-## Raw Dump Tree (original attributes + node_id + children)
-{dump_tree_json}
 
 Rules:
 1. StepContract must contain:
@@ -28,3 +22,17 @@ Rules:
    - Target must be null.
 5. Keep content concise and directly checkable.
 """
+
+ORACLE_PRE_USER_PROMPT = """## PlanResult
+{plan_json}
+
+## Raw Dump Tree (original attributes + node_id + children)
+{dump_tree_json}
+"""
+
+# Backward-compatible single-prompt alias.
+ORACLE_PRE_PROMPT = (
+    ORACLE_PRE_SYSTEM_PROMPT
+    + "\n\n"
+    + ORACLE_PRE_USER_PROMPT
+)
