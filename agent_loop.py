@@ -14,6 +14,8 @@ from Evaluation.replanner import Replanner
 from Execution.action_executor import ActionExecutor
 from Execution.action_mapper import ActionMapper, MappingFailure
 from Execution.oracle_runtime import OracleRuntime
+from Oracle.pre_oracle import OraclePre
+from Oracle.running_oracle import RunningOracle
 from Memory.memory_manager import MemoryManager
 from Oracle.contracts import (
     ACTION_TYPES,
@@ -25,7 +27,6 @@ from Oracle.contracts import (
     export_contract_schema,
 )
 from Perception.perception_manager import PerceptionManager
-from Planning.oracle_pre import OraclePre
 from Planning.planner import Planner
 from Planning.safety_interceptor import SafetyInterceptor
 from utils.audit_recorder import AuditRecorder
@@ -81,12 +82,16 @@ class AgentLoop:
             dead_loop_threshold=config.dead_loop_threshold,
             screen_variance_threshold=config.screen_variance_threshold,
         )
+        self.running_oracle = RunningOracle(
+            screen_variance_threshold=config.screen_variance_threshold,
+        )
         self.evaluator = Evaluator(llm_client=self.llm)
         self.replanner = Replanner(
             llm_client=self.llm,
             memory_manager=self.memory,
             dead_end_threshold=config.dead_end_threshold,
         )
+        self.pending_runtime_replan_hint = ""
 
         logger.info("AgentLoop 初始化完成(V4), max_steps=%d", config.max_steps)
 
@@ -97,7 +102,9 @@ class AgentLoop:
 
         self.memory.reset_short_term()
         self.oracle_runtime.reset()
+        self.running_oracle.reset()
         self.replanner.reset()
+        self.pending_runtime_replan_hint = ""
 
         step = 0
         task_completed = False
@@ -171,12 +178,45 @@ class AgentLoop:
                 package_name=package,
                 keyboard_visible=keyboard_visible,
             )
+            runtime_before = self._run_running_oracle(
+                step=step,
+                phase="before_action",
+                screenshot_path=screenshot_path,
+            )
+            if runtime_before and runtime_before.has_runtime_exception:
+                self._set_runtime_replan_hint(action_text="unknown")
+                logger.warning("Running-Oracle 异常: 执行 back 尝试回退，并触发重规划")
+                self._execute_adaptive_back(
+                    reference_activity=str(activity or ""),
+                    reference_package=str(package or ""),
+                )
+                # 回退后重采样当前界面，继续进入规划流程。
+                screenshot_path = self.executor.screenshot(f"step_{step}_before_recovered.png")
+                dump_path = self.executor.dump_ui(f"step_{step}_before_recovered.xml")
+                activity = self.executor.get_current_activity()
+                package = self.executor.get_current_package()
+                keyboard_visible = self.executor.get_keyboard_visible()
+                ui_state = self.perception.perceive(
+                    screenshot_path=screenshot_path,
+                    dump_path=dump_path,
+                    screen_size=screen_size,
+                    activity_name=activity,
+                    package_name=package,
+                    keyboard_visible=keyboard_visible,
+                )
 
         logger.info("[Step %d] 阶段2: 认知规划", step)
         planner_screenshot = str(getattr(ui_state, "screenshot_path", "") or "")
         if not planner_screenshot:
             raise RuntimeError("Planner 需要 screenshot_path，但当前 UIState 未提供")
-        plan = self.planner.plan(task, planner_screenshot)
+        runtime_replan_hint = str(self.pending_runtime_replan_hint or "").strip()
+        plan = self.planner.plan(
+            task,
+            planner_screenshot,
+            runtime_exception_hint=runtime_replan_hint,
+        )
+        if runtime_replan_hint:
+            self.pending_runtime_replan_hint = ""
         self._record_step_artifact(
             artifact_kind="PlanResult",
             step=step,
@@ -412,6 +452,32 @@ class AgentLoop:
                 package_name=new_package,
                 keyboard_visible=new_keyboard_visible,
             )
+            runtime_after = self._run_running_oracle(
+                step=step,
+                phase="after_action",
+                screenshot_path=new_screenshot,
+            )
+            if runtime_after and runtime_after.has_runtime_exception:
+                action_text = self._describe_action_for_replan(action)
+                self._set_runtime_replan_hint(action_text=action_text)
+                logger.warning("Running-Oracle 异常: 执行 back 尝试回退，并触发重规划")
+                self._execute_adaptive_back(
+                    reference_activity=old_activity,
+                    reference_package=old_package,
+                )
+                self.memory.short_term.add_failure("running_oracle_exception_after_action")
+                self.memory.short_term.add_step(
+                    {
+                        "step": step,
+                        "goal": to_plain_dict(plan.goal),
+                        "contract": to_plain_dict(contract),
+                        "action": to_plain_dict(action),
+                        "result": "running_oracle_exception_after_action",
+                        "running_oracle_tags": list(runtime_after.tags or []),
+                        "from_experience": bool(plan.from_experience),
+                    }
+                )
+                return {"task_completed": False}
 
         post_guard = self.oracle_runtime.post_guard(
             action=action,
@@ -489,6 +555,32 @@ class AgentLoop:
                 package_name=new_package_2,
                 keyboard_visible=new_keyboard_visible_2,
             )
+            runtime_after_2 = self._run_running_oracle(
+                step=step,
+                phase="after_observe_again",
+                screenshot_path=new_screenshot_2,
+            )
+            if runtime_after_2 and runtime_after_2.has_runtime_exception:
+                action_text = self._describe_action_for_replan(action)
+                self._set_runtime_replan_hint(action_text=action_text)
+                logger.warning("Running-Oracle 异常: 执行 back 尝试回退，并触发重规划")
+                self._execute_adaptive_back(
+                    reference_activity=old_activity,
+                    reference_package=old_package,
+                )
+                self.memory.short_term.add_failure("running_oracle_exception_after_observe_again")
+                self.memory.short_term.add_step(
+                    {
+                        "step": step,
+                        "goal": to_plain_dict(plan.goal),
+                        "contract": to_plain_dict(contract),
+                        "action": to_plain_dict(action),
+                        "result": "running_oracle_exception_after_observe_again",
+                        "running_oracle_tags": list(runtime_after_2.tags or []),
+                        "from_experience": bool(plan.from_experience),
+                    }
+                )
+                return {"task_completed": False}
 
             post_guard_2 = self.oracle_runtime.post_guard(
                 action=action,
@@ -673,6 +765,43 @@ class AgentLoop:
             )
         except Exception as exc:
             logger.warning("写入 %s 审计记录失败(step=%s): %s", artifact_kind, step, exc)
+
+    def _run_running_oracle(self, step: int, phase: str, screenshot_path: str):
+        """运行时异常检测（仅观测，不参与任务成败判定）。"""
+        try:
+            result = self.running_oracle.check(
+                screenshot_path=screenshot_path,
+                phase=phase,
+            )
+            self._record_step_artifact(
+                artifact_kind="RunningOracle",
+                step=step,
+                payload={
+                    "phase": phase,
+                    "value": result,
+                },
+                append=True,
+            )
+            if result.has_runtime_exception:
+                logger.warning(
+                    "Running-Oracle 告警(step=%d, phase=%s): tags=%s",
+                    step,
+                    phase,
+                    ",".join(result.tags or []),
+                )
+            return result
+        except Exception as exc:
+            logger.warning("Running-Oracle 执行失败(step=%d, phase=%s): %s", step, phase, exc)
+            return None
+
+    def _set_runtime_replan_hint(self, action_text: str) -> None:
+        action_desc = str(action_text or "").strip() or "unknown"
+        self.pending_runtime_replan_hint = f"刚刚遇到了异常，执行操作为{action_desc}，请重新规划"
+
+    def _describe_action_for_replan(self, action) -> str:
+        action_type = str(getattr(action, "type", "") or "").strip() or "unknown"
+        params = getattr(action, "params", {}) or {}
+        return f"{action_type} {params}".strip()
 
     def _evaluation_from_mapper_failure(self, error: MappingFailure) -> StepEvaluation:
         assessment = Assessment(

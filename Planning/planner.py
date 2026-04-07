@@ -10,7 +10,11 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from Perception.uied_controls import get_uied_visible_widgets_list
-from prompt.planner_prompt import PLANNER_SYSTEM_PROMPT, PLANNER_USER_PROMPT
+from prompt.planner_prompt import (
+    PLANNER_RUNTIME_EXCEPTION_CONTEXT_TEMPLATE,
+    PLANNER_SYSTEM_PROMPT,
+    PLANNER_USER_PROMPT,
+)
 from utils.llm_client import LLMRequest
 
 logger = logging.getLogger(__name__)
@@ -131,7 +135,7 @@ class Planner:
             self.cv_output_dir,
         )
 
-    def plan(self, task: str, screenshot: str) -> PlanResult:
+    def plan(self, task: str, screenshot: str, runtime_exception_hint: str = "") -> PlanResult:
         task_text = str(task or "").strip()
         if not task_text:
             raise ValueError("task 不能为空")
@@ -164,8 +168,17 @@ class Planner:
         except Exception as exc:
             logger.warning("Planner 获取 UIED Visible Widgets List 失败，降级为空列表: %s", exc)
 
+        runtime_hint = str(runtime_exception_hint or "").strip()
+        runtime_context = ""
+        if runtime_hint:
+            runtime_context = PLANNER_RUNTIME_EXCEPTION_CONTEXT_TEMPLATE.format(
+                runtime_exception_hint=runtime_hint
+            )
+            logger.info("Planner 注入重规划提示: %s", runtime_hint)
+
         user_prompt = PLANNER_USER_PROMPT.format(
             task=task_text,
+            runtime_exception_context=runtime_context,
             uied_visible_widgets_list_json=visible_widgets_list_json,
         )
 

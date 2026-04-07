@@ -23,6 +23,7 @@ PlanResult:
 - `reasoning`：规划理由
 
 ## Pre-Oracle（LLM）
+| 职责：定义成功的证据
 ### 输入
 - PlanResult: Planner 输出，移除`reasoning`字段
 - 完整Dump树
@@ -38,3 +39,10 @@ PlanResult:
     - `field`: 控件属性字段（text, class, content-desc, checked, enabled, focused, selected），用来和目标内容进行关系运算
   - `Relation`: 关系类型（包括`exact_match`、`contains`）
   - `content`: 目标内容(如果是`exact_match`，则为固定值；如果是`contains`，则为包含关系的字符串)
+
+## Execution
+
+## Running-Oracle
+| 职责：检测运行时异常，不参与任务成功判定
+
+检测黑屏 / 白屏

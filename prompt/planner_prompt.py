@@ -21,6 +21,11 @@ Rules:
 PLANNER_USER_PROMPT = """Task:
 {task}
 
-UIED Visible Widgets List (JSON list):
+{runtime_exception_context}UIED Visible Widgets List (JSON list):
 {uied_visible_widgets_list_json}
+"""
+
+PLANNER_RUNTIME_EXCEPTION_CONTEXT_TEMPLATE = """Runtime Replan Hint:
+{runtime_exception_hint}
+
 """
