@@ -9,7 +9,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from Perception.uied_controls import get_uied_visible_controls
+from Perception.uied_controls import get_uied_visible_widgets_list
 from prompt.planner_prompt import PLANNER_SYSTEM_PROMPT, PLANNER_USER_PROMPT
 from utils.llm_client import LLMRequest
 
@@ -143,26 +143,26 @@ class Planner:
         )
 
         system_prompt = PLANNER_SYSTEM_PROMPT
-        controls_json = "[]"
+        visible_widgets_list_json = "[]"
         try:
-            controls = get_uied_visible_controls(
+            visible_widgets_list = get_uied_visible_widgets_list(
                 screenshot_path=screenshot_path,
                 cv_output_dir=self.cv_output_dir,
                 resize_height=self.cv_resize_height,
             )
             # Keep prompt size stable while preserving top controls for grounding.
-            controls_json = json.dumps(controls[:160], ensure_ascii=False)
+            visible_widgets_list_json = json.dumps(visible_widgets_list[:160], ensure_ascii=False)
             logger.info(
-                "Planner 注入 UIED 控件列表: total=%d, used=%d",
-                len(controls),
-                min(len(controls), 160),
+                "Planner 注入 UIED Visible Widgets List: total=%d, used=%d",
+                len(visible_widgets_list),
+                min(len(visible_widgets_list), 160),
             )
         except Exception as exc:
-            logger.warning("Planner 获取 UIED 控件列表失败，降级为空列表: %s", exc)
+            logger.warning("Planner 获取 UIED Visible Widgets List 失败，降级为空列表: %s", exc)
 
         user_prompt = PLANNER_USER_PROMPT.format(
             task=task_text,
-            uied_controls_json=controls_json,
+            uied_visible_widgets_list_json=visible_widgets_list_json,
         )
 
         request = LLMRequest(

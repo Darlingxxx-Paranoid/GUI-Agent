@@ -29,7 +29,7 @@ PlanResult:
 `StepContract`
 - `success_definition`：成功的自然语言描述
 - `Expectations`: 成功的期望结果
-  - `Target_category`: 目标类型（包括`widget`、`activity`、`package`）
+  - `Target_category`: 目标类型（包括`widget`、`activity`、`package`）(后期考虑加入OCR)
   - `Target`: 目标(如果是`widget`，则为控件ID+控件指定属性字段(必须基于完整Dump树)；如果是`activity`和`package`，则为空)
     - `node_id`: 控件ID
     - `resource_id`: 控件资源ID

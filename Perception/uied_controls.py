@@ -1,4 +1,4 @@
-"""Utilities for extracting UIED visible controls from a screenshot."""
+"""Utilities for extracting UIED visible widgets list from a screenshot."""
 
 from __future__ import annotations
 
@@ -14,15 +14,15 @@ from Perception.uied.detect import WidgetDetector
 logger = logging.getLogger(__name__)
 
 
-def get_uied_visible_controls(
+def get_uied_visible_widgets_list(
     screenshot_path: str,
     cv_output_dir: str,
     resize_height: int = 800,
 ) -> list[dict]:
     """
-    Run UIED on a screenshot and return normalized visible controls.
+    Run UIED on a screenshot and return normalized visible widgets list.
 
-    The returned controls always include:
+    The returned widgets always include:
     - widget_id
     - class
     - text
@@ -65,7 +65,7 @@ def get_uied_visible_controls(
     scale_x = float(src_w) / float(det_w) if det_w > 0 else 1.0
     scale_y = float(src_h) / float(det_h) if det_h > 0 else 1.0
 
-    controls: list[dict[str, Any]] = []
+    visible_widgets_list: list[dict[str, Any]] = []
     for idx, item in enumerate(raw_controls or []):
         normalized = _normalize_control(
             item=item,
@@ -76,9 +76,9 @@ def get_uied_visible_controls(
             screen_height=src_h,
         )
         if normalized is None:
-            logger.warning("Skip invalid UIED control at index=%d", idx)
+            logger.warning("Skip invalid UIED widget at index=%d", idx)
             continue
-        controls.append(normalized)
+        visible_widgets_list.append(normalized)
 
     payload = {
         "screenshot_path": str(screenshot),
@@ -90,16 +90,30 @@ def get_uied_visible_controls(
         "scale_x": scale_x,
         "scale_y": scale_y,
         "resize_ratio": float(resize_ratio or 1.0),
-        "count": len(controls),
-        "controls": controls,
+        "count": len(visible_widgets_list),
+        "visible_widgets_list": visible_widgets_list,
+        "controls": visible_widgets_list,
     }
     out_path = _context_output_path(screenshot=screenshot, cv_root=cv_root)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with out_path.open("w", encoding="utf-8") as file:
         json.dump(payload, file, ensure_ascii=False, indent=2)
 
-    logger.info("UIED controls saved: %s (count=%d)", out_path, len(controls))
-    return controls
+    logger.info("UIED visible widgets list saved: %s (count=%d)", out_path, len(visible_widgets_list))
+    return visible_widgets_list
+
+
+def get_uied_visible_controls(
+    screenshot_path: str,
+    cv_output_dir: str,
+    resize_height: int = 800,
+) -> list[dict]:
+    """Backward-compatible alias for get_uied_visible_widgets_list."""
+    return get_uied_visible_widgets_list(
+        screenshot_path=screenshot_path,
+        cv_output_dir=cv_output_dir,
+        resize_height=resize_height,
+    )
 
 
 def _normalize_control(
