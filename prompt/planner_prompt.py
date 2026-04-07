@@ -9,11 +9,13 @@ Rules:
 3) goal must describe one concrete next step only.
 4) reasoning must be concise and grounded in the screenshot.
 5) Use the UIED visible widgets list as grounding evidence for visible targets.
-6) You MUST output direct execution coordinates:
-   - For tap/input/long_press/swipe: choose one target widget from UIED visible widgets list, output its id in target_control_id, and output action_x/action_y.
-   - For back/enter/launch_app: set target_control_id=-1, action_x=-1, action_y=-1.
-   - If is_task_complete=true: set target_control_id=-1, action_x=-1, action_y=-1.
-7) Coordinates must be valid screen points and should align with the chosen control center or tappable area.
+6) You MUST output target_widget_id:
+   - For tap/input/long_press/swipe: choose one target widget from UIED visible widgets list and output its id in target_widget_id (>=0).
+   - For back/enter/launch_app: set target_widget_id=-1.
+   - If is_task_complete=true: set target_widget_id=-1.
+7) input_text rules:
+   - For input: input_text must be non-empty.
+   - For non-input actions: input_text must be ''.
 """
 
 PLANNER_USER_PROMPT = """Task:

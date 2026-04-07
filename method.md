@@ -1,7 +1,7 @@
 ## Perception
 ### OCR+CV
 - 输入：截图
-- 输出：OCR结果+候选控件列表
+- 输出：OCR结果+Visible widgets List
 
 ### Dump解析
 - 输入：dump文件
@@ -11,12 +11,14 @@
 ### 输入
 - Task: 任务描述
 - Screenshot: 截图
+- Visible widgets List
 
 ### 输出
 PlanResult:
 - `goal`: 目标描述
 - `action_type`: 动作类型
 - `input_text`: 输入类动作文本
+- `target_widget_id`: 目标控件ID
 - `is_task_complete`：是否任务已完成  
 - `reasoning`：规划理由
 
