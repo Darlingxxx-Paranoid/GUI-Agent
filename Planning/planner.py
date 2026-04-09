@@ -5,12 +5,13 @@ from __future__ import annotations
 import json
 import logging
 import os
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from Perception.uied_controls import get_uied_visible_widgets_list
 from prompt.planner_prompt import (
+    PLANNER_PROGRESS_CONTEXT_TEMPLATE,
     PLANNER_RUNTIME_EXCEPTION_CONTEXT_TEMPLATE,
     PLANNER_SYSTEM_PROMPT,
     PLANNER_USER_PROMPT,
@@ -135,7 +136,13 @@ class Planner:
             self.cv_output_dir,
         )
 
-    def plan(self, task: str, screenshot: str, runtime_exception_hint: str = "") -> PlanResult:
+    def plan(
+        self,
+        task: str,
+        screenshot: str,
+        runtime_exception_hint: str = "",
+        progress_context: list[dict[str, Any]] | None = None,
+    ) -> PlanResult:
         task_text = str(task or "").strip()
         if not task_text:
             raise ValueError("task 不能为空")
@@ -176,9 +183,21 @@ class Planner:
             )
             logger.info("Planner 注入重规划提示: %s", runtime_hint)
 
+        progress_items = self._normalize_progress_context(progress_context)
+        progress_items_json = json.dumps(progress_items[:80], ensure_ascii=False)
+        logger.info(
+            "Planner 注入 progress_context: total=%d, used=%d",
+            len(progress_items),
+            min(len(progress_items), 80),
+        )
+        progress_context_block = PLANNER_PROGRESS_CONTEXT_TEMPLATE.format(
+            progress_context_json=progress_items_json
+        )
+
         user_prompt = PLANNER_USER_PROMPT.format(
             task=task_text,
             runtime_exception_context=runtime_context,
+            progress_context_block=progress_context_block,
             uied_visible_widgets_list_json=visible_widgets_list_json,
         )
 
@@ -203,3 +222,25 @@ class Planner:
         except Exception as exc:
             logger.error("规划失败: %s", exc)
             raise
+
+    def _normalize_progress_context(
+        self,
+        progress_context: list[dict[str, Any]] | None,
+    ) -> list[dict[str, str]]:
+        items: list[dict[str, str]] = []
+        for value in list(progress_context or []):
+            if not isinstance(value, dict):
+                continue
+            goal = str(value.get("goal") or "").strip()
+            action_type = str(value.get("action_type") or "").strip()
+            input_text = str(value.get("input_text") or "")
+            if not goal:
+                continue
+            items.append(
+                {
+                    "goal": goal,
+                    "action_type": action_type,
+                    "input_text": input_text,
+                }
+            )
+        return items

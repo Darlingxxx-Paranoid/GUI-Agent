@@ -12,6 +12,7 @@
 - Task: 任务描述
 - Screenshot: 截图
 - Visible widgets List
+- Progress Context
 
 ### 输出
 PlanResult:
@@ -58,3 +59,7 @@ PlanResult:
 - `is_goal_complete`：是否目标成功
 - `action_history`：动作执行历史（失败才返回）
  
+
+## Global-Oracle
+| 职责：全局评估任务成功
+- progress_context: 任务执行进度

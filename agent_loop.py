@@ -84,7 +84,11 @@ class AgentLoop:
 
         self.pending_runtime_replan_hint = ""
         self.action_history: list[dict[str, Any]] = []
+        self.progress_context: list[dict[str, str]] = []
         self.consecutive_post_failures = 0
+        self._cached_before_observation: StepObservation | None = None
+        self._cached_before_step: int | None = None
+        self._cached_before_source_step: int | None = None
         logger.info("AgentLoop 初始化完成(最小闭环), max_steps=%d", config.max_steps)
 
     def run(self, task: str, dry_run: bool = False) -> bool:
@@ -95,7 +99,9 @@ class AgentLoop:
         self.running_oracle.reset()
         self.pending_runtime_replan_hint = ""
         self.action_history = []
+        self.progress_context = []
         self.consecutive_post_failures = 0
+        self._clear_reusable_observation()
 
         screen_size = (1080, 1920)
         try:
@@ -126,6 +132,7 @@ class AgentLoop:
                 break
             except Exception as exc:
                 logger.error("步骤 %d 执行异常: %s", step, exc, exc_info=True)
+                self._clear_reusable_observation()
                 continue
 
         if task_completed:
@@ -145,7 +152,7 @@ class AgentLoop:
         screen_size: tuple[int, int],
         dry_run: bool,
     ) -> tuple[bool, bool]:
-        before = self._observe(step=step, phase="before", screen_size=screen_size)
+        before = self._observe_before(step=step, screen_size=screen_size)
         if before is None:
             self._record_step_artifact(
                 artifact_kind="StepResult",
@@ -160,6 +167,7 @@ class AgentLoop:
             screenshot_path=before.screenshot_path,
         )
         if runtime_before and runtime_before.has_runtime_exception:
+            self._clear_reusable_observation()
             self._set_runtime_replan_hint(
                 action_text=f"before_action_runtime_exception:{','.join(runtime_before.tags or [])}"
             )
@@ -172,6 +180,7 @@ class AgentLoop:
             task=task,
             screenshot=before.screenshot_path,
             runtime_exception_hint=str(self.pending_runtime_replan_hint or ""),
+            progress_context=self.progress_context,
         )
         self.pending_runtime_replan_hint = ""
         self._record_step_artifact(
@@ -229,6 +238,7 @@ class AgentLoop:
 
         after = self._observe(step=step, phase="after", screen_size=screen_size)
         if after is None:
+            self._clear_reusable_observation()
             action_record["post_oracle"] = {"is_goal_complete": False, "reason": "observe_after_failed"}
             self._set_runtime_replan_hint(action_text="observe_after_failed")
             return False, False
@@ -239,6 +249,7 @@ class AgentLoop:
             screenshot_path=after.screenshot_path,
         )
         if runtime_after and runtime_after.has_runtime_exception:
+            self._clear_reusable_observation()
             self._set_runtime_replan_hint(
                 action_text=f"after_action_runtime_exception:{','.join(runtime_after.tags or [])}"
             )
@@ -268,11 +279,27 @@ class AgentLoop:
 
         if post_result.is_goal_complete:
             self.consecutive_post_failures = 0
-            logger.info("Post-Oracle 通过，子目标完成: %s", plan.goal)
+            progress_item = {
+                "goal": str(plan.goal or ""),
+                "action_type": str(plan.action_type or ""),
+                "input_text": str(plan.input_text or ""),
+            }
+            self.progress_context.append(progress_item)
+            self._cache_reusable_observation(step=step, observation=after)
+            logger.info(
+                "Post-Oracle 通过，子目标完成: %s (progress_context=%d)",
+                plan.goal,
+                len(self.progress_context),
+            )
             self._record_step_artifact(
                 artifact_kind="StepResult",
                 step=step,
-                payload={"status": "subgoal_success", "goal": plan.goal},
+                payload={
+                    "status": "subgoal_success",
+                    "goal": plan.goal,
+                    "action_type": plan.action_type,
+                    "input_text": plan.input_text,
+                },
             )
             return True, False
 
@@ -288,7 +315,76 @@ class AgentLoop:
             if not dry_run:
                 self.executor.back()
             self.consecutive_post_failures = 0
+            self._clear_reusable_observation()
+            return False, False
+        self._cache_reusable_observation(step=step, observation=after)
         return False, False
+
+    def _observe_before(
+        self,
+        step: int,
+        screen_size: tuple[int, int],
+    ) -> StepObservation | None:
+        reused = self._consume_reusable_observation(step=step)
+        if reused is not None:
+            return reused
+        return self._observe(step=step, phase="before", screen_size=screen_size)
+
+    def _consume_reusable_observation(self, step: int) -> StepObservation | None:
+        cached = self._cached_before_observation
+        target_step = self._cached_before_step
+        source_step = self._cached_before_source_step
+        if cached is None or target_step is None:
+            return None
+        if int(target_step) != int(step):
+            logger.debug(
+                "跳过复用观测: target_step=%s, current_step=%d",
+                target_step,
+                step,
+            )
+            self._clear_reusable_observation()
+            return None
+
+        self._clear_reusable_observation()
+        logger.info(
+            "复用观测: step_%d_after -> step_%d_before",
+            int(source_step or max(0, step - 1)),
+            step,
+        )
+        self._record_step_artifact(
+            artifact_kind="Observation",
+            step=step,
+            payload={
+                "phase": "before",
+                "screenshot_path": cached.screenshot_path,
+                "dump_path": cached.dump_path,
+                "activity": cached.activity,
+                "package": cached.package,
+                "keyboard_visible": bool(cached.keyboard_visible),
+                "dump_node_count": self._count_nodes(cached.dump_tree),
+                "widget_count": len(cached.widgets),
+                "reused_from_previous_after": True,
+                "source_step": int(source_step or max(0, step - 1)),
+            },
+            append=True,
+        )
+        return cached
+
+    def _cache_reusable_observation(self, step: int, observation: StepObservation) -> None:
+        if not observation.dump_path:
+            logger.debug("跳过观测复用缓存: step=%d after dump 为空", step)
+            self._clear_reusable_observation()
+            return
+        next_step = int(step) + 1
+        self._cached_before_observation = observation
+        self._cached_before_step = next_step
+        self._cached_before_source_step = int(step)
+        logger.info("缓存观测用于复用: step_%d_after -> step_%d_before", step, next_step)
+
+    def _clear_reusable_observation(self) -> None:
+        self._cached_before_observation = None
+        self._cached_before_step = None
+        self._cached_before_source_step = None
 
     def _observe(
         self,
@@ -337,6 +433,7 @@ class AgentLoop:
                 "keyboard_visible": bool(keyboard_visible),
                 "dump_node_count": self._count_nodes(dump_tree),
                 "widget_count": len(widgets),
+                "reused_from_previous_after": False,
             },
             append=True,
         )

@@ -16,16 +16,23 @@ Rules:
 7) input_text rules:
    - For input: input_text must be non-empty.
    - For non-input actions: input_text must be ''.
+8) Progress Context contains previously verified successful subgoals. Use it to avoid repeating completed steps.
+   - If Progress Context already shows all key task milestones are done and screenshot is consistent with completion, set is_task_complete=true.
 """
 
 PLANNER_USER_PROMPT = """Task:
 {task}
 
-{runtime_exception_context}UIED Visible Widgets List (JSON list):
+{runtime_exception_context}{progress_context_block}UIED Visible Widgets List (JSON list):
 {uied_visible_widgets_list_json}
 """
 
 PLANNER_RUNTIME_EXCEPTION_CONTEXT_TEMPLATE = """Runtime Replan Hint:
 {runtime_exception_hint}
+
+"""
+
+PLANNER_PROGRESS_CONTEXT_TEMPLATE = """Progress Context (verified successful subgoals, JSON list):
+{progress_context_json}
 
 """
