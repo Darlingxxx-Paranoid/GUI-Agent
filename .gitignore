@@ -1,17 +1,18 @@
-#数据文件
+# Runtime data
 data/
-data/*
+benchmark_history/
+success-data/
+success——data/
 
-#模型文件
-Module
+# Python cache
+**/__pycache__/
+*.py[cod]
 
-#虚拟环境
-myvenv
+# Local env
+myvenv/
 
-#测试文件
-*test*
-
-# Agent文件
+# Local agent metadata
 .trae/
 
-__pycache__/
+# OS junk
+.DS_Store

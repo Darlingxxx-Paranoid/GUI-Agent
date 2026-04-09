@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import re
 import time
 from dataclasses import dataclass
 from typing import Any
@@ -27,7 +26,6 @@ class StepObservation:
     screenshot_path: str
     dump_path: str
     dump_tree: dict[str, Any]
-    dump_elements: list[Any]
     widgets: list[dict[str, Any]]
     activity: str
     package: str
@@ -36,22 +34,6 @@ class StepObservation:
 
 class AgentLoop:
     """A minimal yet complete loop: observe -> plan -> pre-oracle -> act -> post-oracle."""
-
-    _APP_ALIAS_MAP = {
-        "gmail": "com.google.android.gm",
-        "chrome": "com.android.chrome",
-        "settings": "com.android.settings",
-        "clock": "com.google.android.deskclock",
-        "youtube": "com.google.android.youtube",
-        "maps": "com.google.android.apps.maps",
-        "photos": "com.google.android.apps.photos",
-        "play store": "com.android.vending",
-        "camera": "com.android.camera2",
-        "wechat": "com.tencent.mm",
-        "微信": "com.tencent.mm",
-        "短信": "com.google.android.apps.messaging",
-        "messages": "com.google.android.apps.messaging",
-    }
 
     def __init__(self, config: AgentConfig):
         self.config = config
@@ -152,7 +134,7 @@ class AgentLoop:
         screen_size: tuple[int, int],
         dry_run: bool,
     ) -> tuple[bool, bool]:
-        before = self._observe_before(step=step, screen_size=screen_size)
+        before = self._observe_before(step=step)
         if before is None:
             self._record_step_artifact(
                 artifact_kind="StepResult",
@@ -236,7 +218,7 @@ class AgentLoop:
             self.executor.execute(action)
         time.sleep(1.8)
 
-        after = self._observe(step=step, phase="after", screen_size=screen_size)
+        after = self._observe(step=step, phase="after")
         if after is None:
             self._clear_reusable_observation()
             action_record["post_oracle"] = {"is_goal_complete": False, "reason": "observe_after_failed"}
@@ -323,12 +305,11 @@ class AgentLoop:
     def _observe_before(
         self,
         step: int,
-        screen_size: tuple[int, int],
     ) -> StepObservation | None:
         reused = self._consume_reusable_observation(step=step)
         if reused is not None:
             return reused
-        return self._observe(step=step, phase="before", screen_size=screen_size)
+        return self._observe(step=step, phase="before")
 
     def _consume_reusable_observation(self, step: int) -> StepObservation | None:
         cached = self._cached_before_observation
@@ -390,7 +371,6 @@ class AgentLoop:
         self,
         step: int,
         phase: str,
-        screen_size: tuple[int, int],
     ) -> StepObservation | None:
         screenshot_name = f"step_{step}_{phase}.png"
         dump_name = f"step_{step}_{phase}.xml"
@@ -405,9 +385,7 @@ class AgentLoop:
             return None
 
         dump_tree: dict[str, Any] = {}
-        dump_elements: list[Any] = []
         if dump_path:
-            dump_elements = self.dump_parser.parse(dump_path)
             dump_tree = self.dump_parser.parse_tree(dump_path)
 
         if not dump_tree:
@@ -442,7 +420,6 @@ class AgentLoop:
             screenshot_path=screenshot_path,
             dump_path=dump_path,
             dump_tree=dump_tree,
-            dump_elements=dump_elements,
             widgets=widgets,
             activity=str(activity or ""),
             package=str(package or ""),
@@ -513,13 +490,6 @@ class AgentLoop:
 
         if action_type == "enter":
             return {"type": "enter", "params": {}}
-
-        if action_type == "launch_app":
-            package = self._infer_package_name(f"{task} {plan.goal}")
-            if package:
-                return {"type": "launch_app", "params": {"package": package}}
-            logger.warning("launch_app 无法推断包名，降级为 tap 中心点")
-            return {"type": "tap", "params": {"x": center[0], "y": center[1]}}
 
         logger.warning("未知 action_type=%s，降级为 tap 中心点", action_type)
         return {"type": "tap", "params": {"x": center[0], "y": center[1]}}
@@ -619,18 +589,6 @@ class AgentLoop:
             if key in token:
                 return "right"
         return "up"
-
-    def _infer_package_name(self, text: str) -> str:
-        token = str(text or "").strip().lower()
-        if not token:
-            return ""
-        for alias, package in self._APP_ALIAS_MAP.items():
-            if str(alias).lower() in token:
-                return package
-        m = re.search(r"\b([a-z][a-z0-9_]*(?:\.[a-z0-9_]+)+)\b", token)
-        if m:
-            return str(m.group(1))
-        return ""
 
     def _count_nodes(self, tree: Any) -> int:
         if not isinstance(tree, dict):
