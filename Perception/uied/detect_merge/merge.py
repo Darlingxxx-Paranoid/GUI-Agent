@@ -3,10 +3,35 @@ import cv2
 import numpy as np
 from os.path import join as p_join
 import os
+import re
 import time
 import shutil
 
 from Perception.uied.detect_merge.Element import Element
+
+_ACTION_TEXT_RE = re.compile(r"[a-z0-9]+")
+_ACTION_WORDS = {
+    "ok",
+    "yes",
+    "no",
+    "allow",
+    "deny",
+    "confirm",
+    "continue",
+    "next",
+    "skip",
+    "done",
+    "save",
+    "send",
+    "apply",
+    "open",
+    "delete",
+    "remove",
+    "discard",
+    "cancel",
+    "retry",
+    "submit",
+}
 
 
 def show_elements(org_img, eles, show=False, win_name="element", wait_key=0, shown_resize=None, line=2):
@@ -154,9 +179,26 @@ def refine_elements(compos, texts, intersection_bias=(2, 2), containment_ratio=0
     3. store text in a compo if it"s contained by the compo as the compo"s text child element
     """
     elements = []
-    contained_texts = []
+    contained_texts = set()
+    preserved_texts = set()
     img_h = int(img_shape[0]) if img_shape and len(img_shape) >= 1 else 0
     img_w = int(img_shape[1]) if img_shape and len(img_shape) >= 2 else 0
+
+    def is_action_label(text_content):
+        value = str(text_content or "").strip()
+        if not value:
+            return False
+        words = _ACTION_TEXT_RE.findall(value.lower())
+        if not words or len(words) > 3:
+            return False
+        if any(word in _ACTION_WORDS for word in words):
+            return True
+
+        letters = [ch for ch in value if ch.isalpha()]
+        if not letters:
+            return False
+        # Short uppercase labels are often modal actions (e.g. SEND/CANCEL).
+        return len(letters) <= 10 and value.upper() == value
 
     def should_keep_contained_text(compo, text):
         # Keep action-like labels inside lower wide strips (e.g. transient bars)
@@ -167,6 +209,34 @@ def refine_elements(compos, texts, intersection_bias=(2, 2), containment_ratio=0
         c_h = compo.height
         t_w = text.width
         t_h = text.height
+        text_content = str(text.text_content or "").strip()
+
+        # Keep short action labels in the lower area of modal-like containers.
+        if is_action_label(text_content):
+            if 0.45 <= c_w / img_w <= 0.98 and 0.18 <= c_h / img_h <= 0.80:
+                if compo.row_min / img_h <= 0.82 and t_w / img_w <= 0.22 and t_h / img_h <= 0.06:
+                    t_center_y = (text.row_min + text.row_max) / 2.0
+                    rel_y = (t_center_y - compo.row_min) / max(1.0, float(c_h))
+                    if rel_y >= 0.72:
+                        return True
+
+        # Keep compact one-line texts inside panel-like containers (e.g. dropdowns,
+        # suggestion lists, transient sheets) as independently tappable items.
+        if text_content:
+            panel_like = (
+                0.35 <= c_w / img_w <= 0.98
+                and 0.12 <= c_h / img_h <= 0.85
+                and 0.06 <= compo.row_min / img_h <= 0.92
+            )
+            compact_line = (
+                0.02 <= t_w / img_w <= 0.90
+                and t_h / img_h <= 0.08
+                and (t_w * t_h) / max(1.0, float(compo.area)) <= 0.18
+            )
+            has_meaningful_text = len(text_content) >= 3 and any(ch.isalnum() for ch in text_content)
+            if panel_like and compact_line and has_meaningful_text:
+                return True
+
         if c_w / img_w < 0.65 or c_h / img_h > 0.12:
             return False
         if compo.row_min / img_h < 0.55:
@@ -192,8 +262,10 @@ def refine_elements(compos, texts, intersection_bias=(2, 2), containment_ratio=0
                 text_area += inter
                 # the text is contained in the non-text compo
                 if iob >= containment_ratio and compo.category != "Block":
-                    if not should_keep_contained_text(compo, text):
-                        contained_texts.append(text)
+                    if should_keep_contained_text(compo, text):
+                        preserved_texts.add(text)
+                    else:
+                        contained_texts.add(text)
         if is_valid and text_area / compo.area < containment_ratio:
             # for t in contained_texts:
             #     t.parent_id = compo.id
@@ -202,7 +274,7 @@ def refine_elements(compos, texts, intersection_bias=(2, 2), containment_ratio=0
 
     # elements += texts
     for text in texts:
-        if text not in contained_texts:
+        if text in preserved_texts or text not in contained_texts:
             elements.append(text)
     return elements
 
