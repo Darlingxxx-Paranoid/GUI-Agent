@@ -7,6 +7,7 @@ import logging
 import os
 import re
 import time
+import traceback
 from dataclasses import dataclass
 from typing import Any
 
@@ -129,6 +130,12 @@ class AgentLoop:
                 break
             except Exception as exc:
                 logger.error("步骤 %d 执行异常: %s", step, exc, exc_info=True)
+                self._record_plan_exception(
+                    step=step,
+                    exc=exc,
+                    phase="run_one_step",
+                    traceback_text=traceback.format_exc(),
+                )
                 self._clear_reusable_observation()
                 continue
 
@@ -173,14 +180,23 @@ class AgentLoop:
                 self.executor.back()
             return False, False
 
-        plan = self.planner.plan(
-            task=task,
-            screenshot=before.screenshot_path,
-            runtime_exception_hint=str(self.pending_runtime_replan_hint or ""),
-            progress_context=self.progress_context,
-            current_package=before.package,
-            task_target_app=self._task_target_app,
-        )
+        try:
+            plan = self.planner.plan(
+                task=task,
+                screenshot=before.screenshot_path,
+                runtime_exception_hint=str(self.pending_runtime_replan_hint or ""),
+                progress_context=self.progress_context,
+                current_package=before.package,
+                task_target_app=self._task_target_app,
+            )
+        except Exception as exc:
+            self._record_plan_exception(
+                step=step,
+                exc=exc,
+                phase="planner.plan",
+                traceback_text=traceback.format_exc(),
+            )
+            raise
         self.pending_runtime_replan_hint = ""
         self._record_step_artifact(
             artifact_kind="PlanResult",
@@ -800,6 +816,56 @@ class AgentLoop:
         action_desc = str(action_text or "").strip() or "unknown"
         self.pending_runtime_replan_hint = (
             f"刚刚遇到了异常或未达成目标，最近操作为{action_desc}，请重规划下一步。"
+        )
+
+    def _record_plan_exception(
+        self,
+        step: int,
+        exc: Exception,
+        phase: str,
+        traceback_text: str = "",
+    ) -> None:
+        if int(step) <= 0:
+            return
+        plan_path = os.path.join(
+            self.audit.base_dir,
+            "PlanResult",
+            f"step_{int(step)}.json",
+        )
+        if os.path.exists(plan_path):
+            logger.info(
+                "步骤 %d 异常发生时 PlanResult 已存在，跳过异常占位写入",
+                step,
+            )
+            return
+
+        error_type = type(exc).__name__
+        error_message = str(exc or "").strip() or repr(exc)
+        tb_tail = str(traceback_text or "").strip()
+        if tb_tail and len(tb_tail) > 1800:
+            tb_tail = tb_tail[-1800:]
+
+        reasoning = (
+            f"status=exception; phase={phase}; "
+            f"error_type={error_type}; error_message={error_message}"
+        )
+        if tb_tail:
+            reasoning = f"{reasoning}; traceback_tail={tb_tail}"
+
+        error_plan_payload: dict[str, Any] = {
+            "goal": f"[EXCEPTION] step_{int(step)} failed before valid planner output",
+            "action_type": "back",
+            "input_text": "",
+            "target_widget_id": -1,
+            "launch_package": "",
+            "launch_activity": "",
+            "is_task_complete": False,
+            "reasoning": reasoning,
+        }
+        self._record_step_artifact(
+            artifact_kind="PlanResult",
+            step=step,
+            payload=error_plan_payload,
         )
 
     def _record_step_artifact(
