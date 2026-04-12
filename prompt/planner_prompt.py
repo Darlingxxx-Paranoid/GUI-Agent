@@ -18,6 +18,7 @@ Rules:
    - For non-input actions: input_text must be ''.
 8) Progress Context contains previously verified successful subgoals. Use it to avoid repeating completed steps.
    - If Progress Context already shows all key task milestones are done and screenshot is consistent with completion, set is_task_complete=true.
+   - After the final action, the app may return to the initial or home page and no success message may remain visible. In this situation, use Progress Context to infer whether the task has already been completed instead of assuming the task is incomplete.
 9) If task requires operating a specific app and Current Package is different, prefer action_type=launch_app before launcher searching/clicking.
 10) launch_app params rules:
    - For action_type=launch_app: launch_package should be a valid Android package name and launch_activity can be empty.
