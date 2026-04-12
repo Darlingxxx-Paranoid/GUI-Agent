@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from Perception.uied_controls import get_uied_visible_widgets_list
 from prompt.planner_prompt import (
+    PLANNER_DEVICE_CONTEXT_TEMPLATE,
     PLANNER_PROGRESS_CONTEXT_TEMPLATE,
     PLANNER_RUNTIME_EXCEPTION_CONTEXT_TEMPLATE,
     PLANNER_SYSTEM_PROMPT,
@@ -44,6 +45,14 @@ class PlanResult(BaseModel):
         default=-1,
         description="Chosen UIED widget id. Use -1 when no widget target is needed.",
     )
+    launch_package: str = Field(
+        default="",
+        description="Android package name when action_type is launch_app.",
+    )
+    launch_activity: str = Field(
+        default="",
+        description="Optional launch activity when action_type is launch_app.",
+    )
     is_task_complete: bool = Field(description="Whether the full task is already complete.")
     reasoning: str = Field(min_length=1, description="Planning reason based on current screenshot.")
 
@@ -67,6 +76,11 @@ class PlanResult(BaseModel):
                     self.target_widget_id,
                 )
                 raise ValueError("When is_task_complete=true, target_widget_id must be -1.")
+            if self.launch_package != "" or self.launch_activity != "":
+                logger.error("PlanResult校验失败: is_task_complete=true 但 launch_package/activity 非空")
+                raise ValueError(
+                    "When is_task_complete=true, launch_package and launch_activity must be empty."
+                )
             logger.info("PlanResult校验通过: 完成态(action_type=wait, input_text为空, target_widget_id=-1)")
             return self
 
@@ -118,6 +132,20 @@ class PlanResult(BaseModel):
             )
             raise ValueError("target_widget_id must be >= -1.")
 
+        if self.action_type == "launch_app":
+            if self.launch_package == "":
+                logger.warning(
+                    "PlanResult提示: action_type=launch_app 但 launch_package 为空，将依赖任务解析兜底"
+                )
+        elif self.launch_package != "" or self.launch_activity != "":
+            logger.error(
+                "PlanResult校验失败: action_type=%s 但 launch_package/activity 非空",
+                self.action_type,
+            )
+            raise ValueError(
+                "When action_type is not launch_app, launch_package and launch_activity must be empty."
+            )
+
         logger.info("PlanResult校验通过: 非完成态(action_type=%s)", self.action_type)
         return self
 
@@ -142,6 +170,8 @@ class Planner:
         screenshot: str,
         runtime_exception_hint: str = "",
         progress_context: list[dict[str, Any]] | None = None,
+        current_package: str = "",
+        task_target_app: dict[str, Any] | None = None,
     ) -> PlanResult:
         task_text = str(task or "").strip()
         if not task_text:
@@ -193,11 +223,23 @@ class Planner:
         progress_context_block = PLANNER_PROGRESS_CONTEXT_TEMPLATE.format(
             progress_context_json=progress_items_json
         )
+        current_pkg = str(current_package or "").strip() or "(unknown)"
+        target_app_payload = self._normalize_task_target_app(task_target_app)
+        device_context_block = PLANNER_DEVICE_CONTEXT_TEMPLATE.format(
+            current_package=current_pkg,
+            task_target_app_json=json.dumps(target_app_payload, ensure_ascii=False),
+        )
+        logger.info(
+            "Planner 注入 device/app context: current_package=%s, target_package=%s",
+            current_pkg,
+            target_app_payload.get("package", ""),
+        )
 
         user_prompt = PLANNER_USER_PROMPT.format(
             task=task_text,
             runtime_exception_context=runtime_context,
             progress_context_block=progress_context_block,
+            device_context_block=device_context_block,
             uied_visible_widgets_list_json=visible_widgets_list_json,
         )
 
@@ -244,3 +286,20 @@ class Planner:
                 }
             )
         return items
+
+    def _normalize_task_target_app(
+        self,
+        task_target_app: dict[str, Any] | None,
+    ) -> dict[str, str]:
+        if not isinstance(task_target_app, dict):
+            return {}
+        name = str(task_target_app.get("name") or "").strip()
+        package = str(task_target_app.get("package") or "").strip()
+        activity = str(task_target_app.get("activity") or "").strip()
+        if not (name or package or activity):
+            return {}
+        return {
+            "name": name,
+            "package": package,
+            "activity": activity,
+        }

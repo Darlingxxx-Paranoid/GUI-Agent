@@ -69,6 +69,14 @@ class ActionExecutor:
         "'": r"\'",
         "\\": r"\\",
     }
+    _ACTION_TYPE_ALIASES = {
+        "launch": "launch_app",
+        "launchapp": "launch_app",
+        "open_app": "launch_app",
+        "openapp": "launch_app",
+        "start_app": "launch_app",
+        "startapp": "launch_app",
+    }
 
     def __init__(
         self,
@@ -196,6 +204,13 @@ class ActionExecutor:
         }
         handler = handlers.get(spec.action_type)
         if handler is None:
+            if str(spec.params.get("package") or "").strip():
+                logger.warning(
+                    "未知动作类型: %s，但检测到 package 参数，按 launch_app 执行",
+                    spec.action_type,
+                )
+                self._handle_launch_app(spec, current_state=current_state)
+                return "launch_app"
             logger.warning("未知动作类型: %s，回退为 tap", spec.action_type)
             self._handle_tap(spec, current_state=current_state)
             return "tap"
@@ -219,7 +234,14 @@ class ActionExecutor:
         else:
             params = {}
 
-        return ActionSpec(action_type=action_type, params=params, target=target)
+        canonical_action_type = self._canonical_action_type(action_type)
+        return ActionSpec(action_type=canonical_action_type, params=params, target=target)
+
+    def _canonical_action_type(self, action_type: str) -> str:
+        token = str(action_type or "").strip().lower().replace("-", "_")
+        if not token:
+            return ""
+        return self._ACTION_TYPE_ALIASES.get(token, token)
 
     def _get_int_param(self, params: Mapping[str, Any], key: str, default: int) -> int:
         value = params.get(key, default)

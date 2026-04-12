@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import json
 import logging
+import os
+import re
 import time
 from dataclasses import dataclass
 from typing import Any
@@ -63,6 +66,8 @@ class AgentLoop:
         self.running_oracle = RunningOracle(
             screen_variance_threshold=config.screen_variance_threshold,
         )
+        self._app_catalog = self._load_app_catalog()
+        self._task_target_app: dict[str, str] | None = None
 
         self.pending_runtime_replan_hint = ""
         self.action_history: list[dict[str, Any]] = []
@@ -83,6 +88,16 @@ class AgentLoop:
         self.action_history = []
         self.progress_context = []
         self.consecutive_post_failures = 0
+        self._task_target_app = self._resolve_task_target_app(task)
+        if self._task_target_app:
+            logger.info(
+                "任务目标 App 解析: name=%s package=%s activity=%s",
+                self._task_target_app.get("name", ""),
+                self._task_target_app.get("package", ""),
+                self._task_target_app.get("activity", ""),
+            )
+        else:
+            logger.info("任务目标 App 解析为空，将依赖 Planner 视觉判断与运行时回退")
         self._clear_reusable_observation()
 
         screen_size = (1080, 1920)
@@ -163,6 +178,8 @@ class AgentLoop:
             screenshot=before.screenshot_path,
             runtime_exception_hint=str(self.pending_runtime_replan_hint or ""),
             progress_context=self.progress_context,
+            current_package=before.package,
+            task_target_app=self._task_target_app,
         )
         self.pending_runtime_replan_hint = ""
         self._record_step_artifact(
@@ -449,6 +466,25 @@ class AgentLoop:
         task: str,
     ) -> dict[str, Any]:
         action_type = str(plan.action_type or "").strip().lower()
+        if action_type == "launch_app":
+            launch_target = self._resolve_launch_target(plan=plan, task=task)
+            package = str(launch_target.get("package") or "").strip()
+            activity = str(launch_target.get("activity") or "").strip()
+            if not package:
+                raise ValueError("action_type=launch_app 但无法解析 package，拒绝降级为 tap")
+            logger.info(
+                "构造 launch_app 动作: package=%s activity=%s",
+                package,
+                activity,
+            )
+            return {
+                "type": "launch_app",
+                "params": {
+                    "package": package,
+                    "activity": activity,
+                },
+            }
+
         widget = self._find_widget_by_id(widgets, int(plan.target_widget_id))
         center = self._widget_center(widget=widget, screen_size=screen_size)
         bounds = self._widget_bounds(widget=widget)
@@ -493,6 +529,144 @@ class AgentLoop:
 
         logger.warning("未知 action_type=%s，降级为 tap 中心点", action_type)
         return {"type": "tap", "params": {"x": center[0], "y": center[1]}}
+
+    def _load_app_catalog(self) -> list[dict[str, str]]:
+        conf_path = os.path.join(os.path.dirname(__file__), "conf.json")
+        try:
+            with open(conf_path, "r", encoding="utf-8") as file:
+                payload = json.load(file)
+        except Exception as exc:
+            logger.warning("加载 app catalog 失败(conf.json): %s", exc)
+            return []
+
+        raw_apps = payload.get("apps")
+        if not isinstance(raw_apps, list):
+            return []
+
+        apps: list[dict[str, str]] = []
+        for item in raw_apps:
+            if not isinstance(item, dict):
+                continue
+            package = str(item.get("package") or "").strip()
+            if not package:
+                continue
+            apps.append(
+                {
+                    "name": str(item.get("name") or "").strip(),
+                    "package": package,
+                    "activity": str(
+                        item.get("launch-activity")
+                        or item.get("launch_activity")
+                        or ""
+                    ).strip(),
+                }
+            )
+        logger.info("加载 app catalog 完成: %d entries", len(apps))
+        return apps
+
+    def _resolve_task_target_app(self, task: str) -> dict[str, str] | None:
+        task_text = str(task or "").strip()
+        if not task_text:
+            return None
+        task_lower = task_text.lower()
+
+        explicit_package = self._extract_package_from_text(task_text)
+        if explicit_package:
+            matched = self._lookup_app_by_package(explicit_package)
+            if matched is not None:
+                return matched
+            if explicit_package.count(".") >= 2:
+                return {"name": "", "package": explicit_package, "activity": ""}
+
+        best: dict[str, str] | None = None
+        best_score = -1
+        use_phrase = ""
+        use_match = re.search(r"\buse\s+(.+?)\s+to\b", task_lower)
+        if use_match:
+            use_phrase = str(use_match.group(1) or "").strip()
+
+        for app in self._app_catalog:
+            name = str(app.get("name") or "").strip()
+            package = str(app.get("package") or "").strip()
+            if not package:
+                continue
+
+            name_lower = name.lower()
+            package_lower = package.lower()
+            score = 0
+
+            if package_lower and package_lower in task_lower:
+                score += 1000
+            if name_lower and name_lower in task_lower:
+                score += 220
+
+            tokens = [token for token in re.split(r"[^a-z0-9]+", name_lower) if len(token) >= 3]
+            overlap = sum(1 for token in tokens if token and token in task_lower)
+            score += overlap * 35
+
+            if use_phrase and name_lower:
+                if use_phrase == name_lower:
+                    score += 240
+                elif use_phrase in name_lower or name_lower in use_phrase:
+                    score += 120
+
+            if score > best_score:
+                best_score = score
+                best = app
+
+        if best is None or best_score < 120:
+            return None
+        return dict(best)
+
+    def _resolve_launch_target(self, plan: PlanResult, task: str) -> dict[str, str]:
+        plan_package = str(getattr(plan, "launch_package", "") or "").strip()
+        plan_activity = str(getattr(plan, "launch_activity", "") or "").strip()
+        if plan_package:
+            matched = self._lookup_app_by_package(plan_package)
+            if matched is None:
+                return {
+                    "name": "",
+                    "package": plan_package,
+                    "activity": plan_activity,
+                }
+            if plan_activity:
+                matched["activity"] = plan_activity
+            return matched
+
+        if self._task_target_app and self._task_target_app.get("package"):
+            return dict(self._task_target_app)
+
+        package_from_task = self._extract_package_from_text(task)
+        if package_from_task:
+            matched = self._lookup_app_by_package(package_from_task)
+            if matched is not None:
+                return matched
+            if package_from_task.count(".") >= 2:
+                return {"name": "", "package": package_from_task, "activity": ""}
+        return {}
+
+    def _lookup_app_by_package(self, package: str) -> dict[str, str] | None:
+        pkg = str(package or "").strip().lower()
+        if not pkg:
+            return None
+        for app in self._app_catalog:
+            app_pkg = str(app.get("package") or "").strip().lower()
+            if app_pkg == pkg:
+                return dict(app)
+        return None
+
+    def _extract_package_from_text(self, text: str) -> str:
+        token_text = str(text or "")
+        pattern = re.compile(r"\b[a-zA-Z][a-zA-Z0-9_]*(?:\.[a-zA-Z0-9_]+)+\b")
+        for match in pattern.finditer(token_text):
+            candidate = str(match.group(0) or "").strip()
+            start = int(match.start())
+            if start > 0 and token_text[start - 1] == "@":
+                # Skip email domains like example@example.com.
+                continue
+            if candidate and "." in candidate:
+                return candidate
+        return ""
 
     def _find_widget_by_id(self, widgets: list[dict[str, Any]], widget_id: int) -> dict[str, Any] | None:
         for item in widgets:
