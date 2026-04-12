@@ -141,7 +141,11 @@ def text_cvt_orc_format_paddle(paddle_result):
                     'bottom': int(max(points[:, 1])),
                 }
                 content = line[1][0]
-                texts.append(Text(i, content, location))
+                confidence = float(line[1][1]) if len(line) > 1 and len(line[1]) > 1 else 1.0
+                text_obj = Text(i, content, location)
+                # Keep OCR confidence for downstream noise suppression.
+                text_obj.confidence = confidence
+                texts.append(text_obj)
             except Exception:
                 continue
     return texts
@@ -150,10 +154,15 @@ def text_cvt_orc_format_paddle(paddle_result):
 def text_filter_noise(texts, img_shape=None):
     valid_texts = []
     img_h = int(img_shape[0]) if img_shape is not None and len(img_shape) > 0 else 0
+    img_w = int(img_shape[1]) if img_shape is not None and len(img_shape) > 1 else 0
+    img_area = img_h * img_w if img_h > 0 and img_w > 0 else 0
     for text in texts:
         content = str(text.content or "").strip()
         if not content:
             continue
+
+        confidence = float(getattr(text, "confidence", 1.0))
+        text_area = int(max(0, text.width) * max(0, text.height))
 
         # Drop symbolic one-char OCR artifacts (status icons / separators), while
         # keeping meaningful one-char alnum labels.
@@ -168,6 +177,16 @@ def text_filter_noise(texts, img_shape=None):
             top_noise_h = max(24, int(img_h * 0.03))
             top_noise_bottom = int(img_h * 0.08)
             if text.height <= top_noise_h and text.location["bottom"] <= top_noise_bottom:
+                continue
+
+        # Suppress oversized low-confidence regions (common false positives in
+        # popup/dropdown overlays), which can incorrectly absorb nearby lines
+        # during intersection merge.
+        if img_area > 0:
+            area_ratio = text_area / img_area
+            if area_ratio > 0.08 and confidence < 0.45:
+                continue
+            if area_ratio > 0.20 and len(content) <= 3:
                 continue
 
         valid_texts.append(text)
@@ -193,6 +212,11 @@ def text_detection(input_file, output_file, show=False):
 
     texts = text_cvt_orc_format_paddle(result)
     logger.debug("After convert: %d", len(texts))
+
+    # Filter obvious OCR noise before any merge step. If left untouched, a single
+    # oversized false-positive text region can absorb multiple nearby candidates.
+    texts = text_filter_noise(texts, img_shape=img.shape)
+    logger.debug("After pre-merge filter: %d", len(texts))
 
     texts = merge_intersected_texts(texts)
     logger.debug("After merge: %d", len(texts))
