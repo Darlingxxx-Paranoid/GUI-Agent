@@ -68,13 +68,19 @@ ContainerExpansion
 ## Post-Oracle
 | 职责：评估变化证据，判断任务成功
 
-### 输入
-- 完整Dump树（动作执行后）
-- `assertions`
+### 1.基于XML树进行UI状态断言的验证
+### 2.如果没有完全通过，使用LLM进行再次验证
+#### 上下文信息：
+* 输入前后截图
+* 执行动作
+* 未通过的UI状态断言（原始语义和XML树断言）
 
-### 输出
-- `is_goal_complete`：是否目标成功
-- `action_history`：动作执行历史（失败才返回）
+#### 判定
+* 动作语义成功（即断言预测或验证错误）：将当前动作加入Progress Context，进入下一步Plan
+* 动作语义失败且UI有变化：回退，动作加入Experience context ，重新Plan
+* 动作语义失败且UI无变化：动作加入Experience context ，重新Plan
+
+
  
 
 ## Global-Oracle（不单独作为一个模块，全局性的一个判断，通过Planner的Progress Context实现）
