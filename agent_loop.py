@@ -63,7 +63,7 @@ class AgentLoop:
             cv_resize_height=config.cv_resize_height,
         )
         self.oracle_pre = OraclePre(llm_client=self.llm)
-        self.post_oracle = PostOracle()
+        self.post_oracle = PostOracle(llm_client=self.llm)
         self.running_oracle = RunningOracle(
             screen_variance_threshold=config.screen_variance_threshold,
         )
@@ -74,7 +74,6 @@ class AgentLoop:
         self.action_history: list[dict[str, Any]] = []
         self.progress_context: list[dict[str, str]] = []
         self.experience_context: list[dict[str, str]] = []
-        self.consecutive_post_failures = 0
         self._cached_before_observation: StepObservation | None = None
         self._cached_before_step: int | None = None
         self._cached_before_source_step: int | None = None
@@ -90,7 +89,6 @@ class AgentLoop:
         self.action_history = []
         self.progress_context = []
         self.experience_context = []
-        self.consecutive_post_failures = 0
         self._task_target_app = self._resolve_task_target_app(task)
         if self._task_target_app:
             logger.info(
@@ -368,7 +366,14 @@ class AgentLoop:
         after = self._observe(step=step, phase="after")
         if after is None:
             self._clear_reusable_observation()
-            action_record["post_oracle"] = {"is_goal_complete": False, "reason": "observe_after_failed"}
+            action_record["post_oracle"] = {
+                "decision": "semantic_fail_ui_unchanged",
+                "needs_back": False,
+                "reason": "observe_after_failed",
+                "evidence_source": "llm_secondary_retry_fallback",
+                "assertion_summary": {"total": 0, "failed": 0},
+                "failed_assertions": [],
+            }
             self._set_runtime_replan_hint(action_text="observe_after_failed")
             self._append_experience_context(plan=plan, failure_reason="observe_after_failed")
             return False, False
@@ -397,9 +402,13 @@ class AgentLoop:
             return False, False
 
         post_result = self.post_oracle.evaluate(
-            dump_tree=after.dump_tree,
-            assertions=pre_oracle_output.assertion_contract.assertions,
-            action_history=self.action_history,
+            before_dump_tree=before.dump_tree,
+            after_dump_tree=after.dump_tree,
+            action=action,
+            semantic_contract=pre_oracle_output.semantic_contract,
+            assertion_contract=pre_oracle_output.assertion_contract,
+            before_screenshot_path=before.screenshot_path,
+            after_screenshot_path=after.screenshot_path,
             step=step,
         )
         post_output = self.post_oracle.to_output(post_result)
@@ -411,8 +420,7 @@ class AgentLoop:
             append=True,
         )
 
-        if post_result.is_goal_complete:
-            self.consecutive_post_failures = 0
+        if post_result.decision == "semantic_success":
             progress_item = {
                 "goal": str(plan.goal or ""),
                 "action_type": str(plan.action_type or ""),
@@ -438,24 +446,38 @@ class AgentLoop:
             )
             return True, False
 
-        self.consecutive_post_failures += 1
-        self._set_runtime_replan_hint(action_text=f"post_oracle_not_complete:{plan.goal}")
-        self._append_experience_context(
-            plan=plan,
-            failure_reason="post_oracle_not_complete",
-        )
-        logger.warning(
-            "Post-Oracle 未通过(step=%d, consecutive_failures=%d)",
-            step,
-            self.consecutive_post_failures,
-        )
-        if self.consecutive_post_failures >= int(max(2, self.config.max_retries_per_subgoal)):
-            logger.warning("连续失败达到阈值，尝试 back 脱困")
+        if post_result.decision == "semantic_fail_ui_changed":
+            self._clear_reusable_observation()
+            self._set_runtime_replan_hint(action_text=f"post_oracle_semantic_fail_ui_changed:{plan.goal}")
+            self._append_experience_context(
+                plan=plan,
+                failure_reason="post_oracle_semantic_fail_ui_changed",
+            )
+            logger.warning("Post-Oracle 语义失败且 UI 有变化(step=%d)，执行回退后重规划", step)
             if not dry_run:
                 self.executor.back()
-            self.consecutive_post_failures = 0
-            self._clear_reusable_observation()
             return False, False
+
+        if post_result.decision == "semantic_fail_ui_unchanged":
+            self._set_runtime_replan_hint(action_text=f"post_oracle_semantic_fail_ui_unchanged:{plan.goal}")
+            self._append_experience_context(
+                plan=plan,
+                failure_reason=(
+                    "post_oracle_llm_fallback_fail"
+                    if post_result.evidence_source == "llm_secondary_retry_fallback"
+                    else "post_oracle_semantic_fail_ui_unchanged"
+                ),
+            )
+            logger.warning("Post-Oracle 语义失败且 UI 无变化(step=%d)，直接重规划", step)
+            self._cache_reusable_observation(step=step, observation=after)
+            return False, False
+
+        logger.warning("Post-Oracle 返回未知 decision=%s(step=%d)，按无变化失败处理", post_result.decision, step)
+        self._set_runtime_replan_hint(action_text=f"post_oracle_unknown_decision:{plan.goal}")
+        self._append_experience_context(
+            plan=plan,
+            failure_reason="post_oracle_llm_fallback_fail",
+        )
         self._cache_reusable_observation(step=step, observation=after)
         return False, False
 

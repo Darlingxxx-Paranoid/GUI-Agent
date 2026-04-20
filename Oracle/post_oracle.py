@@ -1,16 +1,51 @@
-"""Post-Oracle: evaluate after-action dump tree against UI assertions."""
+"""Post-Oracle: XML verification + LLM secondary verification."""
 
 from __future__ import annotations
 
+import json
 import logging
-from typing import Any, Dict, List, Optional, Sequence
+import os
+from typing import Any, Dict, Literal, Optional, Sequence
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
-from Oracle.pre_oracle import UIAssertion, UIAssertionContract, UIAssertionTarget
+from Oracle.pre_oracle import SemanticTransitionContract, UIAssertion, UIAssertionContract, UIAssertionTarget
+from prompt.post_oracle_prompt import ORACLE_POST_SYSTEM_PROMPT, ORACLE_POST_USER_PROMPT
 from utils.audit_recorder import AuditRecorder
+from utils.llm_client import LLMRequest
 
 logger = logging.getLogger(__name__)
+
+PostOracleDecision = Literal[
+    "semantic_success",
+    "semantic_fail_ui_changed",
+    "semantic_fail_ui_unchanged",
+]
+PostOracleEvidenceSource = Literal[
+    "xml_assertions",
+    "llm_secondary",
+    "llm_secondary_retry_fallback",
+]
+
+
+class AssertionSummary(BaseModel):
+    """Summary of XML assertion evaluation."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    total: int = Field(ge=0)
+    failed: int = Field(ge=0)
+
+
+class PostOracleLLMRecheck(BaseModel):
+    """Structured LLM secondary verification output."""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    semantic_success: bool
+    ui_changed: bool
+    rationale: str = Field(min_length=1)
+    attempts: int = Field(default=1, ge=1)
 
 
 class PostOracleResult(BaseModel):
@@ -18,89 +53,267 @@ class PostOracleResult(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    is_goal_complete: bool
-    action_history: Optional[List[Any]] = None
+    decision: PostOracleDecision
+    needs_back: bool
+    reason: str = Field(default="")
+    evidence_source: PostOracleEvidenceSource
+    assertion_summary: AssertionSummary
+    failed_assertions: list[str] = Field(default_factory=list)
+    llm_recheck: Optional[PostOracleLLMRecheck] = None
 
 
 class PostOracle:
-    """Evaluate assertion evidence from after-action dump tree."""
+    """Evaluate assertion evidence and fallback to LLM secondary verification."""
 
-    def __init__(self):
+    def __init__(self, llm_client=None, max_llm_retries: int = 1):
+        self.llm = llm_client
+        self.max_llm_retries = max(0, int(max_llm_retries))
         self.audit = AuditRecorder(component="post_oracle")
-        logger.info("PostOracle 初始化完成")
+        logger.info("PostOracle 初始化完成 (xml + llm-secondary)")
 
     def evaluate(
         self,
-        dump_tree: dict,
-        assertions: UIAssertionContract | Sequence[UIAssertion] | Sequence[dict[str, Any]],
-        action_history: Sequence[Any] | None = None,
+        before_dump_tree: dict,
+        after_dump_tree: dict,
+        action: dict[str, Any] | None,
+        semantic_contract: SemanticTransitionContract | dict[str, Any] | None,
+        assertion_contract: UIAssertionContract | Sequence[UIAssertion] | Sequence[dict[str, Any]],
+        before_screenshot_path: str = "",
+        after_screenshot_path: str = "",
         step: int | None = None,
     ) -> PostOracleResult:
-        if not isinstance(dump_tree, dict):
-            logger.error("Post-Oracle 评估失败: dump_tree 类型非法(type=%s)", type(dump_tree).__name__)
-            raise ValueError("dump_tree 必须是 dict")
+        if not isinstance(after_dump_tree, dict):
+            logger.error("Post-Oracle 评估失败: after_dump_tree 类型非法(type=%s)", type(after_dump_tree).__name__)
+            raise ValueError("after_dump_tree 必须是 dict")
+        if not isinstance(before_dump_tree, dict):
+            before_dump_tree = {}
 
-        assertion_items = self._normalize_assertions(assertions)
-        node_index = self._index_dump_tree(dump_tree)
-        activity, package = self._extract_app_context(dump_tree)
+        assertion_items = self._normalize_assertions(assertion_contract)
+        node_index = self._index_dump_tree(after_dump_tree)
+        activity_after, package_after = self._extract_app_context(after_dump_tree)
 
         failed_messages: list[str] = []
+        failed_items: list[dict[str, Any]] = []
         for idx, assertion in enumerate(assertion_items, start=1):
             ok, reason = self._check_assertion(
                 assertion=assertion,
                 node_index=node_index,
-                activity=activity,
-                package=package,
+                activity=activity_after,
+                package=package_after,
             )
             if not ok:
-                failed_messages.append(f"Assertion[{idx}] {reason}")
+                message = f"Assertion[{idx}] {reason}"
+                failed_messages.append(message)
+                failed_items.append(
+                    {
+                        "index": idx,
+                        "message": message,
+                        "assertion": assertion.model_dump(),
+                    }
+                )
 
-        is_goal_complete = len(failed_messages) == 0
-        result = PostOracleResult(
-            is_goal_complete=is_goal_complete,
-            action_history=(list(action_history or []) if not is_goal_complete else None),
-        )
-        self._record_post_oracle_artifact(
-            step=step,
-            result=result,
-            failure_messages=failed_messages,
-            assertion_count=len(assertion_items),
-        )
-
-        if is_goal_complete:
-            logger.info("Post-Oracle 评估通过: assertions=%d", len(assertion_items))
-        else:
-            logger.info(
-                "Post-Oracle 评估失败: assertions=%d, failed=%d",
-                len(assertion_items),
-                len(failed_messages),
+        summary = AssertionSummary(total=len(assertion_items), failed=len(failed_messages))
+        if not failed_messages:
+            result = PostOracleResult(
+                decision="semantic_success",
+                needs_back=False,
+                reason="xml_assertions_passed",
+                evidence_source="xml_assertions",
+                assertion_summary=summary,
+                failed_assertions=[],
+                llm_recheck=None,
             )
-            for item in failed_messages:
-                logger.info("Post-Oracle 失败详情: %s", item)
+            self._record_post_oracle_artifact(step=step, result=result)
+            logger.info("Post-Oracle 评估通过(XML): assertions=%d", summary.total)
+            return result
 
+        logger.info(
+            "Post-Oracle XML 断言未完全通过: assertions=%d, failed=%d，触发 LLM 二次验证",
+            summary.total,
+            summary.failed,
+        )
+        for message in failed_messages:
+            logger.info("Post-Oracle 失败详情: %s", message)
+
+        llm_recheck = self._secondary_verify_with_llm(
+            before_screenshot_path=before_screenshot_path,
+            after_screenshot_path=after_screenshot_path,
+            action=action or {},
+            semantic_contract=semantic_contract,
+            assertion_items=assertion_items,
+            failed_items=failed_items,
+            before_dump_tree=before_dump_tree,
+            after_dump_tree=after_dump_tree,
+            step=step,
+        )
+
+        if llm_recheck is None:
+            result = PostOracleResult(
+                decision="semantic_fail_ui_unchanged",
+                needs_back=False,
+                reason="llm_secondary_failed_after_retry",
+                evidence_source="llm_secondary_retry_fallback",
+                assertion_summary=summary,
+                failed_assertions=failed_messages,
+                llm_recheck=None,
+            )
+            self._record_post_oracle_artifact(step=step, result=result)
+            logger.warning(
+                "Post-Oracle 二次验证失败(重试后降级): decision=%s",
+                result.decision,
+            )
+            return result
+
+        if llm_recheck.semantic_success:
+            decision: PostOracleDecision = "semantic_success"
+            needs_back = False
+        elif llm_recheck.ui_changed:
+            decision = "semantic_fail_ui_changed"
+            needs_back = True
+        else:
+            decision = "semantic_fail_ui_unchanged"
+            needs_back = False
+
+        result = PostOracleResult(
+            decision=decision,
+            needs_back=needs_back,
+            reason=llm_recheck.rationale,
+            evidence_source="llm_secondary",
+            assertion_summary=summary,
+            failed_assertions=failed_messages,
+            llm_recheck=llm_recheck,
+        )
+        self._record_post_oracle_artifact(step=step, result=result)
+        logger.info(
+            "Post-Oracle 二次验证完成: decision=%s, needs_back=%s, attempts=%d",
+            result.decision,
+            result.needs_back,
+            int(llm_recheck.attempts),
+        )
         return result
 
     def to_output(self, result: PostOracleResult) -> Dict[str, Any]:
-        payload: Dict[str, Any] = {"is_goal_complete": bool(result.is_goal_complete)}
-        if not result.is_goal_complete:
-            payload["action_history"] = list(result.action_history or [])
-        return payload
+        return dict(result.model_dump(exclude_none=True))
+
+    def _secondary_verify_with_llm(
+        self,
+        before_screenshot_path: str,
+        after_screenshot_path: str,
+        action: dict[str, Any],
+        semantic_contract: SemanticTransitionContract | dict[str, Any] | None,
+        assertion_items: Sequence[UIAssertion],
+        failed_items: list[dict[str, Any]],
+        before_dump_tree: dict[str, Any],
+        after_dump_tree: dict[str, Any],
+        step: int | None,
+    ) -> PostOracleLLMRecheck | None:
+        if self.llm is None:
+            logger.warning("Post-Oracle 跳过 LLM 二次验证: llm_client 未初始化")
+            return None
+
+        before_path = str(before_screenshot_path or "").strip()
+        after_path = str(after_screenshot_path or "").strip()
+        if not before_path or not after_path:
+            logger.warning("Post-Oracle 跳过 LLM 二次验证: before/after 截图路径为空")
+            return None
+        if not os.path.exists(before_path) or not os.path.exists(after_path):
+            logger.warning("Post-Oracle 跳过 LLM 二次验证: before/after 截图不存在")
+            return None
+
+        semantic_payload = self._to_jsonable(semantic_contract)
+        assertion_payload = {
+            "assertions": [item.model_dump() for item in assertion_items],
+        }
+        app_context_payload = self._build_app_context_payload(
+            before_dump_tree=before_dump_tree,
+            after_dump_tree=after_dump_tree,
+        )
+
+        user_prompt = ORACLE_POST_USER_PROMPT.format(
+            action_json=json.dumps(self._to_jsonable(action), ensure_ascii=False),
+            semantic_json=json.dumps(semantic_payload, ensure_ascii=False),
+            assertion_json=json.dumps(assertion_payload, ensure_ascii=False),
+            failed_assertions_json=json.dumps(failed_items, ensure_ascii=False),
+            app_context_json=json.dumps(app_context_payload, ensure_ascii=False),
+        )
+
+        total_attempts = self.max_llm_retries + 1
+        for attempt in range(1, total_attempts + 1):
+            request = LLMRequest(
+                system=ORACLE_POST_SYSTEM_PROMPT,
+                user=user_prompt,
+                images=[before_path, after_path],
+                response_format=PostOracleLLMRecheck,
+                audit_meta={
+                    "artifact_kind": "PostOracleLLMRecheck",
+                    "step": step,
+                    "stage": f"post_oracle_secondary_attempt_{attempt}",
+                },
+            )
+            try:
+                parsed = self.llm.chat(request)
+                verified = (
+                    parsed if isinstance(parsed, PostOracleLLMRecheck) else PostOracleLLMRecheck.model_validate(parsed)
+                )
+                return verified.model_copy(update={"attempts": int(attempt)})
+            except Exception as exc:
+                logger.warning(
+                    "Post-Oracle LLM 二次验证失败(attempt=%d/%d): %s",
+                    attempt,
+                    total_attempts,
+                    exc,
+                )
+                continue
+
+        return None
+
+    def _to_jsonable(self, value: Any) -> Any:
+        if value is None:
+            return {}
+        if isinstance(value, BaseModel):
+            return value.model_dump()
+        if isinstance(value, dict):
+            payload: dict[str, Any] = {}
+            for key, item in value.items():
+                payload[str(key)] = self._to_jsonable(item)
+            return payload
+        if isinstance(value, (list, tuple)):
+            return [self._to_jsonable(item) for item in value]
+        return value
+
+    def _build_app_context_payload(
+        self,
+        before_dump_tree: dict[str, Any],
+        after_dump_tree: dict[str, Any],
+    ) -> dict[str, Any]:
+        before_activity, before_package = self._extract_app_context(before_dump_tree)
+        after_activity, after_package = self._extract_app_context(after_dump_tree)
+        return {
+            "before": {
+                "package": before_package,
+                "activity": before_activity,
+            },
+            "after": {
+                "package": after_package,
+                "activity": after_activity,
+            },
+        }
 
     def _normalize_assertions(
         self,
-        assertions: UIAssertionContract | Sequence[UIAssertion] | Sequence[dict[str, Any]],
+        assertion_contract: UIAssertionContract | Sequence[UIAssertion] | Sequence[dict[str, Any]],
     ) -> list[UIAssertion]:
-        if isinstance(assertions, UIAssertionContract):
-            items = list(assertions.assertions or [])
-        elif isinstance(assertions, Sequence) and not isinstance(assertions, (str, bytes)):
+        if isinstance(assertion_contract, UIAssertionContract):
+            items = list(assertion_contract.assertions or [])
+        elif isinstance(assertion_contract, Sequence) and not isinstance(assertion_contract, (str, bytes)):
             items = []
-            for value in assertions:
+            for value in assertion_contract:
                 if isinstance(value, UIAssertion):
                     items.append(value)
                 else:
                     items.append(UIAssertion.model_validate(value))
         else:
-            raise ValueError("assertions 必须是 UIAssertionContract 或 UIAssertion 列表")
+            raise ValueError("assertion_contract 必须是 UIAssertionContract 或 UIAssertion 列表")
 
         if not items:
             raise ValueError("assertions 不能为空")
@@ -327,25 +540,14 @@ class PostOracle:
         self,
         step: int | None,
         result: PostOracleResult,
-        failure_messages: list[str],
-        assertion_count: int,
     ) -> None:
         if step is None:
             return
         try:
-            payload: Dict[str, Any] = {
-                "is_goal_complete": bool(result.is_goal_complete),
-                "assertion_count": int(assertion_count),
-                "failed_assertion_count": int(len(failure_messages)),
-            }
-            if failure_messages:
-                payload["failure_messages"] = list(failure_messages)
-            if not result.is_goal_complete:
-                payload["action_history"] = list(result.action_history or [])
             self.audit.record_step(
                 artifact_kind="PostOracle",
                 step=int(step),
-                payload=payload,
+                payload=result.model_dump(exclude_none=True),
             )
         except Exception as exc:
             logger.error("写入 PostOracle 审计记录失败: %s", exc)
