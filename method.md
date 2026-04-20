@@ -8,20 +8,24 @@
 - 输出：完整Dump树
 
 ## Planner（LLM）
-### 输入
+### 1. 规划阶段
+#### 输入
 - Task: 任务描述
 - Screenshot: 截图
-- Visible widgets List
+- Experience context（之前n步没有通过验证的动作的语义信息，没有则为空）
 - Progress Context
 
-### 输出
+#### 输出
 PlanResult:
-- `goal`: 目标描述
+- `goal`: 动作意图
 - `action_type`: 动作类型
-- `input_text`: 输入类动作文本
-- `target_widget_id`: 目标控件ID
+- `target_description`: 目标描述
 - `is_task_complete`：是否任务已完成  
 - `reasoning`：规划理由
+
+### 2. 锚定阶段
+* 先通过target_description配合OCR进行
+* 否则LLM输入Screenshot+ Visible widgets List进行匹配
 
 ## Pre-Oracle（LLM）
 | 职责：定义成功的证据
@@ -60,6 +64,6 @@ PlanResult:
 - `action_history`：动作执行历史（失败才返回）
  
 
-## Global-Oracle
+## Global-Oracle（不单独作为一个模块，全局性的一个判断，通过Planner的Progress Context实现）
 | 职责：全局评估任务成功
 - progress_context: 任务执行进度
