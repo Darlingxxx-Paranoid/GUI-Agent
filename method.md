@@ -31,21 +31,21 @@ PlanResult:
 
 ## Pre-Oracle（LLM）
 | 职责：定义成功的证据
-### 输入
-- PlanResult: Planner 输出，移除`reasoning`字段
-- 完整Dump树
+### 1. 上下文信息选择
+| 根据动作预测类型选择，尽量减少噪声
+* 局部上下文：适用于控件中心的操作（如点击、输入），通过截取目标控件周围区域获得语义上下文
+* 全局上下文：适用于界面导航类操作（如启动应用、滑动或返回），使用完整界面截图提供语义信息
 
-### 输出
-`StepContract`
-- `success_definition`：成功的自然语言描述
-- `Expectations`: 成功的期望结果
-  - `Target_category`: 目标类型（包括`widget`、`activity`、`package`）(后期考虑加入OCR)
-  - `Target`: 目标(如果是`widget`，则为控件ID+控件指定属性字段(必须基于完整Dump树)；如果是`activity`和`package`，则为空)
-    - `node_id`: 控件ID
-    - `resource_id`: 控件资源ID
-    - `field`: 控件属性字段（text, class, content-desc, checked, enabled, focused, selected），用来和目标内容进行关系运算
-  - `Relation`: 关系类型（包括`exact_match`、`contains`）
-  - `content`: 目标内容(如果是`exact_match`，则为固定值；如果是`contains`，则为包含关系的字符串)
+### 2. 在获得视觉上下文后，Pre‑Oracle 利用多模态 LLM 根据当前动作语义推断动作成功后的界面语义变化
+### 3. 通过一组规则将语义变化映射为UI状态转移模式，并最终生成基于XML界面树的验证断言
+#### UI转移类型
+```
+NavigationTransition
+NodeAppearance
+AttributeModification
+ContentUpdate
+ContainerExpansion
+```
 
 ## Execution
 
