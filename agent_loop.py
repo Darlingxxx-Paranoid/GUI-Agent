@@ -20,7 +20,7 @@ from Perception.dump_parser import DumpParser
 from Perception.uied_controls import get_uied_visible_widgets_list
 from Planning.planner import PlanResult, Planner
 from utils.audit_recorder import AuditRecorder
-from utils.llm_client import LLMClient
+from utils.llm_client import LLMClient, LLMStructuredOutputError
 
 logger = logging.getLogger(__name__)
 
@@ -165,21 +165,6 @@ class AgentLoop:
             )
             return False, False
 
-        runtime_before = self._run_running_oracle(
-            step=step,
-            phase="before_action",
-            screenshot_path=before.screenshot_path,
-        )
-        if runtime_before and runtime_before.has_runtime_exception:
-            self._clear_reusable_observation()
-            self._set_runtime_replan_hint(
-                action_text=f"before_action_runtime_exception:{','.join(runtime_before.tags or [])}"
-            )
-            if not dry_run:
-                logger.warning("Running-Oracle 告警，执行 back 尝试恢复")
-                self.executor.back()
-            return False, False
-
         try:
             plan = self.planner.plan(
                 task=task,
@@ -188,6 +173,7 @@ class AgentLoop:
                 progress_context=self.progress_context,
                 current_package=before.package,
                 task_target_app=self._task_target_app,
+                step=step,
             )
         except Exception as exc:
             self._record_plan_exception(
@@ -212,6 +198,68 @@ class AgentLoop:
                 payload={"phase": "plan", "status": "task_complete"},
             )
             return True, True
+
+        if str(plan.action_type or "").strip().lower() == "wait":
+            action = self._build_action_from_plan(
+                plan=plan,
+                widgets=before.widgets,
+                screen_size=screen_size,
+                task=task,
+            )
+            self._record_step_artifact(
+                artifact_kind="ResolvedAction",
+                step=step,
+                payload=action,
+            )
+            action_record: dict[str, Any] = {
+                "step": step,
+                "goal": plan.goal,
+                "action_type": action.get("type"),
+                "action_params": dict(action.get("params") or {}),
+                "dry_run": bool(dry_run),
+            }
+            self.action_history.append(action_record)
+            logger.info("本步为等待动作，跳过 Pre/Post/Running Oracle 与控件动作映射")
+            if dry_run:
+                logger.info("[DRY RUN] 跳过执行动作: %s", action)
+            else:
+                self.executor.execute(action)
+            wait_progress_item = {
+                "goal": str(plan.goal or ""),
+                "action_type": "wait",
+                "input_text": "",
+            }
+            self.progress_context.append(wait_progress_item)
+            logger.info(
+                "等待动作已记录到 progress_context (progress_context=%d)",
+                len(self.progress_context),
+            )
+            self._record_step_artifact(
+                artifact_kind="StepResult",
+                step=step,
+                payload={
+                    "status": "wait_executed",
+                    "goal": plan.goal,
+                    "action_type": "wait",
+                    "wait_seconds": float((action.get("params") or {}).get("duration_sec") or 2.0),
+                },
+            )
+            return True, False
+
+        runtime_before = self._run_running_oracle(
+            step=step,
+            phase="before_action",
+            screenshot_path=before.screenshot_path,
+        )
+        if runtime_before and runtime_before.has_runtime_exception:
+            self._clear_reusable_observation()
+            self._set_runtime_replan_hint(
+                action_text=f"before_action_runtime_exception:{','.join(runtime_before.tags or [])}"
+            )
+            if not dry_run:
+                logger.warning("Running-Oracle 告警，执行 back 尝试恢复")
+                self.executor.back()
+            return False, False
 
         contract = self.oracle_pre.generate_contract(
             plan=plan,
@@ -482,6 +530,9 @@ class AgentLoop:
         task: str,
     ) -> dict[str, Any]:
         action_type = str(plan.action_type or "").strip().lower()
+        if action_type == "wait":
+            return {"type": "wait", "params": {"duration_sec": 2.0}}
+
         if action_type == "launch_app":
             launch_target = self._resolve_launch_target(plan=plan, task=task)
             package = str(launch_target.get("package") or "").strip()
@@ -838,6 +889,20 @@ class AgentLoop:
                 step,
             )
             return
+
+        if isinstance(exc, LLMStructuredOutputError):
+            raw_payload = exc.raw_payload
+            if raw_payload is not None:
+                self._record_step_artifact(
+                    artifact_kind="PlanResult",
+                    step=step,
+                    payload=raw_payload,
+                )
+                logger.info(
+                    "步骤 %d 记录 LLM 原始结构化输出到 PlanResult（校验失败）",
+                    step,
+                )
+                return
 
         error_type = type(exc).__name__
         error_message = str(exc or "").strip() or repr(exc)

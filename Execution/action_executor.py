@@ -201,6 +201,7 @@ class ActionExecutor:
             "enter": self._handle_enter,
             "launch_app": self._handle_launch_app,
             "long_press": self._handle_long_press,
+            "wait": self._handle_wait,
         }
         handler = handlers.get(spec.action_type)
         if handler is None:
@@ -295,6 +296,16 @@ class ActionExecutor:
             self._get_int_param(spec.params, "y", 0),
             self._get_int_param(spec.params, "duration_ms", 900),
         )
+
+    def _handle_wait(self, spec: ActionSpec, current_state: Any = None) -> None:
+        raw = spec.params.get("duration_sec", 2)
+        try:
+            seconds = float(raw)
+        except Exception:
+            seconds = 2.0
+        seconds = max(0.0, min(10.0, seconds))
+        logger.info("执行等待: %.2f 秒", seconds)
+        time.sleep(seconds)
 
     def _is_input_target_ready(self, target: Any, ui_state: Any) -> bool:
         """

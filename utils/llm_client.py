@@ -34,6 +34,24 @@ class LLMRequest:
     audit_meta: Optional[dict[str, Any]] = None
 
 
+class LLMStructuredOutputError(RuntimeError):
+    """Structured output parse/validation failed but raw model output is available."""
+
+    def __init__(
+        self,
+        message: str,
+        raw_text: str = "",
+        raw_payload: Any = None,
+        parse_error: Exception | None = None,
+        validation_error: Exception | None = None,
+    ):
+        super().__init__(message)
+        self.raw_text = str(raw_text or "")
+        self.raw_payload = raw_payload
+        self.parse_error = parse_error
+        self.validation_error = validation_error
+
+
 class LLMClient:
     """
     LLM 调用客户端
@@ -122,28 +140,86 @@ class LLMClient:
         meta = request.audit_meta or {}
         try:
             if request.response_format is not None:
-                response = self.client.chat.completions.parse(
-                    model=self.model,
-                    messages=messages,
-                    response_format=request.response_format,
-                    temperature=self.temperature,
-                    max_completion_tokens=self.max_tokens,
-                )
-                message = response.choices[0].message
-                parsed = getattr(message, "parsed", None)
-                if parsed is None:
-                    refusal = getattr(message, "refusal", None)
-                    if refusal:
-                        raise RuntimeError(f"模型拒绝响应: {refusal}")
-                    raise RuntimeError("模型返回无法解析为 response_format 的内容")
-                self._save_audit_record(
-                    artifact_kind=str((meta or {}).get("artifact_kind") or ""),
-                    step=(meta or {}).get("step"),
-                    stage=str((meta or {}).get("stage") or "chat_structured"),
-                    llm_response=self._serialize_parsed(parsed),
-                    error="",
-                )
-                return parsed
+                try:
+                    response = self.client.chat.completions.parse(
+                        model=self.model,
+                        messages=messages,
+                        response_format=request.response_format,
+                        temperature=self.temperature,
+                        max_completion_tokens=self.max_tokens,
+                    )
+                    message = response.choices[0].message
+                    parsed = getattr(message, "parsed", None)
+                    if parsed is None:
+                        refusal = getattr(message, "refusal", None)
+                        if refusal:
+                            raise RuntimeError(f"模型拒绝响应: {refusal}")
+                        raise RuntimeError("模型返回无法解析为 response_format 的内容")
+                    self._save_audit_record(
+                        artifact_kind=str((meta or {}).get("artifact_kind") or ""),
+                        step=(meta or {}).get("step"),
+                        stage=str((meta or {}).get("stage") or "chat_structured"),
+                        llm_response=self._serialize_parsed(parsed),
+                        error="",
+                    )
+                    return parsed
+                except Exception as parse_exc:
+                    logger.warning(
+                        "结构化解析失败，回退抓取原始 JSON 输出: %s",
+                        parse_exc,
+                    )
+                    raw_content = ""
+                    raw_payload: Any = None
+                    try:
+                        raw_response = self.client.chat.completions.create(
+                            model=self.model,
+                            messages=messages,
+                            response_format={"type": "json_object"},
+                            temperature=self.temperature,
+                            max_completion_tokens=self.max_tokens,
+                        )
+                        raw_content = str(raw_response.choices[0].message.content or "")
+                        raw_payload = json.loads(raw_content)
+                    except Exception as fallback_exc:
+                        self._save_audit_record(
+                            artifact_kind=str((meta or {}).get("artifact_kind") or ""),
+                            step=(meta or {}).get("step"),
+                            stage=str((meta or {}).get("stage") or "chat_structured_error"),
+                            llm_response=raw_content,
+                            error=f"parse_error={parse_exc}; fallback_error={fallback_exc}",
+                        )
+                        raise
+
+                    validation_exc: Exception | None = None
+                    try:
+                        if hasattr(request.response_format, "model_validate"):
+                            parsed = request.response_format.model_validate(raw_payload)
+                        else:
+                            parsed = raw_payload
+                        self._save_audit_record(
+                            artifact_kind=str((meta or {}).get("artifact_kind") or ""),
+                            step=(meta or {}).get("step"),
+                            stage=str((meta or {}).get("stage") or "chat_structured_fallback"),
+                            llm_response=self._serialize_parsed(raw_payload),
+                            error=f"parse_error={parse_exc}",
+                        )
+                        return parsed
+                    except Exception as val_exc:
+                        validation_exc = val_exc
+                        self._save_audit_record(
+                            artifact_kind=str((meta or {}).get("artifact_kind") or ""),
+                            step=(meta or {}).get("step"),
+                            stage=str((meta or {}).get("stage") or "chat_structured_validation_error"),
+                            llm_response=self._serialize_parsed(raw_payload),
+                            error=f"parse_error={parse_exc}; validation_error={val_exc}",
+                        )
+                        raise LLMStructuredOutputError(
+                            message=f"结构化输出校验失败: {val_exc}",
+                            raw_text=raw_content,
+                            raw_payload=raw_payload,
+                            parse_error=parse_exc,
+                            validation_error=validation_exc,
+                        ) from val_exc
 
             response = self.client.chat.completions.create(
                 model=self.model,

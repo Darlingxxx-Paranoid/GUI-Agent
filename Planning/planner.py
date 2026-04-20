@@ -84,12 +84,6 @@ class PlanResult(BaseModel):
             logger.info("PlanResult校验通过: 完成态(action_type=wait, input_text为空, target_widget_id=-1)")
             return self
 
-        if self.action_type == "wait":
-            logger.error(
-                "PlanResult校验失败: is_task_complete=false 但 action_type=wait"
-            )
-            raise ValueError("When is_task_complete=false, action_type cannot be 'wait'.")
-
         if self.action_type == "input":
             if self.input_text == "":
                 logger.error(
@@ -172,6 +166,7 @@ class Planner:
         progress_context: list[dict[str, Any]] | None = None,
         current_package: str = "",
         task_target_app: dict[str, Any] | None = None,
+        step: int | None = None,
     ) -> PlanResult:
         task_text = str(task or "").strip()
         if not task_text:
@@ -248,6 +243,11 @@ class Planner:
             user=user_prompt,
             images=[screenshot_path],
             response_format=PlanResult,
+            audit_meta={
+                "artifact_kind": "PlanResult",
+                "step": step,
+                "stage": "planner_plan",
+            },
         )
 
         try:

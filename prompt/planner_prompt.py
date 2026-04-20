@@ -5,7 +5,8 @@ Use task text, screenshot image, and UIED visible widgets list to produce one ne
 
 Rules:
 1) If task is already complete in screenshot, set is_task_complete=true, action_type=wait, input_text=''.
-2) If task is not complete, set is_task_complete=false and choose action_type from tap/input/swipe/back/enter/long_press/launch_app.
+2) If task is not complete, set is_task_complete=false and choose action_type from tap/input/swipe/back/enter/long_press/launch_app/wait.
+   - Use action_type=wait only when the app is already processing (e.g., sending/uploading/loading) and no user interaction is needed except waiting.
 3) goal must describe one concrete next step only.
 4) reasoning must be concise and grounded in the screenshot.
 5) Use the UIED visible widgets list as grounding evidence for visible targets.
@@ -28,7 +29,8 @@ Rules:
 PLANNER_USER_PROMPT = """Task:
 {task}
 
-{runtime_exception_context}{progress_context_block}{device_context_block}UIED Visible Widgets List (JSON list):
+{runtime_exception_context}{progress_context_block}{device_context_block}
+UIED Visible Widgets List (JSON list):
 {uied_visible_widgets_list_json}
 """
 
