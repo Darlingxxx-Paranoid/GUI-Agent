@@ -12,7 +12,7 @@
 #### 输入
 - Task: 任务描述
 - Screenshot: 截图
-- Experience context（之前n步没有通过验证的动作的语义信息，没有则为空）
+- Experience context（最近3步没有通过验证的动作语义信息，没有则为空）
 - Progress Context
 
 #### 输出
@@ -20,12 +20,14 @@ PlanResult:
 - `goal`: 动作意图
 - `action_type`: 动作类型
 - `target_description`: 目标描述
+- `input_description`: 输入动作文本（仅`action_type=input`时非空）
 - `is_task_complete`：是否任务已完成  
 - `reasoning`：规划理由
 
 ### 2. 锚定阶段
-* 先通过target_description配合OCR进行
+* 先通过target_description配合OCR/UIED进行匹配
 * 否则LLM输入Screenshot+ Visible widgets List进行匹配
+* 若OCR/UIED+LLM均未锚定到有效控件：本步失败并触发重规划，不执行危险兜底点击
 
 ## Pre-Oracle（LLM）
 | 职责：定义成功的证据

@@ -18,7 +18,7 @@ from Oracle.pre_oracle import OraclePre
 from Oracle.running_oracle import RunningOracle, RunningOracleResult
 from Perception.dump_parser import DumpParser
 from Perception.uied_controls import get_uied_visible_widgets_list
-from Planning.planner import PlanResult, Planner
+from Planning.planner import AnchorResult, PlanResult, Planner
 from utils.audit_recorder import AuditRecorder
 from utils.llm_client import LLMClient, LLMStructuredOutputError
 
@@ -73,6 +73,7 @@ class AgentLoop:
         self.pending_runtime_replan_hint = ""
         self.action_history: list[dict[str, Any]] = []
         self.progress_context: list[dict[str, str]] = []
+        self.experience_context: list[dict[str, str]] = []
         self.consecutive_post_failures = 0
         self._cached_before_observation: StepObservation | None = None
         self._cached_before_step: int | None = None
@@ -88,6 +89,7 @@ class AgentLoop:
         self.pending_runtime_replan_hint = ""
         self.action_history = []
         self.progress_context = []
+        self.experience_context = []
         self.consecutive_post_failures = 0
         self._task_target_app = self._resolve_task_target_app(task)
         if self._task_target_app:
@@ -171,6 +173,7 @@ class AgentLoop:
                 screenshot=before.screenshot_path,
                 runtime_exception_hint=str(self.pending_runtime_replan_hint or ""),
                 progress_context=self.progress_context,
+                experience_context=self.experience_context,
                 current_package=before.package,
                 task_target_app=self._task_target_app,
                 step=step,
@@ -199,9 +202,58 @@ class AgentLoop:
             )
             return True, True
 
+        action_type = str(plan.action_type or "").strip().lower()
+        anchor_result = AnchorResult(
+            target_widget_id=-1,
+            anchor_method="none",
+            anchor_reason=f"action_type={action_type} does not require widget anchor",
+        )
+        if self._action_requires_widget(action_type):
+            anchor_result = self.planner.anchor(
+                plan=plan,
+                screenshot=before.screenshot_path,
+                visible_widgets_list=before.widgets,
+                step=step,
+            )
+        self._record_step_artifact(
+            artifact_kind="AnchorResult",
+            step=step,
+            payload=anchor_result,
+        )
+
+        if self._action_requires_widget(action_type) and int(anchor_result.target_widget_id) < 0:
+            self._set_runtime_replan_hint(
+                action_text=f"anchor_failed:{plan.target_description}"
+            )
+            self._append_experience_context(
+                plan=plan,
+                failure_reason=f"anchor_failed:{anchor_result.anchor_reason}",
+            )
+            self._cache_reusable_observation(step=step, observation=before)
+            logger.warning(
+                "锚定失败(step=%d): action_type=%s target_description=%s reason=%s",
+                step,
+                action_type,
+                plan.target_description,
+                anchor_result.anchor_reason,
+            )
+            self._record_step_artifact(
+                artifact_kind="StepResult",
+                step=step,
+                payload={
+                    "status": "anchor_failed",
+                    "goal": plan.goal,
+                    "action_type": plan.action_type,
+                    "target_description": plan.target_description,
+                    "anchor_reason": anchor_result.anchor_reason,
+                },
+            )
+            return False, False
+
         if str(plan.action_type or "").strip().lower() == "wait":
             action = self._build_action_from_plan(
                 plan=plan,
+                anchor_result=anchor_result,
                 widgets=before.widgets,
                 screen_size=screen_size,
                 task=task,
@@ -227,7 +279,8 @@ class AgentLoop:
             wait_progress_item = {
                 "goal": str(plan.goal or ""),
                 "action_type": "wait",
-                "input_text": "",
+                "target_description": "",
+                "input_description": "",
             }
             self.progress_context.append(wait_progress_item)
             logger.info(
@@ -256,6 +309,10 @@ class AgentLoop:
             self._set_runtime_replan_hint(
                 action_text=f"before_action_runtime_exception:{','.join(runtime_before.tags or [])}"
             )
+            self._append_experience_context(
+                plan=plan,
+                failure_reason=f"before_action_runtime_exception:{','.join(runtime_before.tags or [])}",
+            )
             if not dry_run:
                 logger.warning("Running-Oracle 告警，执行 back 尝试恢复")
                 self.executor.back()
@@ -274,6 +331,7 @@ class AgentLoop:
 
         action = self._build_action_from_plan(
             plan=plan,
+            anchor_result=anchor_result,
             widgets=before.widgets,
             screen_size=screen_size,
             task=task,
@@ -304,6 +362,7 @@ class AgentLoop:
             self._clear_reusable_observation()
             action_record["post_oracle"] = {"is_goal_complete": False, "reason": "observe_after_failed"}
             self._set_runtime_replan_hint(action_text="observe_after_failed")
+            self._append_experience_context(plan=plan, failure_reason="observe_after_failed")
             return False, False
 
         runtime_after = self._run_running_oracle(
@@ -315,6 +374,10 @@ class AgentLoop:
             self._clear_reusable_observation()
             self._set_runtime_replan_hint(
                 action_text=f"after_action_runtime_exception:{','.join(runtime_after.tags or [])}"
+            )
+            self._append_experience_context(
+                plan=plan,
+                failure_reason=f"after_action_runtime_exception:{','.join(runtime_after.tags or [])}",
             )
             action_record["runtime_oracle"] = {
                 "phase": runtime_after.phase,
@@ -345,7 +408,8 @@ class AgentLoop:
             progress_item = {
                 "goal": str(plan.goal or ""),
                 "action_type": str(plan.action_type or ""),
-                "input_text": str(plan.input_text or ""),
+                "target_description": str(plan.target_description or ""),
+                "input_description": str(plan.input_description or ""),
             }
             self.progress_context.append(progress_item)
             self._cache_reusable_observation(step=step, observation=after)
@@ -361,13 +425,17 @@ class AgentLoop:
                     "status": "subgoal_success",
                     "goal": plan.goal,
                     "action_type": plan.action_type,
-                    "input_text": plan.input_text,
+                    "input_description": plan.input_description,
                 },
             )
             return True, False
 
         self.consecutive_post_failures += 1
         self._set_runtime_replan_hint(action_text=f"post_oracle_not_complete:{plan.goal}")
+        self._append_experience_context(
+            plan=plan,
+            failure_reason="post_oracle_not_complete",
+        )
         logger.warning(
             "Post-Oracle 未通过(step=%d, consecutive_failures=%d)",
             step,
@@ -525,6 +593,7 @@ class AgentLoop:
     def _build_action_from_plan(
         self,
         plan: PlanResult,
+        anchor_result: AnchorResult,
         widgets: list[dict[str, Any]],
         screen_size: tuple[int, int],
         task: str,
@@ -552,7 +621,12 @@ class AgentLoop:
                 },
             }
 
-        widget = self._find_widget_by_id(widgets, int(plan.target_widget_id))
+        target_widget_id = int(getattr(anchor_result, "target_widget_id", -1))
+        if self._action_requires_widget(action_type) and target_widget_id < 0:
+            raise ValueError(
+                f"action_type={action_type} 需要已锚定控件，但 target_widget_id={target_widget_id}"
+            )
+        widget = self._find_widget_by_id(widgets, target_widget_id)
         center = self._widget_center(widget=widget, screen_size=screen_size)
         bounds = self._widget_bounds(widget=widget)
 
@@ -568,7 +642,7 @@ class AgentLoop:
         if action_type == "input":
             return {
                 "type": "input",
-                "params": {"x": center[0], "y": center[1], "text": str(plan.input_text or "")},
+                "params": {"x": center[0], "y": center[1], "text": str(plan.input_description or "")},
             }
 
         if action_type == "swipe":
@@ -596,6 +670,27 @@ class AgentLoop:
 
         logger.warning("未知 action_type=%s，降级为 tap 中心点", action_type)
         return {"type": "tap", "params": {"x": center[0], "y": center[1]}}
+
+    def _action_requires_widget(self, action_type: str) -> bool:
+        token = str(action_type or "").strip().lower()
+        return token in {"tap", "input", "swipe", "long_press"}
+
+    def _append_experience_context(
+        self,
+        plan: PlanResult,
+        failure_reason: str,
+    ) -> None:
+        self.experience_context.append(
+            {
+                "goal": str(plan.goal or ""),
+                "action_type": str(plan.action_type or ""),
+                "target_description": str(getattr(plan, "target_description", "") or ""),
+                "input_description": str(getattr(plan, "input_description", "") or ""),
+                "failure_reason": str(failure_reason or "").strip(),
+            }
+        )
+        self.experience_context = self.experience_context[-3:]
+        logger.info("experience_context 更新: total=%d", len(self.experience_context))
 
     def _load_app_catalog(self) -> list[dict[str, str]]:
         conf_path = os.path.join(os.path.dirname(__file__), "conf.json")
@@ -920,8 +1015,8 @@ class AgentLoop:
         error_plan_payload: dict[str, Any] = {
             "goal": f"[EXCEPTION] step_{int(step)} failed before valid planner output",
             "action_type": "back",
-            "input_text": "",
-            "target_widget_id": -1,
+            "target_description": "",
+            "input_description": "",
             "launch_package": "",
             "launch_activity": "",
             "is_task_complete": False,
