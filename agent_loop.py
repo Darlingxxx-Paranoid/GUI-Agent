@@ -318,15 +318,23 @@ class AgentLoop:
                 self.executor.back()
             return False, False
 
-        contract = self.oracle_pre.generate_contract(
+        pre_oracle_output = self.oracle_pre.generate_contract(
             plan=plan,
             dump_tree=before.dump_tree,
+            screenshot_path=before.screenshot_path,
+            anchor_result=anchor_result,
+            widgets=before.widgets,
             step=step,
         )
         self._record_step_artifact(
-            artifact_kind="StepContract",
+            artifact_kind="SemanticTransitionContract",
             step=step,
-            payload=contract,
+            payload=pre_oracle_output.semantic_contract,
+        )
+        self._record_step_artifact(
+            artifact_kind="UIAssertionContract",
+            step=step,
+            payload=pre_oracle_output.assertion_contract,
         )
 
         action = self._build_action_from_plan(
@@ -390,7 +398,7 @@ class AgentLoop:
 
         post_result = self.post_oracle.evaluate(
             dump_tree=after.dump_tree,
-            expectations=contract.Expectations,
+            assertions=pre_oracle_output.assertion_contract.assertions,
             action_history=self.action_history,
             step=step,
         )

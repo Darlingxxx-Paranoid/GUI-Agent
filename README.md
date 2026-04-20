@@ -79,7 +79,8 @@ python main.py --task "测试任务" --dry-run --log-level DEBUG
 * `Observation`
 * `PlanResult`
 * `AnchorResult`
-* `StepContract`
+* `SemanticTransitionContract`
+* `UIAssertionContract`
 * `ResolvedAction`
 * `RunningOracle`
 * `PostOracle`

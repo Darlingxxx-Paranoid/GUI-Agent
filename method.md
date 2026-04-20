@@ -38,6 +38,17 @@ PlanResult:
 
 ### 2. 在获得视觉上下文后，Pre‑Oracle 利用多模态 LLM 根据当前动作语义推断动作成功后的界面语义变化
 ### 3. 通过一组规则将语义变化映射为UI状态转移模式，并最终生成基于XML界面树的验证断言
+### 输出（两层）
+- `SemanticTransitionContract`
+  - `context_mode`: `local|global`
+  - `transition_type`: UI语义转移类型
+  - `success_definition`: 成功语义描述
+  - `semantic_hints`: 高层语义提示
+- `UIAssertionContract`
+  - `context_mode`: `local|global`
+  - `transition_type`: UI语义转移类型
+  - `success_definition`: 成功语义描述
+  - `assertions`: 基于XML可执行断言
 #### UI转移类型
 ```
 NavigationTransition
@@ -59,7 +70,7 @@ ContainerExpansion
 
 ### 输入
 - 完整Dump树（动作执行后）
-- `Expectations`
+- `assertions`
 
 ### 输出
 - `is_goal_complete`：是否目标成功
