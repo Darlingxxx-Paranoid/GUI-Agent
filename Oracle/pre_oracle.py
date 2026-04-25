@@ -552,25 +552,69 @@ class OraclePre:
             anchor_node_id=anchor_node_id,
             allow_anchor_fallback=True,
         )
+        expected_text_hint = str(selectors.get("expected_text") or "").strip()
         desired_field = str(selectors.get("field") or "").strip()
         if desired_field not in node:
-            desired_field = "text" if "text" in node else self._pick_existing_field(node=node, candidates=["content-desc", "class"])
+            desired_field = ""
+        if not desired_field:
+            node_text = str(node.get("text") or "").strip()
+            node_content_desc = str(node.get("content-desc") or "").strip()
+            if expected_text_hint and "text" in node:
+                desired_field = "text"
+            elif node_content_desc and "content-desc" in node:
+                desired_field = "content-desc"
+            elif node_text and "text" in node:
+                desired_field = "text"
+            elif "text" in node:
+                desired_field = "text"
+            else:
+                desired_field = self._pick_existing_field(node=node, candidates=["content-desc", "class"])
         if not desired_field:
             raise ValueError("ContentUpdate 未找到可用字段")
 
         expected_text = (
-            str(selectors.get("expected_text") or "").strip()
+            expected_text_hint
             or str(getattr(plan, "input_description", "") or "").strip()
             or str(target.text or "").strip()
         )
         if not expected_text:
-            raise ValueError("ContentUpdate 缺少 expected_text")
-        return UIAssertion(
-            category="widget",
-            target=target.model_copy(update={"field": desired_field}),
-            relation="contains",
-            content=expected_text,
-        )
+            expected_text = str(node.get(desired_field, "") or "").strip()
+        if expected_text:
+            return UIAssertion(
+                category="widget",
+                target=target.model_copy(update={"field": desired_field}),
+                relation="contains",
+                content=expected_text,
+            )
+
+        raw_expected_bool = str(selectors.get("expected_bool") or "").strip().lower()
+        if raw_expected_bool:
+            bool_field = self._pick_existing_field(
+                node=node,
+                candidates=["enabled", "clickable", "focused", "selected", "checked"],
+            )
+            if bool_field:
+                relation: AssertionRelation = "is_true"
+                content = "true"
+                if any(token in raw_expected_bool for token in ["false", "0", "no", "off"]):
+                    relation = "is_false"
+                    content = "false"
+                return UIAssertion(
+                    category="widget",
+                    target=target.model_copy(update={"field": bool_field}),
+                    relation=relation,
+                    content=content,
+                )
+
+        fallback_class = str(target.class_name or node.get("class") or "").strip()
+        if fallback_class and "class" in node:
+            return UIAssertion(
+                category="widget",
+                target=target.model_copy(update={"field": "class"}),
+                relation="contains",
+                content=fallback_class,
+            )
+        raise ValueError("ContentUpdate 缺少 expected_text")
 
     def _build_container_expansion_assertion(
         self,
@@ -615,6 +659,7 @@ class OraclePre:
         selector_class = str(selectors.get("class_name") or "").strip()
 
         selected_node_id: int | None = None
+        resource_match_error: str = ""
         if selector_resource_id:
             selected_node_id, match_score = self._find_node_by_resource_id_with_score(
                 selector_resource_id=selector_resource_id,
@@ -625,15 +670,7 @@ class OraclePre:
                 anchor_node_id=anchor_node_id,
             )
             if selected_node_id is None:
-                if allow_anchor_fallback and anchor_node_id is not None:
-                    logger.warning(
-                        "target_resource_id=%r 无法命中，回退 anchor_node_id=%s",
-                        selector_resource_id,
-                        anchor_node_id,
-                    )
-                    selected_node_id = int(anchor_node_id)
-                else:
-                    raise ValueError(f"target_resource_id='{selector_resource_id}' 无法解析到 node")
+                resource_match_error = f"target_resource_id='{selector_resource_id}' 无法解析到 node"
             else:
                 selected_node = node_index.get(int(selected_node_id)) or {}
                 logger.debug(
@@ -645,32 +682,47 @@ class OraclePre:
                     str(selected_node.get("class", "") or "")[:80],
                     str(selected_node.get("resource-id", "") or ""),
                 )
-        elif selector_node_id is not None:
+
+        if selected_node_id is None and selector_node_id is not None:
             node_id = int(selector_node_id)
             if node_id not in node_index:
                 raise ValueError(f"target_node_id={node_id} 不存在")
             selected_node_id = node_id
-        elif selector_text or selector_class:
+
+        if selected_node_id is None and (selector_text or selector_class):
             selected_node_id, match_score = self._find_node_by_text_class_with_score(
                 node_index=node_index,
                 text=selector_text,
                 class_name=selector_class,
             )
             if selected_node_id is None:
-                raise ValueError("target_text/target_class 无法解析到 node")
-            selected_node = node_index.get(int(selected_node_id)) or {}
-            logger.debug(
-                "selector text/class 命中: node_id=%s score=%.2f text=%r class=%r rid=%r",
-                selected_node_id,
-                float(match_score),
-                str(selected_node.get("text", "") or "")[:80],
-                str(selected_node.get("class", "") or "")[:80],
-                str(selected_node.get("resource-id", "") or ""),
-            )
-        elif allow_anchor_fallback and anchor_node_id is not None:
+                if not (allow_anchor_fallback and anchor_node_id is not None):
+                    if selector_resource_id and resource_match_error:
+                        raise ValueError(resource_match_error)
+                    raise ValueError("target_text/target_class 无法解析到 node")
+            else:
+                selected_node = node_index.get(int(selected_node_id)) or {}
+                logger.debug(
+                    "selector text/class 命中: node_id=%s score=%.2f text=%r class=%r rid=%r",
+                    selected_node_id,
+                    float(match_score),
+                    str(selected_node.get("text", "") or "")[:80],
+                    str(selected_node.get("class", "") or "")[:80],
+                    str(selected_node.get("resource-id", "") or ""),
+                )
+
+        if selected_node_id is None and allow_anchor_fallback and anchor_node_id is not None:
+            if selector_resource_id and resource_match_error:
+                logger.warning(
+                    "target_resource_id=%r 无法命中，回退 anchor_node_id=%s",
+                    selector_resource_id,
+                    anchor_node_id,
+                )
             selected_node_id = int(anchor_node_id)
 
         if selected_node_id is None:
+            if resource_match_error:
+                raise ValueError(resource_match_error)
             raise ValueError("未找到可用 target 选择器，且无法回退 anchor node")
 
         node = node_index.get(int(selected_node_id))
@@ -792,21 +844,24 @@ class OraclePre:
             text_score = 0.0
             class_score = 0.0
 
-            if text_norm:
+            if text_norm and class_norm:
+                text_score = self._selector_value_match_score(query=text_norm, candidate=node_text)
+                class_score = self._selector_value_match_score(query=class_norm, candidate=node_class)
+                if text_score <= 0.0 or class_score <= 0.0:
+                    continue
+                score = (text_score * 2.0) + class_score
+            elif text_norm:
                 text_score = self._selector_value_match_score(query=text_norm, candidate=node_text)
                 if text_score <= 0.0:
                     continue
-            if class_norm:
+                score = text_score * 2.0
+            elif class_norm:
                 class_score = self._selector_value_match_score(query=class_norm, candidate=node_class)
                 if class_score <= 0.0:
                     continue
-
-            if text_norm and class_norm:
-                score = (text_score * 2.0) + class_score
-            elif text_norm:
-                score = text_score * 2.0
-            else:
                 score = class_score
+            else:
+                continue
 
             node_rid = str(node.get("resource-id", "") or "").strip()
             has_rid = 1.0 if node_rid else 0.0
@@ -1031,6 +1086,7 @@ class OraclePre:
 
         best_node_id: int | None = None
         best_score = -1.0
+        best_rank_tuple: tuple[float, float, float, float, float, float, float] | None = None
         for node_id, node in node_index.items():
             node_bounds = self._parse_node_bounds(node)
             iou = self._bbox_iou(widget_bounds, node_bounds) if (widget_bounds and node_bounds) else 0.0
@@ -1043,9 +1099,36 @@ class OraclePre:
             if widget_class and node_class and (widget_class in node_class or node_class in widget_class):
                 score += 2.0
 
-            if score > best_score:
+            try:
+                node_id_int = int(node_id)
+            except Exception:
+                continue
+            interactive_count = float(
+                sum(
+                    1
+                    for key in ["clickable", "focusable", "checkable", "scrollable"]
+                    if self._node_attr_is_true(node=node, key=key)
+                )
+            )
+            has_rid = 1.0 if str(node.get("resource-id") or "").strip() else 0.0
+            clickable = 1.0 if self._node_attr_is_true(node=node, key="clickable") else 0.0
+            area = 0.0
+            if node_bounds is not None:
+                area = float(max(0, (node_bounds[2] - node_bounds[0]) * (node_bounds[3] - node_bounds[1])))
+
+            rank_tuple = (
+                float(score),
+                float(iou),
+                interactive_count,
+                clickable,
+                has_rid,
+                float(-area),
+                float(-node_id_int),
+            )
+            if best_rank_tuple is None or rank_tuple > best_rank_tuple:
                 best_score = score
-                best_node_id = int(node_id)
+                best_node_id = node_id_int
+                best_rank_tuple = rank_tuple
         if best_node_id is None or best_score <= 0.0:
             return None
         return best_node_id
