@@ -438,6 +438,149 @@ def compo_block_recognition(binary, compos, block_side_length=0.15):
                 compo.category = 'Block'
 
 
+def _bbox_metrics(compo):
+    x1, y1, x2, y2 = compo.put_bbox()
+    w = max(1, x2 - x1)
+    h = max(1, y2 - y1)
+    cx = (x1 + x2) / 2.0
+    return x1, y1, x2, y2, w, h, cx
+
+
+def _overlap_ratio_1d(a1, a2, b1, b2):
+    inter = max(0, min(a2, b2) - max(a1, b1))
+    denom = max(1, min(a2 - a1, b2 - b1))
+    return inter / float(denom)
+
+
+def _vertical_gap(compo_a, compo_b):
+    _, ay1, _, ay2, _, _, _ = _bbox_metrics(compo_a)
+    _, by1, _, by2, _, _, _ = _bbox_metrics(compo_b)
+    if ay2 < by1:
+        return by1 - ay2
+    if by2 < ay1:
+        return ay1 - by2
+    return 0
+
+
+def _is_top_thin_fragment(compo, img_w, top_limit, thin_max_h, thin_min_w, thin_max_w):
+    x1, _, x2, y2, w, h, _ = _bbox_metrics(compo)
+    if y2 > top_limit:
+        return False
+    if h > thin_max_h:
+        return False
+    if w < thin_min_w or w > thin_max_w:
+        return False
+    if (w / float(max(1, h))) < 4.0:
+        return False
+    # Avoid merging tiny status-bar speckles at screen edges.
+    if x1 <= 0 or x2 >= img_w:
+        return False
+    return True
+
+
+def _fragments_related(compo_a, compo_b, max_vertical_gap, min_x_overlap_ratio, max_center_shift):
+    ax1, _, ax2, _, aw, _, acx = _bbox_metrics(compo_a)
+    bx1, _, bx2, _, bw, _, bcx = _bbox_metrics(compo_b)
+    x_overlap = _overlap_ratio_1d(ax1, ax2, bx1, bx2)
+    if x_overlap < min_x_overlap_ratio and abs(acx - bcx) > max_center_shift:
+        return False
+    if abs(aw - bw) > max(8, int(0.6 * max(aw, bw))):
+        return False
+    if _vertical_gap(compo_a, compo_b) > max_vertical_gap:
+        return False
+    return True
+
+
+def merge_top_thin_icon_fragments(compos, img_shape):
+    """
+    Merge thin horizontal fragments in top toolbar into one icon candidate.
+
+    This targets cases like hamburger/back icons where each stroke is detected as
+    a separate 2-3px component and later becomes hard to anchor.
+    """
+    if len(compos) < 2:
+        return compos
+
+    img_h, img_w = img_shape[:2]
+    top_limit = int(img_h * 0.18)
+    thin_max_h = 3
+    thin_min_w = max(8, int(img_w * 0.01))
+    thin_max_w = max(thin_min_w + 1, int(img_w * 0.12))
+    max_vertical_gap = max(5, int(img_h * 0.01))
+    min_x_overlap_ratio = 0.60
+    max_center_shift = max(6, int(img_w * 0.02))
+    max_group_h = max(8, int(img_h * 0.08))
+    max_group_w = max(16, int(img_w * 0.20))
+
+    candidate_indices = []
+    for idx, compo in enumerate(compos):
+        if _is_top_thin_fragment(
+                compo=compo,
+                img_w=img_w,
+                top_limit=top_limit,
+                thin_max_h=thin_max_h,
+                thin_min_w=thin_min_w,
+                thin_max_w=thin_max_w):
+            candidate_indices.append(idx)
+
+    if len(candidate_indices) < 2:
+        return compos
+
+    neighbors = {idx: set() for idx in candidate_indices}
+    for i, idx_a in enumerate(candidate_indices):
+        compo_a = compos[idx_a]
+        for idx_b in candidate_indices[i + 1:]:
+            compo_b = compos[idx_b]
+            if _fragments_related(
+                    compo_a=compo_a,
+                    compo_b=compo_b,
+                    max_vertical_gap=max_vertical_gap,
+                    min_x_overlap_ratio=min_x_overlap_ratio,
+                    max_center_shift=max_center_shift):
+                neighbors[idx_a].add(idx_b)
+                neighbors[idx_b].add(idx_a)
+
+    visited = set()
+    remove_indices = set()
+    for start in candidate_indices:
+        if start in visited:
+            continue
+        stack = [start]
+        component_indices = []
+        while stack:
+            current = stack.pop()
+            if current in visited:
+                continue
+            visited.add(current)
+            component_indices.append(current)
+            for nxt in neighbors[current]:
+                if nxt not in visited:
+                    stack.append(nxt)
+
+        if len(component_indices) < 2:
+            continue
+
+        component_indices.sort(key=lambda idx: (compos[idx].bbox.row_min, compos[idx].bbox.col_min))
+        bx1 = min(compos[idx].bbox.col_min for idx in component_indices)
+        by1 = min(compos[idx].bbox.row_min for idx in component_indices)
+        bx2 = max(compos[idx].bbox.col_max for idx in component_indices)
+        by2 = max(compos[idx].bbox.row_max for idx in component_indices)
+        group_h = by2 - by1
+        group_w = bx2 - bx1
+        if group_h > max_group_h or group_w > max_group_w:
+            continue
+
+        base_idx = component_indices[0]
+        base = compos[base_idx]
+        for idx in component_indices[1:]:
+            base.compo_merge(compos[idx])
+            remove_indices.add(idx)
+
+    if not remove_indices:
+        return compos
+    return [compo for idx, compo in enumerate(compos) if idx not in remove_indices]
+
+
 # take the binary image as input
 # calculate the connected regions -> get the bounding boundaries of them -> check if those regions are rectangles
 # return all boundaries and boundaries of rectangles
@@ -480,7 +623,7 @@ def component_detection(binary, min_obj_area,
                 component = Component(region, binary.shape)
                 # calculate the boundary of the connected area
                 # ignore small area
-                if component.width <= 3 or component.height <= 3:
+                if component.width < 3 or component.height < 3:
                     continue
                 # check if it is line by checking the length of edges
                 # if component.compo_is_line(line_thickness):

@@ -64,6 +64,9 @@ def compo_detection(
     ui_compos = det.component_detection(
         binary=binary, min_obj_area=int(uied_params["min-ele-area"]),
     )
+    ui_compos = det.merge_top_thin_icon_fragments(
+        compos=ui_compos, img_shape=binary.shape
+    )
 
     # *** Step 3 *** results refinement
     ui_compos = det.compo_filter(
