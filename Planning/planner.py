@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 import json
 import logging
+import math
 import os
 import re
 from typing import Any, Literal
@@ -180,6 +182,14 @@ class _AnchorLLMOutput(BaseModel):
         return self
 
 
+@dataclass(frozen=True)
+class _HeuristicAnchorStats:
+    result: AnchorResult
+    top_score: float
+    score_gap: float
+    low_confidence: bool
+
+
 class Planner:
     """Plan next step from task+screenshot, then anchor target widget when needed."""
 
@@ -189,6 +199,8 @@ class Planner:
         default_cv_dir = os.path.join(project_root, "data", "cv_output")
         self.cv_output_dir = str(cv_output_dir or default_cv_dir)
         self.cv_resize_height = int(cv_resize_height or 800)
+        self.anchor_confidence_min_score = 38.0
+        self.anchor_confidence_min_gap = 8.0
         logger.info(
             "Planner 初始化完成 (v2: semantic plan + anchor), cv_output_dir=%s",
             self.cv_output_dir,
@@ -337,12 +349,39 @@ class Planner:
             widgets=widgets,
         )
         if heuristic is not None:
+            if heuristic.low_confidence:
+                logger.info(
+                    "锚定低置信度(heuristic): widget_id=%s score=%.1f gap=%.1f，转LLM复核",
+                    heuristic.result.target_widget_id,
+                    heuristic.top_score,
+                    heuristic.score_gap,
+                )
+                llm_result = self._anchor_with_llm(
+                    plan=plan,
+                    screenshot=screenshot,
+                    widgets=widgets,
+                    step=step,
+                )
+                if int(llm_result.target_widget_id) >= 0:
+                    logger.info(
+                        "锚定完成(llm override): widget_id=%s method=%s",
+                        llm_result.target_widget_id,
+                        llm_result.anchor_method,
+                    )
+                    return llm_result
+                logger.info(
+                    "LLM 复核未给出有效候选，回退 heuristic 结果: widget_id=%s",
+                    heuristic.result.target_widget_id,
+                )
+                return heuristic.result
             logger.info(
-                "锚定命中(heuristic): widget_id=%s method=%s",
-                heuristic.target_widget_id,
-                heuristic.anchor_method,
+                "锚定命中(heuristic): widget_id=%s method=%s score=%.1f gap=%.1f",
+                heuristic.result.target_widget_id,
+                heuristic.result.anchor_method,
+                heuristic.top_score,
+                heuristic.score_gap,
             )
-            return heuristic
+            return heuristic.result
 
         llm_result = self._anchor_with_llm(
             plan=plan,
@@ -362,65 +401,179 @@ class Planner:
         target_description: str,
         action_type: str,
         widgets: list[dict[str, Any]],
-    ) -> AnchorResult | None:
+    ) -> _HeuristicAnchorStats | None:
         target_norm = self._normalize_text(target_description)
         target_tokens = self._tokenize(target_norm)
-        if not target_norm or not target_tokens:
+        if not target_norm:
             return None
 
-        best: tuple[int, AnchorMethod, int, str] | None = None
+        position_target = self._infer_position_target(target_norm=target_norm)
+        screen_w, screen_h = self._infer_screen_size_from_widgets(widgets=widgets)
+
+        ranked: list[tuple[float, AnchorResult]] = []
         for widget in widgets:
             try:
                 widget_id = int(widget.get("widget_id"))
             except Exception:
                 continue
 
-            widget_text = self._normalize_text(str(widget.get("text") or ""))
-            widget_class = self._normalize_text(str(widget.get("class") or ""))
-            combined = f"{widget_text} {widget_class}".strip()
-
-            exact_text_hit = bool(widget_text and target_norm == widget_text)
-            contains_text_hit = bool(widget_text and target_norm in widget_text)
-            class_hit = bool(widget_class and target_norm in widget_class)
-
-            token_hits = 0
-            for token in target_tokens:
-                if token in combined:
-                    token_hits += 1
-
-            score = 0
-            method: AnchorMethod = "uied_keyword_overlap"
-            if exact_text_hit:
-                score += 220
-                method = "uied_text_match"
-            elif contains_text_hit:
-                score += 160
-                method = "uied_text_match"
-            elif class_hit:
-                score += 90
-                method = "uied_class_match"
-
-            score += token_hits * 18
-            if action_type == "input" and any(key in widget_class for key in ["edit", "input", "text"]):
-                score += 24
-
-            if score <= 0:
+            (
+                final_score,
+                anchor_method,
+                reason,
+            ) = self._score_widget_candidate(
+                widget=widget,
+                action_type=action_type,
+                target_norm=target_norm,
+                target_tokens=target_tokens,
+                screen_w=screen_w,
+                screen_h=screen_h,
+                position_target=position_target,
+            )
+            if final_score <= 0:
                 continue
 
-            reason = (
-                f"text='{str(widget.get('text') or '')[:64]}', "
-                f"class='{str(widget.get('class') or '')[:64]}', token_hits={token_hits}, score={score}"
+            ranked.append(
+                (
+                    float(final_score),
+                    AnchorResult(
+                        target_widget_id=widget_id,
+                        anchor_method=anchor_method,
+                        anchor_reason=reason,
+                    ),
+                )
             )
-            if best is None or score > best[2]:
-                best = (widget_id, method, score, reason)
 
-        if best is None:
+        if not ranked:
             return None
-        return AnchorResult(
-            target_widget_id=int(best[0]),
-            anchor_method=best[1],
-            anchor_reason=best[3],
+
+        ranked.sort(key=lambda item: item[0], reverse=True)
+        top_score, top_result = ranked[0]
+        second_score = ranked[1][0] if len(ranked) >= 2 else 0.0
+        score_gap = float(top_score - second_score)
+        low_confidence = (
+            float(top_score) < float(self.anchor_confidence_min_score)
+            or score_gap < float(self.anchor_confidence_min_gap)
         )
+        top_result = top_result.model_copy(
+            update={
+                "anchor_reason": (
+                    f"{top_result.anchor_reason}, "
+                    f"top_score={top_score:.1f}, second_score={second_score:.1f}, "
+                    f"gap={score_gap:.1f}, low_confidence={str(low_confidence).lower()}"
+                )
+            }
+        )
+        return _HeuristicAnchorStats(
+            result=top_result,
+            top_score=float(top_score),
+            score_gap=float(score_gap),
+            low_confidence=bool(low_confidence),
+        )
+
+    def _score_widget_candidate(
+        self,
+        widget: dict[str, Any],
+        action_type: str,
+        target_norm: str,
+        target_tokens: list[str],
+        screen_w: int,
+        screen_h: int,
+        position_target: tuple[float, float] | None,
+    ) -> tuple[float, AnchorMethod, str]:
+        widget_text_raw = str(widget.get("text") or "")
+        widget_class_raw = str(widget.get("class") or "")
+        widget_text = self._normalize_text(widget_text_raw)
+        widget_class = self._normalize_text(widget_class_raw)
+        combined = f"{widget_text} {widget_class}".strip()
+
+        exact_text_hit = bool(widget_text and target_norm == widget_text)
+        contains_text_hit = bool(widget_text and target_norm in widget_text)
+        class_hit = bool(widget_class and target_norm in widget_class)
+
+        token_hits = 0
+        for token in target_tokens:
+            if token in combined:
+                token_hits += 1
+
+        text_score = 0.0
+        method: AnchorMethod = "uied_keyword_overlap"
+        if exact_text_hit:
+            text_score += 120.0
+            method = "uied_text_match"
+        elif contains_text_hit:
+            text_score += 72.0
+            method = "uied_text_match"
+        elif class_hit:
+            text_score += 42.0
+            method = "uied_class_match"
+        text_score += min(token_hits, 6) * 9.0
+
+        action_score = 0.0
+        if action_type in {"tap", "long_press", "swipe"}:
+            if any(key in widget_class for key in ["compo", "button", "icon", "image", "combined"]):
+                action_score += 14.0
+            if "text" in widget_class:
+                action_score -= 4.0
+        elif action_type == "input":
+            if any(key in widget_class for key in ["edit", "input", "field"]):
+                action_score += 56.0
+            elif "text" in widget_class:
+                action_score += 4.0
+            if any(key in combined for key in ["enter", "input", "search", "query", "field", "box", "type", "write"]):
+                action_score += 12.0
+
+        geometry_score = 0.0
+        width_ratio = 0.0
+        height_ratio = 0.0
+        area_ratio = 0.0
+        bounds = self._extract_widget_bounds(widget=widget)
+        if bounds is not None and screen_w > 0 and screen_h > 0:
+            x1, y1, x2, y2 = bounds
+            width = max(1, x2 - x1)
+            height = max(1, y2 - y1)
+            width_ratio = float(width) / float(max(1, screen_w))
+            height_ratio = float(height) / float(max(1, screen_h))
+            area_ratio = float(width * height) / float(max(1, screen_w * screen_h))
+
+            if area_ratio <= 0.20:
+                geometry_score += 6.0
+            else:
+                geometry_score -= 10.0
+            if width_ratio > 0.70 and height_ratio < 0.14:
+                geometry_score -= 32.0
+            if action_type in {"tap", "long_press"} and not widget_text and area_ratio < 0.08:
+                geometry_score += 8.0
+            if action_type == "input" and width_ratio > 0.22 and height_ratio > 0.04:
+                geometry_score += 6.0
+            if action_type == "input" and "text" in widget_class and not any(
+                key in widget_class for key in ["edit", "input", "field"]
+            ):
+                geometry_score -= 8.0
+
+        text_len = len(widget_text_raw.strip())
+        if text_len >= 40:
+            geometry_score -= 22.0
+        if text_len >= 90:
+            geometry_score -= 30.0
+
+        position_score = 0.0
+        if position_target is not None and bounds is not None and screen_w > 0 and screen_h > 0:
+            cx = float((bounds[0] + bounds[2]) / 2.0) / float(max(1, screen_w))
+            cy = float((bounds[1] + bounds[3]) / 2.0) / float(max(1, screen_h))
+            tx, ty = position_target
+            distance = math.sqrt((cx - tx) ** 2 + (cy - ty) ** 2)
+            closeness = max(0.0, 1.0 - (distance / 1.2))
+            position_score = closeness * 26.0
+
+        final_score = text_score + action_score + geometry_score + position_score
+        reason = (
+            f"text='{widget_text_raw[:64]}', class='{widget_class_raw[:48]}', "
+            f"token_hits={token_hits}, text_score={text_score:.1f}, action_score={action_score:.1f}, "
+            f"geometry_score={geometry_score:.1f}, position_score={position_score:.1f}, "
+            f"final_score={final_score:.1f}"
+        )
+        return float(final_score), method, reason
 
     def _anchor_with_llm(
         self,
@@ -507,6 +660,79 @@ class Planner:
         except Exception as exc:
             logger.warning("锚定阶段提取 UIED Visible Widgets List 失败: %s", exc)
             return []
+
+    def _extract_widget_bounds(
+        self,
+        widget: dict[str, Any],
+    ) -> tuple[int, int, int, int] | None:
+        bounds = widget.get("bounds")
+        if not isinstance(bounds, (list, tuple)) or len(bounds) != 4:
+            return None
+        try:
+            x1 = int(bounds[0])
+            y1 = int(bounds[1])
+            x2 = int(bounds[2])
+            y2 = int(bounds[3])
+        except Exception:
+            return None
+        if x2 <= x1 or y2 <= y1:
+            return None
+        return (x1, y1, x2, y2)
+
+    def _infer_screen_size_from_widgets(
+        self,
+        widgets: list[dict[str, Any]],
+    ) -> tuple[int, int]:
+        max_x = 0
+        max_y = 0
+        for widget in widgets:
+            bounds = self._extract_widget_bounds(widget=widget)
+            if bounds is None:
+                continue
+            _, _, x2, y2 = bounds
+            max_x = max(max_x, int(x2))
+            max_y = max(max_y, int(y2))
+        return max(max_x, 1), max(max_y, 1)
+
+    def _infer_position_target(
+        self,
+        target_norm: str,
+    ) -> tuple[float, float] | None:
+        text = str(target_norm or "").strip().lower()
+        if not text:
+            return None
+
+        right_hit = any(key in text for key in ["right", "右"])
+        left_hit = any(key in text for key in ["left", "左"])
+        center_x_hit = any(key in text for key in ["center", "middle", "中央", "中间"])
+        top_hit = any(key in text for key in ["top", "upper", "上", "顶部"])
+        bottom_hit = any(key in text for key in ["bottom", "lower", "下", "底部"])
+        center_y_hit = any(key in text for key in ["center", "middle", "中央", "中间"])
+
+        x_target: float | None = None
+        y_target: float | None = None
+
+        if right_hit and not left_hit:
+            x_target = 0.88
+        elif left_hit and not right_hit:
+            x_target = 0.12
+        elif center_x_hit:
+            x_target = 0.50
+
+        if top_hit and not bottom_hit:
+            y_target = 0.12
+        elif bottom_hit and not top_hit:
+            y_target = 0.88
+        elif center_y_hit:
+            y_target = 0.50
+
+        if x_target is None and y_target is None:
+            return None
+        if x_target is None:
+            x_target = 0.50
+        if y_target is None:
+            y_target = 0.50
+        return float(x_target), float(y_target)
 
     def _normalize_progress_context(
         self,
