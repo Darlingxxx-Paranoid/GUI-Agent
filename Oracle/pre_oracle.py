@@ -616,23 +616,57 @@ class OraclePre:
 
         selected_node_id: int | None = None
         if selector_resource_id:
-            matches = rid_index.get(selector_resource_id, [])
-            if not matches:
-                raise ValueError(f"target_resource_id='{selector_resource_id}' 无法解析到 node")
-            selected_node_id = int(matches[0])
+            selected_node_id, match_score = self._find_node_by_resource_id_with_score(
+                selector_resource_id=selector_resource_id,
+                node_index=node_index,
+                rid_index=rid_index,
+                text=selector_text,
+                class_name=selector_class,
+                anchor_node_id=anchor_node_id,
+            )
+            if selected_node_id is None:
+                if allow_anchor_fallback and anchor_node_id is not None:
+                    logger.warning(
+                        "target_resource_id=%r 无法命中，回退 anchor_node_id=%s",
+                        selector_resource_id,
+                        anchor_node_id,
+                    )
+                    selected_node_id = int(anchor_node_id)
+                else:
+                    raise ValueError(f"target_resource_id='{selector_resource_id}' 无法解析到 node")
+            else:
+                selected_node = node_index.get(int(selected_node_id)) or {}
+                logger.debug(
+                    "selector resource_id 命中: query=%r node_id=%s score=%.2f text=%r class=%r rid=%r",
+                    selector_resource_id,
+                    selected_node_id,
+                    float(match_score),
+                    str(selected_node.get("text", "") or "")[:80],
+                    str(selected_node.get("class", "") or "")[:80],
+                    str(selected_node.get("resource-id", "") or ""),
+                )
         elif selector_node_id is not None:
             node_id = int(selector_node_id)
             if node_id not in node_index:
                 raise ValueError(f"target_node_id={node_id} 不存在")
             selected_node_id = node_id
         elif selector_text or selector_class:
-            selected_node_id = self._find_node_by_text_class(
+            selected_node_id, match_score = self._find_node_by_text_class_with_score(
                 node_index=node_index,
                 text=selector_text,
                 class_name=selector_class,
             )
             if selected_node_id is None:
                 raise ValueError("target_text/target_class 无法解析到 node")
+            selected_node = node_index.get(int(selected_node_id)) or {}
+            logger.debug(
+                "selector text/class 命中: node_id=%s score=%.2f text=%r class=%r rid=%r",
+                selected_node_id,
+                float(match_score),
+                str(selected_node.get("text", "") or "")[:80],
+                str(selected_node.get("class", "") or "")[:80],
+                str(selected_node.get("resource-id", "") or ""),
+            )
         elif allow_anchor_fallback and anchor_node_id is not None:
             selected_node_id = int(anchor_node_id)
 
@@ -652,40 +686,230 @@ class OraclePre:
         )
         return target, node
 
+    def _find_node_by_resource_id_with_score(
+        self,
+        selector_resource_id: str,
+        node_index: Dict[int, dict],
+        rid_index: Dict[str, list[int]],
+        text: str,
+        class_name: str,
+        anchor_node_id: int | None,
+    ) -> tuple[int | None, float]:
+        query_norm = self._normalize_resource_id(selector_resource_id)
+        if not query_norm:
+            return None, -1.0
+
+        text_norm = str(text or "").strip().lower()
+        class_norm = str(class_name or "").strip().lower()
+
+        best_node_id: int | None = None
+        best_score = -1.0
+        best_rank_tuple: tuple[float, float, float, float, float, float, float] | None = None
+
+        for rid, raw_node_ids in rid_index.items():
+            rid_raw = str(rid or "").strip()
+            if not rid_raw:
+                continue
+            rid_score = self._resource_id_match_score(query=query_norm, candidate=rid_raw)
+            if rid_score <= 0.0:
+                continue
+
+            for raw_node_id in raw_node_ids:
+                try:
+                    node_id_int = int(raw_node_id)
+                except Exception:
+                    continue
+                node = node_index.get(node_id_int)
+                if not isinstance(node, dict):
+                    continue
+
+                node_text = str(node.get("text", "") or "").strip().lower()
+                node_class = str(node.get("class", "") or "").strip().lower()
+                text_score = (
+                    self._selector_value_match_score(query=text_norm, candidate=node_text) if text_norm else 0.0
+                )
+                class_score = (
+                    self._selector_value_match_score(query=class_norm, candidate=node_class) if class_norm else 0.0
+                )
+                is_anchor = 1.0 if anchor_node_id is not None and node_id_int == int(anchor_node_id) else 0.0
+                interactive_count = float(
+                    sum(
+                        1
+                        for key in ["clickable", "focusable", "checkable", "scrollable"]
+                        if self._node_attr_is_true(node=node, key=key)
+                    )
+                )
+
+                score = (rid_score * 3.0) + (text_score * 1.5) + class_score + (is_anchor * 1.2)
+                rank_tuple = (
+                    float(score),
+                    float(rid_score),
+                    float(text_score),
+                    float(class_score),
+                    is_anchor,
+                    interactive_count,
+                    float(-node_id_int),
+                )
+                if best_rank_tuple is None or rank_tuple > best_rank_tuple:
+                    best_node_id = node_id_int
+                    best_score = float(score)
+                    best_rank_tuple = rank_tuple
+
+        return best_node_id, float(best_score)
+
     def _find_node_by_text_class(
         self,
         node_index: Dict[int, dict],
         text: str,
         class_name: str,
     ) -> int | None:
+        best_id, _ = self._find_node_by_text_class_with_score(
+            node_index=node_index,
+            text=text,
+            class_name=class_name,
+        )
+        return best_id
+
+    def _find_node_by_text_class_with_score(
+        self,
+        node_index: Dict[int, dict],
+        text: str,
+        class_name: str,
+    ) -> tuple[int | None, float]:
         text_norm = str(text or "").strip().lower()
         class_norm = str(class_name or "").strip().lower()
+        if not text_norm and not class_norm:
+            return None, -1.0
+
         best_id: int | None = None
         best_score = -1.0
+        best_rank_tuple: tuple[float, float, float, float] | None = None
+
         for node_id, node in node_index.items():
             node_text = str(node.get("text", "") or "").strip().lower()
             node_class = str(node.get("class", "") or "").strip().lower()
+
+            text_score = 0.0
+            class_score = 0.0
+
+            if text_norm:
+                text_score = self._selector_value_match_score(query=text_norm, candidate=node_text)
+                if text_score <= 0.0:
+                    continue
+            if class_norm:
+                class_score = self._selector_value_match_score(query=class_norm, candidate=node_class)
+                if class_score <= 0.0:
+                    continue
+
             if text_norm and class_norm:
-                text_hit = text_norm in node_text or node_text in text_norm
-                class_hit = class_norm in node_class or node_class in class_norm
-                if not (text_hit and class_hit):
-                    continue
-                score = 3.0
+                score = (text_score * 2.0) + class_score
             elif text_norm:
-                if not (text_norm in node_text or node_text in text_norm):
-                    continue
-                score = 2.0
-            elif class_norm:
-                if not (class_norm in node_class or node_class in class_norm):
-                    continue
-                score = 1.5
+                score = text_score * 2.0
             else:
+                score = class_score
+
+            node_rid = str(node.get("resource-id", "") or "").strip()
+            has_rid = 1.0 if node_rid else 0.0
+            interactive_count = float(
+                sum(
+                    1
+                    for key in ["clickable", "focusable", "checkable", "scrollable"]
+                    if self._node_attr_is_true(node=node, key=key)
+                )
+            )
+            try:
+                node_id_int = int(node_id)
+            except Exception:
                 continue
 
-            if score > best_score:
+            rank_tuple = (
+                float(score),
+                has_rid,
+                interactive_count,
+                float(-node_id_int),
+            )
+
+            if best_rank_tuple is None or rank_tuple > best_rank_tuple:
                 best_score = score
-                best_id = int(node_id)
-        return best_id
+                best_id = node_id_int
+                best_rank_tuple = rank_tuple
+        return best_id, float(best_score)
+
+    def _resource_id_match_score(self, query: str, candidate: str) -> float:
+        query_norm = self._normalize_resource_id(query)
+        candidate_norm = self._normalize_resource_id(candidate)
+        if not query_norm or not candidate_norm:
+            return 0.0
+        if query_norm == candidate_norm:
+            return 8.0
+
+        query_leaf = self._resource_id_leaf(query_norm)
+        candidate_leaf = self._resource_id_leaf(candidate_norm)
+        score = 0.0
+
+        if query_leaf and candidate_leaf:
+            if query_leaf == candidate_leaf:
+                score = max(score, 6.0)
+            if len(query_leaf) >= 3 and query_leaf in candidate_leaf:
+                score = max(score, 4.0)
+            if len(candidate_leaf) >= 3 and candidate_leaf in query_leaf:
+                score = max(score, 2.0)
+
+            query_tokens = self._identifier_tokens(query_leaf)
+            candidate_tokens = self._identifier_tokens(candidate_leaf)
+            if query_tokens and candidate_tokens:
+                overlap = query_tokens & candidate_tokens
+                if overlap:
+                    coverage = float(len(overlap)) / float(len(query_tokens))
+                    score = max(score, 1.5 + coverage)
+
+        if len(query_norm) >= 3 and query_norm in candidate_norm:
+            score = max(score, 5.0)
+        if len(candidate_norm) >= 3 and candidate_norm in query_norm:
+            score = max(score, 2.0)
+        return score
+
+    def _normalize_resource_id(self, value: str) -> str:
+        token = str(value or "").strip().lower()
+        if not token:
+            return ""
+        return re.sub(r"\s+", "_", token)
+
+    def _resource_id_leaf(self, value: str) -> str:
+        token = self._normalize_resource_id(value)
+        if not token:
+            return ""
+        if ":" in token:
+            token = token.split(":", 1)[1]
+        if "/" in token:
+            token = token.rsplit("/", 1)[-1]
+        return token
+
+    def _identifier_tokens(self, value: str) -> set[str]:
+        token = str(value or "").strip().lower()
+        if not token:
+            return set()
+        return {part for part in re.split(r"[^a-z0-9]+", token) if len(part) >= 2}
+
+    def _selector_value_match_score(self, query: str, candidate: str) -> float:
+        query_norm = str(query or "").strip().lower()
+        candidate_norm = str(candidate or "").strip().lower()
+        if not query_norm or not candidate_norm:
+            return 0.0
+        if query_norm == candidate_norm:
+            return 5.0
+        if query_norm in candidate_norm:
+            return 3.0
+        if len(query_norm) >= 3 and len(candidate_norm) >= 3 and candidate_norm in query_norm:
+            return 1.5
+        return 0.0
+
+    def _node_attr_is_true(self, node: dict[str, Any], key: str) -> bool:
+        value = node.get(str(key or ""))
+        if isinstance(value, bool):
+            return value
+        token = str(value or "").strip().lower()
+        return token in {"true", "1", "yes", "on"}
 
     def _validate_transition_assertions(
         self,
