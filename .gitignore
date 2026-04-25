@@ -16,3 +16,5 @@ myvenv/
 
 # OS junk
 .DS_Store
+
+run/
