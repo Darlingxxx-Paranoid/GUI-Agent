@@ -35,9 +35,10 @@ class WidgetDetector:
             web   : {'min-grad':3, 'ffl-block':5, 'min-ele-area':25, 'max-word-inline-gap':4, 'max-line-gap':4}
         """
         self.key_params = {
-            "min-grad": 10,
-            "ffl-block": 5,
-            "min-ele-area": 50,
+            # Use more sensitive defaults for low-contrast mobile input fields.
+            "min-grad": 6,
+            "ffl-block": 4,
+            "min-ele-area": 20,
             "merge-contained-ele": True,
             "remove-bar": True,
         }

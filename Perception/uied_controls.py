@@ -80,6 +80,11 @@ def get_uied_visible_widgets_list(
             logger.warning("Skip invalid UIED widget at index=%d", idx)
             continue
         visible_widgets_list.append(normalized)
+    visible_widgets_list = _augment_compose_widgets(
+        widgets=visible_widgets_list,
+        screen_width=int(src_w),
+        screen_height=int(src_h),
+    )
 
     payload = {
         "screenshot_path": str(screenshot),
@@ -261,6 +266,244 @@ def _normalize_control(
         "width": width,
         "height": height,
     }
+
+
+def _augment_compose_widgets(
+    widgets: list[dict[str, Any]],
+    screen_width: int,
+    screen_height: int,
+) -> list[dict[str, Any]]:
+    """
+    Add inferred editable widgets for compose-like pages where UIED only sees text.
+
+    Common low-contrast fields in mobile compose pages (e.g. Subject input and blank
+    body editor) may not form explicit edges for the CV detector. This augmentation
+    keeps inference conservative and only applies when compose-style top labels exist.
+    """
+    if not widgets or screen_width <= 0 or screen_height <= 0:
+        return widgets
+
+    augmented = list(widgets)
+    compose_like = _is_compose_like_screen(augmented)
+    if not compose_like:
+        return augmented
+
+    next_id = _next_widget_id(augmented)
+    next_id = _append_inferred_subject_input(
+        widgets=augmented,
+        screen_width=screen_width,
+        screen_height=screen_height,
+        start_widget_id=next_id,
+    )
+    _append_inferred_body_editor(
+        widgets=augmented,
+        screen_width=screen_width,
+        screen_height=screen_height,
+        start_widget_id=next_id,
+    )
+    return augmented
+
+
+def _is_compose_like_screen(widgets: list[dict[str, Any]]) -> bool:
+    texts = [_norm_text(w.get("text")) for w in widgets]
+    if any("compose email" in text for text in texts):
+        return True
+    has_cancel = any(text == "cancel" for text in texts)
+    has_send = any(text == "send" for text in texts)
+    return has_cancel and has_send
+
+
+def _append_inferred_subject_input(
+    widgets: list[dict[str, Any]],
+    screen_width: int,
+    screen_height: int,
+    start_widget_id: int,
+) -> int:
+    subject_labels = []
+    for widget in widgets:
+        text = _norm_text(widget.get("text"))
+        if text.startswith("subject"):
+            subject_labels.append(widget)
+
+    next_id = start_widget_id
+    for label in subject_labels:
+        bounds = label.get("bounds") or []
+        if not isinstance(bounds, (list, tuple)) or len(bounds) != 4:
+            continue
+        x1, y1, x2, y2 = [int(v) for v in bounds]
+        label_h = max(1, y2 - y1)
+
+        input_x1 = max(x2 + max(8, int(screen_width * 0.008)), int(screen_width * 0.16))
+        input_x2 = min(screen_width, int(screen_width * 0.96))
+        input_y1 = max(0, y1 - max(2, int(label_h * 0.12)))
+        input_y2 = min(screen_height, y2 + max(2, int(label_h * 0.12)))
+        if input_x2 - input_x1 < int(screen_width * 0.18):
+            continue
+        if input_y2 - input_y1 < max(18, int(screen_height * 0.015)):
+            continue
+
+        candidate = [input_x1, input_y1, input_x2, input_y2]
+        if _overlaps_existing_widget(widgets, candidate, iou_threshold=0.55):
+            continue
+
+        widgets.append(
+            _build_widget(
+                widget_id=next_id,
+                cls_name="EditText",
+                text="",
+                bounds=candidate,
+            )
+        )
+        next_id += 1
+    return next_id
+
+
+def _append_inferred_body_editor(
+    widgets: list[dict[str, Any]],
+    screen_width: int,
+    screen_height: int,
+    start_widget_id: int,
+) -> int:
+    # Skip if a large editable area already exists.
+    min_body_h = int(screen_height * 0.22)
+    for widget in widgets:
+        bounds = widget.get("bounds") or []
+        if not isinstance(bounds, (list, tuple)) or len(bounds) != 4:
+            continue
+        x1, y1, x2, y2 = [int(v) for v in bounds]
+        if (x2 - x1) >= int(screen_width * 0.70) and (y2 - y1) >= min_body_h:
+            if _norm_text(widget.get("text")) == "":
+                return start_widget_id
+
+    header_bottom = _estimate_header_bottom(widgets, screen_height)
+    footer_top = _estimate_footer_top(widgets, screen_height)
+    body_y1 = min(
+        max(header_bottom + max(8, int(screen_height * 0.004)), int(screen_height * 0.16)),
+        int(screen_height * 0.60),
+    )
+    body_y2 = max(
+        min(footer_top - max(8, int(screen_height * 0.004)), int(screen_height * 0.95)),
+        body_y1 + 1,
+    )
+    if body_y2 - body_y1 < min_body_h:
+        return start_widget_id
+
+    candidate = [0, body_y1, screen_width, body_y2]
+    if _overlaps_existing_widget(widgets, candidate, iou_threshold=0.75):
+        return start_widget_id
+
+    widgets.append(
+        _build_widget(
+            widget_id=start_widget_id,
+            cls_name="EditText",
+            text="",
+            bounds=candidate,
+        )
+    )
+    return start_widget_id + 1
+
+
+def _estimate_header_bottom(widgets: list[dict[str, Any]], screen_height: int) -> int:
+    cutoff = int(screen_height * 0.45)
+    bottoms = []
+    for widget in widgets:
+        bounds = widget.get("bounds") or []
+        if not isinstance(bounds, (list, tuple)) or len(bounds) != 4:
+            continue
+        y1 = int(bounds[1])
+        y2 = int(bounds[3])
+        if y1 <= cutoff:
+            bottoms.append(y2)
+    if not bottoms:
+        return int(screen_height * 0.18)
+    return max(bottoms)
+
+
+def _estimate_footer_top(widgets: list[dict[str, Any]], screen_height: int) -> int:
+    cutoff = int(screen_height * 0.82)
+    tops = []
+    for widget in widgets:
+        bounds = widget.get("bounds") or []
+        if not isinstance(bounds, (list, tuple)) or len(bounds) != 4:
+            continue
+        y1 = int(bounds[1])
+        y2 = int(bounds[3])
+        if y2 >= cutoff:
+            tops.append(y1)
+    if not tops:
+        return int(screen_height * 0.94)
+    return min(tops)
+
+
+def _overlaps_existing_widget(
+    widgets: list[dict[str, Any]],
+    candidate_bounds: list[int],
+    iou_threshold: float,
+) -> bool:
+    cx1, cy1, cx2, cy2 = candidate_bounds
+    for widget in widgets:
+        bounds = widget.get("bounds") or []
+        if not isinstance(bounds, (list, tuple)) or len(bounds) != 4:
+            continue
+        wx1, wy1, wx2, wy2 = [int(v) for v in bounds]
+        if _bbox_iou(cx1, cy1, cx2, cy2, wx1, wy1, wx2, wy2) >= iou_threshold:
+            return True
+    return False
+
+
+def _bbox_iou(
+    ax1: int,
+    ay1: int,
+    ax2: int,
+    ay2: int,
+    bx1: int,
+    by1: int,
+    bx2: int,
+    by2: int,
+) -> float:
+    ix1 = max(ax1, bx1)
+    iy1 = max(ay1, by1)
+    ix2 = min(ax2, bx2)
+    iy2 = min(ay2, by2)
+    inter = max(0, ix2 - ix1) * max(0, iy2 - iy1)
+    if inter <= 0:
+        return 0.0
+    a_area = max(1, (ax2 - ax1) * (ay2 - ay1))
+    b_area = max(1, (bx2 - bx1) * (by2 - by1))
+    union = max(1, a_area + b_area - inter)
+    return float(inter) / float(union)
+
+
+def _build_widget(
+    widget_id: int,
+    cls_name: str,
+    text: str,
+    bounds: list[int],
+) -> dict[str, Any]:
+    x1, y1, x2, y2 = [int(v) for v in bounds]
+    return {
+        "widget_id": int(widget_id),
+        "class": str(cls_name),
+        "text": str(text),
+        "bounds": [x1, y1, x2, y2],
+        "center": [(x1 + x2) // 2, (y1 + y2) // 2],
+        "width": int(x2 - x1),
+        "height": int(y2 - y1),
+    }
+
+
+def _next_widget_id(widgets: list[dict[str, Any]]) -> int:
+    current = -1
+    for widget in widgets:
+        try:
+            current = max(current, int(widget.get("widget_id")))
+        except Exception:
+            continue
+    return current + 1
+
+
+def _norm_text(value: Any) -> str:
+    return str(value or "").strip().lower()
 
 
 def _parse_widget_for_overlay(
