@@ -111,7 +111,12 @@ class AgentLoop:
         self._active_step_ledger: dict[str, Any] | None = None
         logger.info("AgentLoop 初始化完成(最小闭环), max_steps=%d", config.max_steps)
 
-    def run(self, task: str, dry_run: bool = False) -> bool:
+    def run(
+        self,
+        task: str,
+        dry_run: bool = False,
+        task_target_package: str = "",
+    ) -> bool:
         logger.info("=" * 60)
         logger.info("开始执行任务: '%s'", task)
         logger.info("=" * 60)
@@ -124,10 +129,14 @@ class AgentLoop:
         self._ui_changed_signature_counts = {}
         self._clear_anchor_replan_context()
         self._clear_post_oracle_replan_request()
-        self._task_target_app = self._resolve_task_target_app(task)
+        self._task_target_app, source = self._resolve_task_target_app_with_override(
+            task=task,
+            task_target_package=task_target_package,
+        )
         if self._task_target_app:
             logger.info(
-                "任务目标 App 解析: name=%s package=%s activity=%s",
+                "任务目标 App 解析(source=%s): name=%s package=%s activity=%s",
+                source,
                 self._task_target_app.get("name", ""),
                 self._task_target_app.get("package", ""),
                 self._task_target_app.get("activity", ""),
@@ -1426,6 +1435,23 @@ class AgentLoop:
             return None
         return dict(best)
 
+    def _resolve_task_target_app_with_override(
+        self,
+        task: str,
+        task_target_package: str = "",
+    ) -> tuple[dict[str, str] | None, str]:
+        explicit_task_target_package = str(task_target_package or "").strip()
+        if explicit_task_target_package:
+            resolved = self._resolve_app_by_package(explicit_task_target_package)
+            if resolved is not None:
+                return resolved, "explicit_package"
+            logger.warning(
+                "显式 task_target_package 无法解析: %s，回退任务文本推断",
+                explicit_task_target_package,
+            )
+            return self._resolve_task_target_app(task), "task_inference_fallback"
+        return self._resolve_task_target_app(task), "task_inference"
+
     def _resolve_launch_target(self, plan: PlanResult, task: str) -> dict[str, str]:
         plan_package = str(getattr(plan, "launch_package", "") or "").strip()
         plan_activity = str(getattr(plan, "launch_activity", "") or "").strip()
@@ -1461,6 +1487,17 @@ class AgentLoop:
             app_pkg = str(app.get("package") or "").strip().lower()
             if app_pkg == pkg:
                 return dict(app)
+        return None
+
+    def _resolve_app_by_package(self, package: str) -> dict[str, str] | None:
+        pkg = str(package or "").strip()
+        if not pkg:
+            return None
+        matched = self._lookup_app_by_package(pkg)
+        if matched is not None:
+            return matched
+        if pkg.count(".") >= 2:
+            return {"name": "", "package": pkg, "activity": ""}
         return None
 
     def _extract_package_from_text(self, text: str) -> str:

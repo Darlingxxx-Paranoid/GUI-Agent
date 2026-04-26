@@ -119,6 +119,12 @@ def main():
         default=30,
         help="单个任务最大执行步数（默认: 30）",
     )
+    parser.add_argument(
+        "--task-target-package",
+        type=str,
+        default="",
+        help="目标 App package（可选，显式传入时优先于任务文本推断）",
+    )
     args = parser.parse_args()
 
     data_dir = os.path.join(os.path.dirname(__file__), "data")
@@ -135,6 +141,7 @@ def main():
     logger.info("任务: %s", args.task)
     logger.info("设备: %s", args.serial or "默认")
     logger.info("Dry Run: %s", args.dry_run)
+    logger.info("Task target package: %s", args.task_target_package or "(none)")
 
     # 初始化配置
     config = AgentConfig()
@@ -145,7 +152,11 @@ def main():
 
     # 启动 Agent
     agent = AgentLoop(config)
-    success = agent.run(task=args.task, dry_run=args.dry_run)
+    success = agent.run(
+        task=args.task,
+        dry_run=args.dry_run,
+        task_target_package=args.task_target_package,
+    )
 
     if success:
         logger.info("🎉 任务执行成功!")
