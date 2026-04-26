@@ -544,9 +544,10 @@ class PostOracle:
         if step is None:
             return
         try:
-            self.audit.record_step(
+            self.audit.record_step_phase(
                 artifact_kind="PostOracle",
                 step=int(step),
+                phase="post",
                 payload=result.model_dump(exclude_none=True),
             )
         except Exception as exc:

@@ -46,6 +46,26 @@ class AuditRecorder:
             self._write_json(path=path, payload=body)
         return path
 
+    def record_step_phase(
+        self,
+        artifact_kind: str,
+        step: int,
+        phase: str,
+        payload: Any,
+        llm: bool = False,
+    ) -> str:
+        step_num = self._normalize_step(step)
+        kind = self._sanitize_token(artifact_kind)
+        phase_token = self._sanitize_token(phase)
+        folder = os.path.join(self.base_dir, kind)
+        os.makedirs(folder, exist_ok=True)
+
+        suffix = "_llm" if llm else ""
+        path = os.path.join(folder, f"step_{step_num}_{phase_token}{suffix}.json")
+        body = _to_plain_dict(payload)
+        self._write_json(path=path, payload=body)
+        return path
+
     def _append_payload(self, path: str, payload: Any) -> list[Any]:
         current: list[Any] = []
         if os.path.exists(path):

@@ -108,6 +108,7 @@ class AgentLoop:
         self._pending_post_oracle_replan_request: PostOracleReplanRequest | None = None
         self._pending_post_oracle_replan_step: int | None = None
         self._ui_changed_signature_counts: dict[str, int] = {}
+        self._active_step_ledger: dict[str, Any] | None = None
         logger.info("AgentLoop 初始化完成(最小闭环), max_steps=%d", config.max_steps)
 
     def run(self, task: str, dry_run: bool = False) -> bool:
@@ -147,31 +148,48 @@ class AgentLoop:
             logger.info("=" * 40)
             logger.info("第 %d 步 (最大 %d)", step, self.config.max_steps)
             logger.info("=" * 40)
+            self._begin_step_ledger(step=step)
             try:
-                step_done, task_completed = self._run_one_step(
-                    task=task,
-                    step=step,
-                    screen_size=screen_size,
-                    dry_run=dry_run,
-                )
-                if task_completed:
+                try:
+                    step_done, task_completed = self._run_one_step(
+                        task=task,
+                        step=step,
+                        screen_size=screen_size,
+                        dry_run=dry_run,
+                    )
+                    if task_completed:
+                        break
+                    if not step_done:
+                        # 当前步失败，继续下一步重规划。
+                        continue
+                except KeyboardInterrupt:
+                    self._record_step_result(
+                        step=step,
+                        status="interrupted",
+                        effective=self._is_step_effective(step),
+                        reason="user_interrupt",
+                    )
+                    logger.info("用户中断任务")
                     break
-                if not step_done:
-                    # 当前步失败，继续下一步重规划。
+                except Exception as exc:
+                    logger.error("步骤 %d 执行异常: %s", step, exc, exc_info=True)
+                    self._record_plan_exception(
+                        step=step,
+                        exc=exc,
+                        phase="run_one_step",
+                        traceback_text=traceback.format_exc(),
+                    )
+                    self._clear_reusable_observation()
+                    self._record_step_result(
+                        step=step,
+                        status="step_exception",
+                        effective=self._is_step_effective(step),
+                        error_type=type(exc).__name__,
+                        error_message=str(exc or "").strip() or repr(exc),
+                    )
                     continue
-            except KeyboardInterrupt:
-                logger.info("用户中断任务")
-                break
-            except Exception as exc:
-                logger.error("步骤 %d 执行异常: %s", step, exc, exc_info=True)
-                self._record_plan_exception(
-                    step=step,
-                    exc=exc,
-                    phase="run_one_step",
-                    traceback_text=traceback.format_exc(),
-                )
-                self._clear_reusable_observation()
-                continue
+            finally:
+                self._finalize_step_ledger(step=step)
 
         if task_completed:
             logger.info("任务成功完成: '%s'", task)
@@ -192,10 +210,11 @@ class AgentLoop:
     ) -> tuple[bool, bool]:
         before = self._observe_before(step=step)
         if before is None:
-            self._record_step_artifact(
-                artifact_kind="StepResult",
+            self._record_step_result(
                 step=step,
-                payload={"phase": "before", "status": "observe_failed"},
+                status="observe_failed",
+                effective=False,
+                phase="before",
             )
             return False, False
 
@@ -264,13 +283,15 @@ class AgentLoop:
             step=step,
             payload=plan,
         )
+        self._set_step_effective(step=step, effective=True)
 
         if plan.is_task_complete:
             logger.info("Planner 判断任务已完成")
-            self._record_step_artifact(
-                artifact_kind="StepResult",
+            self._record_step_result(
                 step=step,
-                payload={"phase": "plan", "status": "task_complete"},
+                status="task_complete",
+                effective=True,
+                phase="plan",
             )
             return True, True
 
@@ -316,16 +337,14 @@ class AgentLoop:
                 plan.target_description,
                 anchor_result.anchor_reason,
             )
-            self._record_step_artifact(
-                artifact_kind="StepResult",
+            self._record_step_result(
                 step=step,
-                payload={
-                    "status": "anchor_failed",
-                    "goal": plan.goal,
-                    "action_type": plan.action_type,
-                    "target_description": plan.target_description,
-                    "anchor_reason": anchor_result.anchor_reason,
-                },
+                status="anchor_failed",
+                effective=True,
+                goal=plan.goal,
+                action_type=plan.action_type,
+                target_description=plan.target_description,
+                anchor_reason=anchor_result.anchor_reason,
             )
             return False, False
 
@@ -366,15 +385,13 @@ class AgentLoop:
                 "等待动作已记录到 progress_context (progress_context=%d)",
                 len(self.progress_context),
             )
-            self._record_step_artifact(
-                artifact_kind="StepResult",
+            self._record_step_result(
                 step=step,
-                payload={
-                    "status": "wait_executed",
-                    "goal": plan.goal,
-                    "action_type": "wait",
-                    "wait_seconds": float((action.get("params") or {}).get("duration_sec") or 2.0),
-                },
+                status="wait_executed",
+                effective=True,
+                goal=plan.goal,
+                action_type="wait",
+                wait_seconds=float((action.get("params") or {}).get("duration_sec") or 2.0),
             )
             return True, False
 
@@ -395,6 +412,14 @@ class AgentLoop:
             if not dry_run:
                 logger.warning("Running-Oracle 告警，执行 back 尝试恢复")
                 self.executor.back()
+            self._record_step_result(
+                step=step,
+                status="runtime_before_exception",
+                effective=True,
+                phase=str(runtime_before.phase or "before_action"),
+                tags=list(runtime_before.tags or []),
+                reason=str(runtime_before.message or ""),
+            )
             return False, False
 
         pre_oracle_output = self.oracle_pre.generate_contract(
@@ -404,16 +429,6 @@ class AgentLoop:
             anchor_result=anchor_result,
             widgets=before.widgets,
             step=step,
-        )
-        self._record_step_artifact(
-            artifact_kind="SemanticTransitionContract",
-            step=step,
-            payload=pre_oracle_output.semantic_contract,
-        )
-        self._record_step_artifact(
-            artifact_kind="UIAssertionContract",
-            step=step,
-            payload=pre_oracle_output.assertion_contract,
         )
 
         action = self._build_action_from_plan(
@@ -457,6 +472,13 @@ class AgentLoop:
             }
             self._set_runtime_replan_hint(action_text="observe_after_failed")
             self._append_experience_context(plan=plan, failure_reason="observe_after_failed")
+            self._record_step_result(
+                step=step,
+                status="observe_after_failed",
+                effective=True,
+                goal=plan.goal,
+                action_type=plan.action_type,
+            )
             return False, False
 
         runtime_after = self._run_running_oracle(
@@ -480,6 +502,14 @@ class AgentLoop:
             if not dry_run:
                 logger.warning("Running-Oracle 告警，执行 back 尝试恢复")
                 self.executor.back()
+            self._record_step_result(
+                step=step,
+                status="runtime_after_exception",
+                effective=True,
+                phase=str(runtime_after.phase or "after_action"),
+                tags=list(runtime_after.tags or []),
+                reason=str(runtime_after.message or ""),
+            )
             return False, False
 
         post_result = self.post_oracle.evaluate(
@@ -494,11 +524,10 @@ class AgentLoop:
         )
         post_output = self.post_oracle.to_output(post_result)
         action_record["post_oracle"] = dict(post_output)
-        self._record_step_artifact(
-            artifact_kind="PostOracle",
+        self._set_post_oracle_summary(
             step=step,
-            payload={"phase": "post", "value": post_output},
-            append=True,
+            decision=str(post_result.decision or ""),
+            reason=str(post_result.reason or ""),
         )
 
         if post_result.decision == "semantic_success":
@@ -517,15 +546,13 @@ class AgentLoop:
                 plan.goal,
                 len(self.progress_context),
             )
-            self._record_step_artifact(
-                artifact_kind="StepResult",
+            self._record_step_result(
                 step=step,
-                payload={
-                    "status": "subgoal_success",
-                    "goal": plan.goal,
-                    "action_type": plan.action_type,
-                    "input_description": plan.input_description,
-                },
+                status="subgoal_success",
+                effective=True,
+                goal=plan.goal,
+                action_type=plan.action_type,
+                input_description=plan.input_description,
             )
             return True, False
 
@@ -557,6 +584,14 @@ class AgentLoop:
                 )
                 if not dry_run:
                     self.executor.back()
+                self._record_step_result(
+                    step=step,
+                    status="post_oracle_semantic_fail_ui_changed_force_back",
+                    effective=True,
+                    goal=plan.goal,
+                    reason=str(post_result.reason or ""),
+                    decision=str(post_result.decision or ""),
+                )
                 return False, False
 
             self._cache_anchor_replan_context(
@@ -570,6 +605,14 @@ class AgentLoop:
                 step,
             )
             self._cache_reusable_observation(step=step, observation=after)
+            self._record_step_result(
+                step=step,
+                status="post_oracle_semantic_fail_ui_changed_replan",
+                effective=True,
+                goal=plan.goal,
+                reason=str(post_result.reason or ""),
+                decision=str(post_result.decision or ""),
+            )
             return False, False
 
         if post_result.decision == "semantic_fail_ui_unchanged":
@@ -595,6 +638,14 @@ class AgentLoop:
             )
             logger.warning("Post-Oracle 语义失败且 UI 无变化(step=%d)，直接重规划", step)
             self._cache_reusable_observation(step=step, observation=after)
+            self._record_step_result(
+                step=step,
+                status="post_oracle_semantic_fail_ui_unchanged",
+                effective=True,
+                goal=plan.goal,
+                reason=str(post_result.reason or ""),
+                decision=str(post_result.decision or ""),
+            )
             return False, False
 
         self._clear_anchor_replan_context()
@@ -610,6 +661,14 @@ class AgentLoop:
             post_result=post_result,
         )
         self._cache_reusable_observation(step=step, observation=after)
+        self._record_step_result(
+            step=step,
+            status="post_oracle_unknown_decision",
+            effective=True,
+            goal=plan.goal,
+            reason=str(post_result.reason or ""),
+            decision=str(post_result.decision or ""),
+        )
         return False, False
 
     def _observe_before(
@@ -646,7 +705,6 @@ class AgentLoop:
             artifact_kind="Observation",
             step=step,
             payload={
-                "phase": "before",
                 "screenshot_path": cached.screenshot_path,
                 "dump_path": cached.dump_path,
                 "activity": cached.activity,
@@ -657,7 +715,12 @@ class AgentLoop:
                 "reused_from_previous_after": True,
                 "source_step": int(source_step or max(0, step - 1)),
             },
-            append=True,
+            phase="before",
+        )
+        self._set_step_ledger_field(
+            step=step,
+            key="reused_before_from_step",
+            value=int(source_step or max(0, step - 1)),
         )
         return cached
 
@@ -1005,7 +1068,6 @@ class AgentLoop:
             artifact_kind="Observation",
             step=step,
             payload={
-                "phase": phase,
                 "screenshot_path": screenshot_path,
                 "dump_path": dump_path,
                 "activity": activity,
@@ -1015,7 +1077,7 @@ class AgentLoop:
                 "widget_count": len(widgets),
                 "reused_from_previous_after": False,
             },
-            append=True,
+            phase=phase,
         )
 
         return StepObservation(
@@ -1461,8 +1523,8 @@ class AgentLoop:
             self._record_step_artifact(
                 artifact_kind="RunningOracle",
                 step=step,
-                payload={"phase": phase, "value": result},
-                append=True,
+                payload=result,
+                phase=phase,
             )
             return result
         except Exception as exc:
@@ -1544,16 +1606,144 @@ class AgentLoop:
         artifact_kind: str,
         step: int,
         payload: Any,
+        phase: str = "",
         append: bool = False,
-    ) -> None:
+    ) -> str | None:
         if int(step) <= 0:
-            return
+            return None
         try:
-            self.audit.record_step(
-                artifact_kind=artifact_kind,
+            if str(phase or "").strip():
+                path = self.audit.record_step_phase(
+                    artifact_kind=artifact_kind,
+                    step=int(step),
+                    phase=str(phase),
+                    payload=payload,
+                )
+            else:
+                path = self.audit.record_step(
+                    artifact_kind=artifact_kind,
+                    step=int(step),
+                    payload=payload,
+                    append=append,
+                )
+            self._track_step_artifact(
                 step=int(step),
-                payload=payload,
-                append=append,
+                artifact_kind=artifact_kind,
+                phase=str(phase or ""),
+                path=path,
             )
+            return path
         except Exception as exc:
             logger.warning("写入 %s 审计记录失败(step=%d): %s", artifact_kind, step, exc)
+            return None
+
+    def _begin_step_ledger(self, step: int) -> None:
+        self._active_step_ledger = {
+            "step": int(step),
+            "attempted": True,
+            "effective": False,
+            "final_status": "",
+            "final_reason": "",
+            "reused_before_from_step": None,
+            "post_oracle_decision": "",
+            "post_oracle_reason": "",
+            "artifact_refs": {},
+        }
+
+    def _track_step_artifact(
+        self,
+        step: int,
+        artifact_kind: str,
+        phase: str,
+        path: str,
+    ) -> None:
+        ledger = self._active_step_ledger
+        if not isinstance(ledger, dict):
+            return
+        if int(ledger.get("step", -1)) != int(step):
+            return
+        refs = ledger.setdefault("artifact_refs", {})
+        if not isinstance(refs, dict):
+            refs = {}
+            ledger["artifact_refs"] = refs
+        key = str(artifact_kind or "").strip()
+        phase_token = str(phase or "").strip()
+        if phase_token:
+            key = f"{key}.{phase_token}"
+        rel_path = str(path or "").strip()
+        if rel_path:
+            try:
+                rel_path = os.path.relpath(rel_path, self.audit.base_dir)
+            except Exception:
+                pass
+        refs[key] = rel_path
+
+    def _set_step_ledger_field(self, step: int, key: str, value: Any) -> None:
+        ledger = self._active_step_ledger
+        if not isinstance(ledger, dict):
+            return
+        if int(ledger.get("step", -1)) != int(step):
+            return
+        ledger[str(key)] = value
+
+    def _set_step_effective(self, step: int, effective: bool) -> None:
+        self._set_step_ledger_field(step=step, key="effective", value=bool(effective))
+
+    def _is_step_effective(self, step: int) -> bool:
+        ledger = self._active_step_ledger
+        if not isinstance(ledger, dict):
+            return False
+        if int(ledger.get("step", -1)) != int(step):
+            return False
+        return bool(ledger.get("effective"))
+
+    def _set_step_outcome(self, step: int, status: str, reason: str = "") -> None:
+        self._set_step_ledger_field(step=step, key="final_status", value=str(status or "").strip())
+        self._set_step_ledger_field(step=step, key="final_reason", value=str(reason or "").strip())
+
+    def _record_step_result(
+        self,
+        step: int,
+        status: str,
+        effective: bool | None = None,
+        **kwargs: Any,
+    ) -> None:
+        payload: dict[str, Any] = {"status": str(status or "").strip()}
+        payload.update(kwargs)
+        self._record_step_artifact(
+            artifact_kind="StepResult",
+            step=step,
+            payload=payload,
+        )
+        if effective is not None:
+            self._set_step_effective(step=step, effective=bool(effective))
+        reason = str(kwargs.get("reason") or kwargs.get("error_message") or "").strip()
+        self._set_step_outcome(step=step, status=status, reason=reason)
+
+    def _set_post_oracle_summary(self, step: int, decision: str, reason: str) -> None:
+        self._set_step_ledger_field(step=step, key="post_oracle_decision", value=str(decision or "").strip())
+        self._set_step_ledger_field(step=step, key="post_oracle_reason", value=str(reason or "").strip())
+
+    def _finalize_step_ledger(self, step: int) -> None:
+        ledger = self._active_step_ledger
+        if not isinstance(ledger, dict):
+            return
+        if int(ledger.get("step", -1)) != int(step):
+            return
+        if not str(ledger.get("final_status") or "").strip():
+            self._set_step_outcome(
+                step=step,
+                status="step_returned_without_status",
+            )
+        if not bool(ledger.get("effective")):
+            ledger["effective"] = self._is_step_effective(step=step)
+        try:
+            self.audit.record_step(
+                artifact_kind="StepLedger",
+                step=int(step),
+                payload=ledger,
+            )
+        except Exception as exc:
+            logger.warning("写入 StepLedger 审计记录失败(step=%d): %s", step, exc)
+        finally:
+            self._active_step_ledger = None
