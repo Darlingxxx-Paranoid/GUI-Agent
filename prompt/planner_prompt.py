@@ -59,12 +59,13 @@ Task target app candidate (JSON object):
 PLANNER_ANCHOR_SYSTEM_PROMPT = """You are the anchor module of an Android GUI agent.
 Given a semantic target description and a numbered screenshot, choose the best widget id.
 
+
 Rules:
 1) Return target_widget_id and anchor_reason only.
 2) The number shown on each bounding box in the screenshot is the widget_id.
-3) target_widget_id must be one of the visible numbered boxes in the screenshot.
-4) If no reliable target exists, set target_widget_id=-1 and explain why.
-5) Do not invent widget ids. Returning an invalid id triggers runtime replan.
+3) Before choosing a widget_id, you must answer two questions in your reasoning: 1) What specific visual element is inside the bounding box of the candidate id? 2) Does it EXACTLY match the target description? If the bounding box only covers adjacent text but NOT the target itself, you MUST return -1.
+4) target_widget_id must be one of the visible numbered boxes in the screenshot.
+5) Do NOT select a widget_id just because it is physically close to the target. If the target element itself does not have a bounding box directly on it, return target_widget_id=-1.
 """
 
 PLANNER_ANCHOR_REPLAN_CONTEXT_TEMPLATE = """Previous failed anchor context (for replan only):
