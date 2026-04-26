@@ -77,6 +77,7 @@ class AgentLoop:
         self._cached_before_observation: StepObservation | None = None
         self._cached_before_step: int | None = None
         self._cached_before_source_step: int | None = None
+        self._ui_changed_signature_counts: dict[str, int] = {}
         logger.info("AgentLoop 初始化完成(最小闭环), max_steps=%d", config.max_steps)
 
     def run(self, task: str, dry_run: bool = False) -> bool:
@@ -89,6 +90,7 @@ class AgentLoop:
         self.action_history = []
         self.progress_context = []
         self.experience_context = []
+        self._ui_changed_signature_counts = {}
         self._task_target_app = self._resolve_task_target_app(task)
         if self._task_target_app:
             logger.info(
@@ -428,6 +430,7 @@ class AgentLoop:
                 "input_description": str(plan.input_description or ""),
             }
             self.progress_context.append(progress_item)
+            self._ui_changed_signature_counts = {}
             self._cache_reusable_observation(step=step, observation=after)
             logger.info(
                 "Post-Oracle 通过，子目标完成: %s (progress_context=%d)",
@@ -453,7 +456,27 @@ class AgentLoop:
                 plan=plan,
                 failure_reason="post_oracle_semantic_fail_ui_changed",
             )
-            logger.warning("Post-Oracle 语义失败且 UI 有变化(step=%d)，执行回退后重规划", step)
+            defer_back, signature, count = self._should_defer_back_on_ui_changed(
+                plan=plan,
+                before=before,
+                after=after,
+                post_reason=str(post_result.reason or ""),
+            )
+            if defer_back:
+                logger.warning(
+                    "Post-Oracle 语义失败且 UI 有变化(step=%d)，检测到中间态(签名=%s, count=%d)，本次不回退，直接重规划",
+                    step,
+                    signature,
+                    count,
+                )
+                self._cache_reusable_observation(step=step, observation=after)
+                return False, False
+            logger.warning(
+                "Post-Oracle 语义失败且 UI 有变化(step=%d)，执行回退后重规划(签名=%s, count=%d)",
+                step,
+                signature,
+                count,
+            )
             if not dry_run:
                 self.executor.back()
             return False, False
@@ -545,6 +568,109 @@ class AgentLoop:
         self._cached_before_observation = None
         self._cached_before_step = None
         self._cached_before_source_step = None
+
+    def _build_ui_changed_signature(
+        self,
+        plan: PlanResult,
+        before: StepObservation,
+        after: StepObservation,
+    ) -> str:
+        goal = str(plan.goal or "").strip().lower()
+        action_type = str(plan.action_type or "").strip().lower()
+        target = str(plan.target_description or "").strip().lower()
+        return "|".join(
+            [
+                str(before.package or "").strip().lower(),
+                str(before.activity or "").strip().lower(),
+                str(after.package or "").strip().lower(),
+                str(after.activity or "").strip().lower(),
+                action_type,
+                goal,
+                target,
+            ]
+        )
+
+    def _is_intermediate_ui_changed_failure(
+        self,
+        plan: PlanResult,
+        before: StepObservation,
+        after: StepObservation,
+        post_reason: str,
+    ) -> bool:
+        before_pkg = str(before.package or "").strip().lower()
+        after_pkg = str(after.package or "").strip().lower()
+        before_act = str(before.activity or "").strip().lower()
+        after_act = str(after.activity or "").strip().lower()
+
+        if not before_pkg or not after_pkg:
+            return False
+        if before_pkg != after_pkg:
+            return False
+        if before_act and after_act and before_act != after_act:
+            return False
+
+        reason = str(post_reason or "").strip().lower()
+        reason_keywords = [
+            "dialog",
+            "popup",
+            "pop-up",
+            "overlay",
+            "menu",
+            "confirm",
+            "confirmation",
+            "cancel",
+            "send",
+            "choose a view",
+            "弹窗",
+            "菜单",
+            "确认",
+            "对话框",
+        ]
+        if any(key in reason for key in reason_keywords):
+            return True
+
+        goal = str(plan.goal or "").strip().lower()
+        target = str(plan.target_description or "").strip().lower()
+        target_keywords = [
+            "send",
+            "compose",
+            "new mail",
+            "new message",
+            "menu",
+            "confirm",
+            "弹窗",
+            "菜单",
+            "确认",
+            "发送",
+        ]
+        if any(key in goal for key in target_keywords) and any(key in target for key in target_keywords):
+            return True
+        return False
+
+    def _should_defer_back_on_ui_changed(
+        self,
+        plan: PlanResult,
+        before: StepObservation,
+        after: StepObservation,
+        post_reason: str,
+    ) -> tuple[bool, str, int]:
+        signature = self._build_ui_changed_signature(
+            plan=plan,
+            before=before,
+            after=after,
+        )
+        count = int(self._ui_changed_signature_counts.get(signature, 0)) + 1
+        self._ui_changed_signature_counts[signature] = count
+
+        is_intermediate = self._is_intermediate_ui_changed_failure(
+            plan=plan,
+            before=before,
+            after=after,
+            post_reason=post_reason,
+        )
+        if is_intermediate and count == 1:
+            return True, signature, count
+        return False, signature, count
 
     def _observe(
         self,
