@@ -479,6 +479,23 @@ class AgentLoop:
                 plan=plan,
                 failure_reason="post_oracle_semantic_fail_ui_changed",
             )
+            force_back, current_activity = self._should_force_back_on_activity_mismatch(
+                before=before,
+            )
+            if force_back:
+                logger.warning(
+                    (
+                        "Post-Oracle 语义失败且 UI 有变化(step=%d)，"
+                        "当前 Activity 与动作前不一致(before=%s, current=%s)，立即执行回退"
+                    ),
+                    step,
+                    str(before.activity or ""),
+                    str(current_activity or ""),
+                )
+                if not dry_run:
+                    self.executor.back()
+                return False, False
+
             defer_back, signature, count = self._should_defer_back_on_ui_changed(
                 plan=plan,
                 before=before,
@@ -723,6 +740,27 @@ class AgentLoop:
                 target,
             ]
         )
+
+    def _get_current_activity_safe(self) -> str:
+        executor = getattr(self, "executor", None)
+        if executor is None:
+            return ""
+        try:
+            return str(executor.get_current_activity() or "").strip()
+        except Exception as exc:
+            logger.warning("读取当前 Activity 失败，跳过 activity 强制回退判断: %s", exc)
+            return ""
+
+    def _should_force_back_on_activity_mismatch(
+        self,
+        before: StepObservation,
+    ) -> tuple[bool, str]:
+        before_activity = str(before.activity or "").strip().lower()
+        current_activity = self._get_current_activity_safe()
+        current_activity_norm = str(current_activity or "").strip().lower()
+        if not before_activity or not current_activity_norm:
+            return False, current_activity
+        return before_activity != current_activity_norm, current_activity
 
     def _is_intermediate_ui_changed_failure(
         self,
