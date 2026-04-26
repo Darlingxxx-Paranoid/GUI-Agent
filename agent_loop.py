@@ -457,7 +457,20 @@ class AgentLoop:
             logger.info("[DRY RUN] 跳过执行动作: %s", action)
         else:
             self.executor.execute(action)
-        time.sleep(1.8)
+        executed_action_type = str(action.get("type") or "").strip().lower().replace("-", "_")
+        launch_action_aliases = {
+            "launch_app",
+            "launch",
+            "launchapp",
+            "open_app",
+            "openapp",
+            "start_app",
+            "startapp",
+        }
+        post_action_wait_sec = 3.0 if executed_action_type in launch_action_aliases else 1.8
+        if post_action_wait_sec >= 3.0:
+            logger.info("检测到启动应用动作，执行后等待 %.1f 秒再进行 post-oracle", post_action_wait_sec)
+        time.sleep(post_action_wait_sec)
 
         after = self._observe(step=step, phase="after")
         if after is None:
