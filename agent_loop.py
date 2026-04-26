@@ -18,7 +18,7 @@ from Oracle.pre_oracle import OraclePre
 from Oracle.running_oracle import RunningOracle, RunningOracleResult
 from Perception.dump_parser import DumpParser
 from Perception.uied_controls import get_uied_visible_widgets_list
-from Planning.planner import AnchorResult, PlanResult, Planner
+from Planning.planner import AnchorResult, PlanResult, ReplanOutput, Planner
 from utils.audit_recorder import AuditRecorder
 from utils.llm_client import LLMClient, LLMStructuredOutputError
 
@@ -48,6 +48,17 @@ class AnchorReplanContext:
     previous_selected_widget: dict[str, Any]
     post_oracle_decision: str
     post_oracle_reason: str
+
+
+@dataclass
+class PostOracleReplanRequest:
+    """One-shot replan request generated from previous Post-Oracle failure."""
+
+    previous_step: int
+    previous_plan: PlanResult
+    post_oracle_decision: str
+    post_oracle_reason: str
+    need_back: bool
 
 
 class AgentLoop:
@@ -94,6 +105,8 @@ class AgentLoop:
         self._cached_before_source_step: int | None = None
         self._pending_anchor_replan_context: AnchorReplanContext | None = None
         self._pending_anchor_replan_context_step: int | None = None
+        self._pending_post_oracle_replan_request: PostOracleReplanRequest | None = None
+        self._pending_post_oracle_replan_step: int | None = None
         self._ui_changed_signature_counts: dict[str, int] = {}
         logger.info("AgentLoop 初始化完成(最小闭环), max_steps=%d", config.max_steps)
 
@@ -109,6 +122,7 @@ class AgentLoop:
         self.experience_context = []
         self._ui_changed_signature_counts = {}
         self._clear_anchor_replan_context()
+        self._clear_post_oracle_replan_request()
         self._task_target_app = self._resolve_task_target_app(task)
         if self._task_target_app:
             logger.info(
@@ -185,22 +199,62 @@ class AgentLoop:
             )
             return False, False
 
+        pending_replan_request = self._consume_post_oracle_replan_request(step=step)
+        replan_mode = ""
         try:
-            plan = self.planner.plan(
-                task=task,
-                screenshot=before.screenshot_path,
-                runtime_exception_hint=str(self.pending_runtime_replan_hint or ""),
-                progress_context=self.progress_context,
-                experience_context=self.experience_context,
-                current_package=before.package,
-                task_target_app=self._task_target_app,
-                step=step,
-            )
+            if pending_replan_request is None:
+                plan = self.planner.plan(
+                    task=task,
+                    screenshot=before.screenshot_path,
+                    runtime_exception_hint=str(self.pending_runtime_replan_hint or ""),
+                    progress_context=self.progress_context,
+                    experience_context=self.experience_context,
+                    current_package=before.package,
+                    task_target_app=self._task_target_app,
+                    step=step,
+                )
+            else:
+                replan_output = self.planner.replan(
+                    task=task,
+                    screenshot=before.screenshot_path,
+                    previous_plan=pending_replan_request.previous_plan,
+                    post_oracle_decision=pending_replan_request.post_oracle_decision,
+                    post_oracle_reason=pending_replan_request.post_oracle_reason,
+                    need_back=bool(pending_replan_request.need_back),
+                    runtime_exception_hint=str(self.pending_runtime_replan_hint or ""),
+                    progress_context=self.progress_context,
+                    experience_context=self.experience_context,
+                    current_package=before.package,
+                    task_target_app=self._task_target_app,
+                    step=step,
+                )
+                output = (
+                    replan_output
+                    if isinstance(replan_output, ReplanOutput)
+                    else ReplanOutput.model_validate(replan_output)
+                )
+                plan = output.plan
+                replan_mode = str(output.mode or "").strip().lower()
+                self._record_step_artifact(
+                    artifact_kind="ReplanDecision",
+                    step=step,
+                    payload={
+                        "mode": replan_mode,
+                        "reason_id": int(output.feedback.reason_id),
+                        "reason_label": str(output.feedback.reason_label or ""),
+                        "situation": str(output.feedback.situation or ""),
+                        "reasoning": str(output.feedback.reasoning or ""),
+                        "source_step": int(pending_replan_request.previous_step),
+                        "need_back": bool(pending_replan_request.need_back),
+                        "post_oracle_decision": str(pending_replan_request.post_oracle_decision or ""),
+                        "post_oracle_reason": str(pending_replan_request.post_oracle_reason or ""),
+                    },
+                )
         except Exception as exc:
             self._record_plan_exception(
                 step=step,
                 exc=exc,
-                phase="planner.plan",
+                phase="planner.replan" if pending_replan_request is not None else "planner.plan",
                 traceback_text=traceback.format_exc(),
             )
             raise
@@ -221,13 +275,17 @@ class AgentLoop:
             return True, True
 
         action_type = str(plan.action_type or "").strip().lower()
+        if replan_mode != "rematch":
+            self._clear_anchor_replan_context()
         anchor_result = AnchorResult(
             target_widget_id=-1,
             anchor_method="none",
             anchor_reason=f"action_type={action_type} does not require widget anchor",
         )
         if self._action_requires_widget(action_type):
-            replan_anchor_context = self._consume_anchor_replan_context(step=step)
+            replan_anchor_context = None
+            if replan_mode == "rematch":
+                replan_anchor_context = self._consume_anchor_replan_context(step=step)
             anchor_result = self.planner.anchor(
                 plan=plan,
                 screenshot=before.screenshot_path,
@@ -472,21 +530,26 @@ class AgentLoop:
             return True, False
 
         if post_result.decision == "semantic_fail_ui_changed":
-            self._clear_anchor_replan_context()
-            self._clear_reusable_observation()
             self._set_runtime_replan_hint(action_text=f"post_oracle_semantic_fail_ui_changed:{plan.goal}")
             self._append_experience_context(
                 plan=plan,
                 failure_reason="post_oracle_semantic_fail_ui_changed",
             )
+            self._cache_post_oracle_replan_request(
+                step=step,
+                plan=plan,
+                post_result=post_result,
+            )
             force_back, current_activity = self._should_force_back_on_activity_mismatch(
                 before=before,
             )
             if force_back:
+                self._clear_anchor_replan_context()
+                self._clear_reusable_observation()
                 logger.warning(
                     (
                         "Post-Oracle 语义失败且 UI 有变化(step=%d)，"
-                        "当前 Activity 与动作前不一致(before=%s, current=%s)，立即执行回退"
+                        "当前 Activity 与动作前不一致(before=%s, current=%s)，执行一次额外回退后重规划"
                     ),
                     step,
                     str(before.activity or ""),
@@ -496,29 +559,17 @@ class AgentLoop:
                     self.executor.back()
                 return False, False
 
-            defer_back, signature, count = self._should_defer_back_on_ui_changed(
-                plan=plan,
-                before=before,
-                after=after,
-                post_reason=str(post_result.reason or ""),
+            self._cache_anchor_replan_context(
+                step=step,
+                observation=before,
+                anchor_result=anchor_result,
+                post_result=post_result,
             )
-            if defer_back:
-                logger.warning(
-                    "Post-Oracle 语义失败且 UI 有变化(step=%d)，检测到中间态(签名=%s, count=%d)，本次不回退，直接重规划",
-                    step,
-                    signature,
-                    count,
-                )
-                self._cache_reusable_observation(step=step, observation=after)
-                return False, False
             logger.warning(
-                "Post-Oracle 语义失败且 UI 有变化(step=%d)，执行回退后重规划(签名=%s, count=%d)",
+                "Post-Oracle 语义失败且 UI 有变化(step=%d)，进入 replan 流程（无 activity 强制回退）",
                 step,
-                signature,
-                count,
             )
-            if not dry_run:
-                self.executor.back()
+            self._cache_reusable_observation(step=step, observation=after)
             return False, False
 
         if post_result.decision == "semantic_fail_ui_unchanged":
@@ -537,6 +588,11 @@ class AgentLoop:
                 anchor_result=anchor_result,
                 post_result=post_result,
             )
+            self._cache_post_oracle_replan_request(
+                step=step,
+                plan=plan,
+                post_result=post_result,
+            )
             logger.warning("Post-Oracle 语义失败且 UI 无变化(step=%d)，直接重规划", step)
             self._cache_reusable_observation(step=step, observation=after)
             return False, False
@@ -547,6 +603,11 @@ class AgentLoop:
         self._append_experience_context(
             plan=plan,
             failure_reason="post_oracle_llm_fallback_fail",
+        )
+        self._cache_post_oracle_replan_request(
+            step=step,
+            plan=plan,
+            post_result=post_result,
         )
         self._cache_reusable_observation(step=step, observation=after)
         return False, False
@@ -615,6 +676,70 @@ class AgentLoop:
         self._cached_before_observation = None
         self._cached_before_step = None
         self._cached_before_source_step = None
+
+    def _cache_post_oracle_replan_request(
+        self,
+        step: int,
+        plan: PlanResult,
+        post_result: Any,
+    ) -> None:
+        try:
+            plan_payload = (
+                plan.model_copy(deep=True)
+                if isinstance(plan, PlanResult)
+                else PlanResult.model_validate(plan)
+            )
+        except Exception as exc:
+            logger.warning("跳过缓存 post-oracle replan request: previous plan 非法: %s", exc)
+            self._clear_post_oracle_replan_request()
+            return
+
+        request = PostOracleReplanRequest(
+            previous_step=int(step),
+            previous_plan=plan_payload,
+            post_oracle_decision=str(getattr(post_result, "decision", "") or ""),
+            post_oracle_reason=str(getattr(post_result, "reason", "") or ""),
+            need_back=bool(getattr(post_result, "needs_back", False)),
+        )
+        self._pending_post_oracle_replan_request = request
+        self._pending_post_oracle_replan_step = int(step) + 1
+        logger.info(
+            "缓存 post-oracle replan request: prev_step=%d -> target_step=%d decision=%s need_back=%s",
+            int(step),
+            int(step) + 1,
+            request.post_oracle_decision,
+            request.need_back,
+        )
+
+    def _consume_post_oracle_replan_request(
+        self,
+        step: int,
+    ) -> PostOracleReplanRequest | None:
+        request = self._pending_post_oracle_replan_request
+        target_step = self._pending_post_oracle_replan_step
+        if request is None or target_step is None:
+            return None
+        if int(target_step) != int(step):
+            logger.debug(
+                "跳过 post-oracle replan request: target_step=%s, current_step=%d",
+                target_step,
+                step,
+            )
+            self._clear_post_oracle_replan_request()
+            return None
+
+        self._clear_post_oracle_replan_request()
+        logger.info(
+            "注入 post-oracle replan request: prev_step=%d -> current_step=%d decision=%s",
+            int(request.previous_step),
+            int(step),
+            request.post_oracle_decision,
+        )
+        return request
+
+    def _clear_post_oracle_replan_request(self) -> None:
+        self._pending_post_oracle_replan_request = None
+        self._pending_post_oracle_replan_step = None
 
     def _cache_anchor_replan_context(
         self,

@@ -32,10 +32,20 @@ Rules:
 PLANNER_USER_PROMPT = """Task:
 {task}
 
-{runtime_exception_context}{progress_context_block}{experience_context_block}{device_context_block}"""
+{runtime_exception_context}{correcting_context_block}{progress_context_block}{experience_context_block}{device_context_block}"""
 
 PLANNER_RUNTIME_EXCEPTION_CONTEXT_TEMPLATE = """Runtime Replan Hint:
 {runtime_exception_hint}
+
+"""
+
+PLANNER_CORRECTING_CONTEXT_TEMPLATE = """Correcting Replan Context:
+correcting=true
+reason_category: {reason_category}
+situation: {situation}
+previous_failed_goal: {previous_goal}
+previous_failed_action_type: {previous_action_type}
+previous_failed_target: {previous_target}
 
 """
 
@@ -112,4 +122,40 @@ Hint:
 - Prefer interactive or text-relevant nodes that best satisfy the target description.
 - Use screenshot only as visual confirmation.
 - If uncertain, return target_node_id=-1.
+"""
+
+PLANNER_REPLAN_FEEDBACK_SYSTEM_PROMPT = """You are the replan feedback decider of an Android GUI agent.
+Given one failed step context, choose exactly one root cause category.
+
+Category IDs:
+1 = widget_match_or_localization_error
+2 = missing_required_prerequisite_action
+3 = app_bug_triggered
+4 = action_scenario_mismatch
+
+Return one JSON object only with keys:
+{
+  "reason_id": 1|2|3|4,
+  "situation": "short concrete situation summary",
+  "reasoning": "short grounded explanation"
+}
+
+Rules:
+1) reason_id must be exactly one of 1,2,3,4.
+2) Prefer category 1 only when the semantic intent is still correct but target anchoring/selection is likely wrong.
+3) situation must be concise and actionable for replanning.
+4) Do not output markdown or extra keys.
+"""
+
+PLANNER_REPLAN_FEEDBACK_USER_PROMPT = """Task:
+{task}
+
+Current package: {current_package}
+need_back={need_back}
+
+Previous failed action (JSON):
+{previous_plan_json}
+
+Post-oracle failure (JSON):
+{post_oracle_json}
 """

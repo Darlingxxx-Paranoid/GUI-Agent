@@ -16,6 +16,7 @@ from Perception.uied_controls import (
 )
 from prompt.planner_prompt import (
     PLANNER_ANCHOR_REPLAN_CONTEXT_TEMPLATE,
+    PLANNER_CORRECTING_CONTEXT_TEMPLATE,
     PLANNER_ANCHOR_SYSTEM_PROMPT,
     PLANNER_ANCHOR_USER_PROMPT,
     PLANNER_ANCHOR_XML_SYSTEM_PROMPT,
@@ -23,6 +24,8 @@ from prompt.planner_prompt import (
     PLANNER_DEVICE_CONTEXT_TEMPLATE,
     PLANNER_EXPERIENCE_CONTEXT_TEMPLATE,
     PLANNER_PROGRESS_CONTEXT_TEMPLATE,
+    PLANNER_REPLAN_FEEDBACK_SYSTEM_PROMPT,
+    PLANNER_REPLAN_FEEDBACK_USER_PROMPT,
     PLANNER_RUNTIME_EXCEPTION_CONTEXT_TEMPLATE,
     PLANNER_SYSTEM_PROMPT,
     PLANNER_USER_PROMPT,
@@ -53,6 +56,13 @@ AnchorMethod = Literal[
 ]
 
 WIDGET_ACTION_TYPES: set[str] = {"tap", "input", "long_press", "swipe"}
+REPLAN_REASON_ID_TO_LABEL: dict[int, str] = {
+    1: "widget_match_or_localization_error",
+    2: "missing_required_prerequisite_action",
+    3: "app_bug_triggered",
+    4: "action_scenario_mismatch",
+}
+ReplanMode = Literal["rematch", "correcting"]
 
 
 def remove_punctuation(s: str, more_punc: Optional[list[str]] = None) -> str:
@@ -264,6 +274,46 @@ class _AnchorXMLTreeLLMOutput(BaseModel):
         return self
 
 
+class _ReplanFeedbackLLMOutput(BaseModel):
+    """Internal structured output for replan feedback classification."""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    reason_id: int = Field(ge=1, le=4)
+    situation: str = Field(min_length=1)
+    reasoning: str = Field(min_length=1)
+
+
+class ReplanFeedback(BaseModel):
+    """Structured feedback for deciding rematch vs correcting replan."""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    reason_id: int = Field(ge=1, le=4)
+    reason_label: str = Field(min_length=1)
+    situation: str = Field(min_length=1)
+    reasoning: str = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def validate_reason_label(self) -> "ReplanFeedback":
+        mapped = REPLAN_REASON_ID_TO_LABEL.get(int(self.reason_id))
+        if not mapped:
+            raise ValueError(f"unsupported reason_id={self.reason_id}")
+        if self.reason_label != mapped:
+            self.reason_label = mapped
+        return self
+
+
+class ReplanOutput(BaseModel):
+    """Output contract for planner.replan."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    mode: ReplanMode
+    plan: PlanResult
+    feedback: ReplanFeedback
+
+
 class Planner:
     """Plan next step from task+screenshot, then anchor target widget when needed."""
 
@@ -299,6 +349,10 @@ class Planner:
         experience_context: list[dict[str, Any]] | None = None,
         current_package: str = "",
         task_target_app: dict[str, Any] | None = None,
+        correcting: bool = False,
+        situation: str = "",
+        reason_category: str = "",
+        previous_failed_plan: PlanResult | dict[str, Any] | None = None,
         step: int | None = None,
     ) -> PlanResult:
         task_text = str(task or "").strip()
@@ -322,6 +376,22 @@ class Planner:
                 runtime_exception_hint=runtime_hint
             )
             logger.info("Planner 注入重规划提示: %s", runtime_hint)
+
+        correcting_context = ""
+        if bool(correcting):
+            prev_failed_payload = self._normalize_previous_failed_plan(previous_failed_plan)
+            correcting_context = PLANNER_CORRECTING_CONTEXT_TEMPLATE.format(
+                reason_category=str(reason_category or "").strip() or "unknown",
+                situation=str(situation or "").strip() or "unknown",
+                previous_goal=str(prev_failed_payload.get("goal") or ""),
+                previous_action_type=str(prev_failed_payload.get("action_type") or ""),
+                previous_target=str(prev_failed_payload.get("target_description") or ""),
+            )
+            logger.info(
+                "Planner 注入 correcting 上下文: reason=%s, situation=%s",
+                str(reason_category or "").strip() or "unknown",
+                str(situation or "").strip() or "unknown",
+            )
 
         progress_items = self._normalize_progress_context(progress_context)
         progress_items_json = json.dumps(progress_items[:80], ensure_ascii=False)
@@ -360,6 +430,7 @@ class Planner:
         user_prompt = PLANNER_USER_PROMPT.format(
             task=task_text,
             runtime_exception_context=runtime_context,
+            correcting_context_block=correcting_context,
             progress_context_block=progress_context_block,
             experience_context_block=experience_context_block,
             device_context_block=device_context_block,
@@ -391,6 +462,187 @@ class Planner:
         except Exception as exc:
             logger.error("规划失败(v2): %s", exc)
             raise
+
+    def next_action(
+        self,
+        task: str,
+        screenshot: str,
+        runtime_exception_hint: str = "",
+        progress_context: list[dict[str, Any]] | None = None,
+        experience_context: list[dict[str, Any]] | None = None,
+        current_package: str = "",
+        task_target_app: dict[str, Any] | None = None,
+        correcting: bool = False,
+        situation: str = "",
+        reason_category: str = "",
+        previous_failed_plan: PlanResult | dict[str, Any] | None = None,
+        step: int | None = None,
+    ) -> PlanResult:
+        """Generate next semantic action. `correcting=True` means explicit replan."""
+        return self.plan(
+            task=task,
+            screenshot=screenshot,
+            runtime_exception_hint=runtime_exception_hint,
+            progress_context=progress_context,
+            experience_context=experience_context,
+            current_package=current_package,
+            task_target_app=task_target_app,
+            correcting=correcting,
+            situation=situation,
+            reason_category=reason_category,
+            previous_failed_plan=previous_failed_plan,
+            step=step,
+        )
+
+    def rematch_next_action(
+        self,
+        previous_plan: PlanResult | dict[str, Any],
+        feedback: ReplanFeedback | dict[str, Any] | None = None,
+    ) -> PlanResult:
+        """Keep semantic action unchanged and only rematch widget in anchor stage."""
+        if isinstance(previous_plan, PlanResult):
+            base_plan = previous_plan
+        else:
+            base_plan = PlanResult.model_validate(previous_plan or {})
+
+        feedback_text = ""
+        if isinstance(feedback, ReplanFeedback):
+            feedback_text = f"reason={feedback.reason_label}; situation={feedback.situation}"
+        elif isinstance(feedback, dict):
+            feedback_text = (
+                f"reason={str(feedback.get('reason_label') or feedback.get('reason_id') or '')}; "
+                f"situation={str(feedback.get('situation') or '')}"
+            )
+        feedback_text = feedback_text.strip()
+
+        suffix = (
+            f" [rematch_only: {feedback_text}]"
+            if feedback_text
+            else " [rematch_only]"
+        )
+        reasoning = (str(base_plan.reasoning or "").strip() or "rematch") + suffix
+        return base_plan.model_copy(update={"reasoning": reasoning})
+
+    def issue_feedback(
+        self,
+        task: str,
+        current_package: str,
+        previous_plan: PlanResult | dict[str, Any],
+        post_oracle_decision: str,
+        post_oracle_reason: str,
+        need_back: bool,
+        step: int | None = None,
+    ) -> ReplanFeedback:
+        """Classify one failed step into one of 4 root causes."""
+        previous_plan_payload = self._normalize_previous_failed_plan(previous_plan)
+        user_prompt = PLANNER_REPLAN_FEEDBACK_USER_PROMPT.format(
+            task=str(task or "").strip(),
+            current_package=str(current_package or "").strip() or "(unknown)",
+            need_back=str(bool(need_back)).lower(),
+            previous_plan_json=json.dumps(previous_plan_payload, ensure_ascii=False),
+            post_oracle_json=json.dumps(
+                {
+                    "decision": str(post_oracle_decision or "").strip(),
+                    "reason": str(post_oracle_reason or "").strip(),
+                },
+                ensure_ascii=False,
+            ),
+        )
+        request = LLMRequest(
+            system=PLANNER_REPLAN_FEEDBACK_SYSTEM_PROMPT,
+            user=user_prompt,
+            images=[],
+            response_format=_ReplanFeedbackLLMOutput,
+            audit_meta={
+                "artifact_kind": "ReplanFeedback",
+                "step": step,
+                "stage": "planner_issue_feedback",
+            },
+        )
+
+        try:
+            parsed = self.llm.chat(request)
+            llm_output = (
+                parsed
+                if isinstance(parsed, _ReplanFeedbackLLMOutput)
+                else _ReplanFeedbackLLMOutput.model_validate(parsed)
+            )
+            reason_id = int(llm_output.reason_id)
+            return ReplanFeedback(
+                reason_id=reason_id,
+                reason_label=REPLAN_REASON_ID_TO_LABEL.get(reason_id, "action_scenario_mismatch"),
+                situation=str(llm_output.situation or "").strip(),
+                reasoning=str(llm_output.reasoning or "").strip(),
+            )
+        except Exception as exc:
+            logger.warning("issue_feedback 失败，回退默认分类(reason_id=4): %s", exc)
+            fallback_situation = str(post_oracle_reason or "").strip() or "post_oracle failure"
+            return ReplanFeedback(
+                reason_id=4,
+                reason_label=REPLAN_REASON_ID_TO_LABEL[4],
+                situation=fallback_situation,
+                reasoning=f"fallback because issue_feedback failed: {exc}",
+            )
+
+    def replan(
+        self,
+        task: str,
+        screenshot: str,
+        previous_plan: PlanResult | dict[str, Any],
+        post_oracle_decision: str,
+        post_oracle_reason: str,
+        need_back: bool,
+        runtime_exception_hint: str = "",
+        progress_context: list[dict[str, Any]] | None = None,
+        experience_context: list[dict[str, Any]] | None = None,
+        current_package: str = "",
+        task_target_app: dict[str, Any] | None = None,
+        step: int | None = None,
+    ) -> ReplanOutput:
+        """Replan entrypoint with issue_feedback -> rematch/correcting routing."""
+        feedback = self.issue_feedback(
+            task=task,
+            current_package=current_package,
+            previous_plan=previous_plan,
+            post_oracle_decision=post_oracle_decision,
+            post_oracle_reason=post_oracle_reason,
+            need_back=need_back,
+            step=step,
+        )
+        reason_id = int(feedback.reason_id)
+        if reason_id == 1:
+            mode: ReplanMode = "rematch"
+            plan = self.rematch_next_action(
+                previous_plan=previous_plan,
+                feedback=feedback,
+            )
+        else:
+            mode = "correcting"
+            plan = self.next_action(
+                task=task,
+                screenshot=screenshot,
+                runtime_exception_hint=runtime_exception_hint,
+                progress_context=progress_context,
+                experience_context=experience_context,
+                current_package=current_package,
+                task_target_app=task_target_app,
+                correcting=True,
+                situation=str(feedback.situation or "").strip(),
+                reason_category=str(feedback.reason_label or "").strip(),
+                previous_failed_plan=previous_plan,
+                step=step,
+            )
+        logger.info(
+            "replan 决策完成: mode=%s, reason_id=%d, reason_label=%s",
+            mode,
+            reason_id,
+            feedback.reason_label,
+        )
+        return ReplanOutput(
+            mode=mode,
+            plan=plan,
+            feedback=feedback,
+        )
 
     def anchor(
         self,
@@ -876,6 +1128,35 @@ class Planner:
         except Exception as exc:
             logger.warning("锚定阶段提取 UIED Visible Widgets List 失败: %s", exc)
             return []
+
+    def _normalize_previous_failed_plan(
+        self,
+        previous_failed_plan: PlanResult | dict[str, Any] | None,
+    ) -> dict[str, str]:
+        if isinstance(previous_failed_plan, PlanResult):
+            return {
+                "goal": str(previous_failed_plan.goal or ""),
+                "action_type": str(previous_failed_plan.action_type or ""),
+                "target_description": str(previous_failed_plan.target_description or ""),
+                "input_description": str(previous_failed_plan.input_description or ""),
+            }
+        if not isinstance(previous_failed_plan, dict):
+            return {
+                "goal": "",
+                "action_type": "",
+                "target_description": "",
+                "input_description": "",
+            }
+        return {
+            "goal": str(previous_failed_plan.get("goal") or ""),
+            "action_type": str(previous_failed_plan.get("action_type") or ""),
+            "target_description": str(previous_failed_plan.get("target_description") or ""),
+            "input_description": str(
+                previous_failed_plan.get("input_description")
+                or previous_failed_plan.get("input_text")
+                or ""
+            ),
+        }
 
     def _normalize_progress_context(
         self,
