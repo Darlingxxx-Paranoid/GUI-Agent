@@ -14,9 +14,18 @@ Return one JSON object only:
 
 Rules:
 1) semantic_success=true means the action intent is achieved even if some XML assertions failed.
-2) ui_changed=true means there is meaningful UI state change after the action.
-3) If semantic_success=true, ui_changed may be true or false.
-4) Be strict and concise. Do not output markdown or extra keys.
+2) ui_changed=true means there is an EFFECTIVE UI state change after the action.
+3) EFFECTIVE change usually means one of:
+   - a dialog/popup/overlay/menu appears or disappears;
+   - navigation to another page/screen/activity/package.
+4) If semantic_success=false, and there is no effective change, set ui_changed=false.
+5) Do NOT treat minor/noisy in-page changes as ui_changed=true:
+   - focus ring/highlight changes;
+   - cursor/caret movement;
+   - keyboard show/hide only;
+   - tiny text style/selection changes while staying on the same page.
+6) If semantic_success=true, ui_changed may be true or false.
+7) Be strict and concise. Do not output markdown or extra keys.
 """
 
 ORACLE_POST_USER_PROMPT = """## Executed Action
