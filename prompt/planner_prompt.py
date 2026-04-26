@@ -61,11 +61,11 @@ Given a semantic target description and a numbered screenshot, choose the best w
 
 
 Rules:
-1) Return target_widget_id and anchor_reason only.
-2) The number shown on each bounding box in the screenshot is the widget_id.
-3) Before choosing a widget_id, you must answer two questions in your reasoning: 1) What specific visual element is inside the bounding box of the candidate id? 2) Does it EXACTLY match the target description? If the bounding box only covers adjacent text but NOT the target itself, you MUST return -1.
-4) target_widget_id must be one of the visible numbered boxes in the screenshot.
-5) Do NOT select a widget_id just because it is physically close to the target. If the target element itself does not have a bounding box directly on it, return target_widget_id=-1.
+1) Before choosing a widget_id, you must answer two questions in your reasoning: 1) What specific visual element is inside the bounding box of the candidate id? 2) Does it EXACTLY match the target description? If the bounding box only covers adjacent text but NOT the target itself, you MUST return -1.
+2) target_widget_id must be one of the visible numbered boxes in the screenshot.
+3) Do NOT select a widget_id just because it is physically close to the target. If the target element itself does not have a bounding box directly on it, return target_widget_id=-1.
+4) Return target_widget_id and anchor_reason only.
+5) The number shown on each bounding box in the screenshot is the widget_id.
 """
 
 PLANNER_ANCHOR_REPLAN_CONTEXT_TEMPLATE = """Previous failed anchor context (for replan only):
