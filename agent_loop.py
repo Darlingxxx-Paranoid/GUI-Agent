@@ -232,6 +232,7 @@ class AgentLoop:
                 plan=plan,
                 screenshot=before.screenshot_path,
                 visible_widgets_list=before.widgets,
+                dump_tree=before.dump_tree,
                 replan_anchor_context=replan_anchor_context,
                 step=step,
             )
@@ -241,7 +242,7 @@ class AgentLoop:
             payload=anchor_result,
         )
 
-        if self._action_requires_widget(action_type) and int(anchor_result.target_widget_id) < 0:
+        if self._action_requires_widget(action_type) and not self._has_valid_anchor_target(anchor_result):
             self._set_runtime_replan_hint(
                 action_text=f"anchor_failed:{plan.target_description}"
             )
@@ -911,13 +912,20 @@ class AgentLoop:
             }
 
         target_widget_id = int(getattr(anchor_result, "target_widget_id", -1))
-        if self._action_requires_widget(action_type) and target_widget_id < 0:
+        if self._action_requires_widget(action_type) and not self._has_valid_anchor_target(anchor_result):
             raise ValueError(
-                f"action_type={action_type} 需要已锚定控件，但 target_widget_id={target_widget_id}"
+                f"action_type={action_type} 需要已锚定目标，但 target_widget_id={target_widget_id}"
             )
         widget = self._find_widget_by_id(widgets, target_widget_id)
-        center = self._widget_center(widget=widget, screen_size=screen_size)
-        bounds = self._widget_bounds(widget=widget)
+        center = self._anchor_center_from_result(
+            anchor_result=anchor_result,
+            widget=widget,
+            screen_size=screen_size,
+        )
+        bounds = self._anchor_bounds_from_result(
+            anchor_result=anchor_result,
+            widget=widget,
+        )
 
         if action_type == "tap":
             return {"type": "tap", "params": {"x": center[0], "y": center[1]}}
@@ -963,6 +971,57 @@ class AgentLoop:
     def _action_requires_widget(self, action_type: str) -> bool:
         token = str(action_type or "").strip().lower()
         return token in {"tap", "input", "swipe", "long_press"}
+
+    def _has_valid_anchor_target(self, anchor_result: AnchorResult) -> bool:
+        try:
+            if int(getattr(anchor_result, "target_widget_id", -1)) >= 0:
+                return True
+        except Exception:
+            pass
+        try:
+            node_id = getattr(anchor_result, "target_node_id", None)
+            if node_id is not None and int(node_id) >= 0:
+                return True
+        except Exception:
+            pass
+        center = getattr(anchor_result, "target_center", None)
+        if isinstance(center, (list, tuple)) and len(center) == 2:
+            try:
+                int(center[0])
+                int(center[1])
+                return True
+            except Exception:
+                pass
+        return False
+
+    def _anchor_center_from_result(
+        self,
+        anchor_result: AnchorResult,
+        widget: dict[str, Any] | None,
+        screen_size: tuple[int, int],
+    ) -> tuple[int, int]:
+        center = getattr(anchor_result, "target_center", None)
+        if isinstance(center, (list, tuple)) and len(center) == 2:
+            try:
+                return (int(center[0]), int(center[1]))
+            except Exception:
+                pass
+        return self._widget_center(widget=widget, screen_size=screen_size)
+
+    def _anchor_bounds_from_result(
+        self,
+        anchor_result: AnchorResult,
+        widget: dict[str, Any] | None,
+    ) -> tuple[int, int, int, int] | None:
+        bounds = getattr(anchor_result, "target_bounds", None)
+        if isinstance(bounds, (list, tuple)) and len(bounds) == 4:
+            try:
+                x1, y1, x2, y2 = [int(v) for v in bounds]
+                if x2 > x1 and y2 > y1:
+                    return (x1, y1, x2, y2)
+            except Exception:
+                pass
+        return self._widget_bounds(widget=widget)
 
     def _append_experience_context(
         self,

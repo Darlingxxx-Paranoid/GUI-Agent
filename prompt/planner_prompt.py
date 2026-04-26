@@ -85,8 +85,7 @@ Target description: {target_description}
 Hint:
 - The screenshot includes numbered bounding boxes for candidate widgets.
 - The number on each box is the widget_id to return.
-- If uncertain, return target_widget_id=-1.
-- Returning an id not present in the screenshot will trigger replan.
+- You MUST make sure the target widget you choose is exact. If uncertain, return target_widget_id=-1.
 
 {replan_context_block}"""
 
