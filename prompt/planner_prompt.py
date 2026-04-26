@@ -89,3 +89,27 @@ Hint:
 - Returning an id not present in the screenshot will trigger replan.
 
 {replan_context_block}"""
+
+PLANNER_ANCHOR_XML_SYSTEM_PROMPT = """You are the XML fallback anchor module of an Android GUI agent.
+When visual anchoring fails, choose the best XML node id from candidates.
+
+Rules:
+1) Return target_node_id and anchor_reason only.
+2) target_node_id must come from the provided XML node candidates.
+3) If no reliable node exists, set target_node_id=-1 and explain why.
+4) Do not return widget_id. This stage anchors by XML node id only.
+"""
+
+PLANNER_ANCHOR_XML_USER_PROMPT = """Action type: {action_type}
+Goal: {goal}
+Target description: {target_description}
+First-pass visual anchor fail reason: {first_pass_reason}
+
+XML node candidates (JSON list, each item has node_id/bounds/text/class/resource-id):
+{xml_nodes_json}
+
+Hint:
+- Prefer interactive or text-relevant nodes that best satisfy the target description.
+- Use screenshot only as visual confirmation.
+- If uncertain, return target_node_id=-1.
+"""

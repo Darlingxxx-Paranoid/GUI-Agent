@@ -160,6 +160,7 @@ class OraclePre:
             preferred_mode=preferred_mode,
             anchor_result=anchor_result,
             widgets=list(widgets or []),
+            node_index=node_index,
             step=step,
         )
         if fallback_reason:
@@ -173,6 +174,7 @@ class OraclePre:
             fallback_reason=fallback_reason,
             anchor_result=anchor_result,
             widgets=list(widgets or []),
+            node_index=node_index,
             context_image_path=context_image_path,
         )
         user_prompt = ORACLE_PRE_USER_PROMPT.format(
@@ -248,16 +250,18 @@ class OraclePre:
         preferred_mode: ContextMode,
         anchor_result: Any,
         widgets: list[dict[str, Any]],
+        node_index: Dict[int, dict],
         step: int | None,
     ) -> tuple[str, ContextMode, str]:
         path = str(screenshot_path or "").strip()
         if preferred_mode != "local":
             return path, "global", ""
 
-        anchor_widget = self._resolve_anchor_widget(anchor_result=anchor_result, widgets=widgets)
-        if anchor_widget is None:
-            return path, "global", "anchor_widget_not_found"
-        bounds = self._widget_bounds(anchor_widget)
+        bounds = self._resolve_anchor_bounds(
+            anchor_result=anchor_result,
+            widgets=widgets,
+            node_index=node_index,
+        )
         if bounds is None:
             return path, "global", "anchor_bounds_invalid"
 
@@ -279,10 +283,12 @@ class OraclePre:
         fallback_reason: str,
         anchor_result: Any,
         widgets: list[dict[str, Any]],
+        node_index: Dict[int, dict],
         context_image_path: str,
     ) -> dict[str, Any]:
         activity, package = self._extract_app_context(dump_tree)
         anchor_widget = self._resolve_anchor_widget(anchor_result=anchor_result, widgets=widgets)
+        anchor_node = self._resolve_anchor_node(anchor_result=anchor_result, node_index=node_index)
         payload: dict[str, Any] = {
             "context_mode": actual_mode,
             "context_image_path": str(context_image_path or ""),
@@ -300,6 +306,14 @@ class OraclePre:
                 "text": str(anchor_widget.get("text") or ""),
                 "class": str(anchor_widget.get("class") or ""),
                 "bounds": self._widget_bounds(anchor_widget),
+            }
+        if anchor_node is not None:
+            payload["anchor_node"] = {
+                "node_id": int(anchor_node.get("node_id") or -1),
+                "resource_id": str(anchor_node.get("resource-id") or ""),
+                "text": str(anchor_node.get("text") or ""),
+                "class": str(anchor_node.get("class") or ""),
+                "bounds": self._parse_node_bounds(anchor_node),
             }
         return payload
 
@@ -1077,6 +1091,13 @@ class OraclePre:
         widgets: list[dict[str, Any]],
         node_index: Dict[int, dict],
     ) -> int | None:
+        anchor_node = self._resolve_anchor_node(anchor_result=anchor_result, node_index=node_index)
+        if anchor_node is not None:
+            try:
+                return int(anchor_node.get("node_id"))
+            except Exception:
+                return None
+
         anchor_widget = self._resolve_anchor_widget(anchor_result=anchor_result, widgets=widgets)
         if anchor_widget is None:
             return None
@@ -1151,6 +1172,58 @@ class OraclePre:
             except Exception:
                 continue
         return None
+
+    def _resolve_anchor_node(
+        self,
+        anchor_result: Any,
+        node_index: Dict[int, dict],
+    ) -> dict[str, Any] | None:
+        try:
+            target_node_id = getattr(anchor_result, "target_node_id", None)
+            if target_node_id is None:
+                return None
+            node_id = int(target_node_id)
+        except Exception:
+            return None
+        if node_id < 0:
+            return None
+        node = node_index.get(node_id)
+        if isinstance(node, dict):
+            return node
+        return None
+
+    def _resolve_anchor_bounds(
+        self,
+        anchor_result: Any,
+        widgets: list[dict[str, Any]],
+        node_index: Dict[int, dict],
+    ) -> tuple[int, int, int, int] | None:
+        center = getattr(anchor_result, "target_center", None)
+        bounds = getattr(anchor_result, "target_bounds", None)
+        if isinstance(bounds, (list, tuple)) and len(bounds) == 4:
+            try:
+                x1, y1, x2, y2 = [int(v) for v in bounds]
+                if x2 > x1 and y2 > y1:
+                    return x1, y1, x2, y2
+            except Exception:
+                pass
+
+        anchor_node = self._resolve_anchor_node(anchor_result=anchor_result, node_index=node_index)
+        if anchor_node is not None:
+            node_bounds = self._parse_node_bounds(anchor_node)
+            if node_bounds is not None:
+                return node_bounds
+            if isinstance(center, (list, tuple)) and len(center) == 2:
+                try:
+                    cx, cy = int(center[0]), int(center[1])
+                    return cx - 1, cy - 1, cx + 1, cy + 1
+                except Exception:
+                    pass
+
+        anchor_widget = self._resolve_anchor_widget(anchor_result=anchor_result, widgets=widgets)
+        if anchor_widget is None:
+            return None
+        return self._widget_bounds(anchor_widget)
 
     def _widget_bounds(self, widget: dict[str, Any] | None) -> tuple[int, int, int, int] | None:
         if not isinstance(widget, dict):

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -17,6 +18,8 @@ from prompt.planner_prompt import (
     PLANNER_ANCHOR_REPLAN_CONTEXT_TEMPLATE,
     PLANNER_ANCHOR_SYSTEM_PROMPT,
     PLANNER_ANCHOR_USER_PROMPT,
+    PLANNER_ANCHOR_XML_SYSTEM_PROMPT,
+    PLANNER_ANCHOR_XML_USER_PROMPT,
     PLANNER_DEVICE_CONTEXT_TEMPLATE,
     PLANNER_EXPERIENCE_CONTEXT_TEMPLATE,
     PLANNER_PROGRESS_CONTEXT_TEMPLATE,
@@ -45,6 +48,7 @@ AnchorMethod = Literal[
     "uied_class_match",
     "uied_keyword_overlap",
     "llm",
+    "llm_xml_tree",
     "failed",
 ]
 
@@ -194,6 +198,22 @@ class AnchorResult(BaseModel):
         default=-1,
         description="Chosen UIED widget id. Use -1 when no widget is selected.",
     )
+    target_node_id: Optional[int] = Field(
+        default=None,
+        description="Chosen XML node id for XML-tree anchor fallback.",
+    )
+    target_bounds: list[int] = Field(
+        default_factory=list,
+        description="Target bounds [x1,y1,x2,y2] when XML-tree anchor fallback succeeds.",
+    )
+    target_center: list[int] = Field(
+        default_factory=list,
+        description="Target center [x,y] when XML-tree anchor fallback succeeds.",
+    )
+    target_resource_id: str = Field(
+        default="",
+        description="Resource-id of selected XML node when available.",
+    )
     anchor_method: AnchorMethod = Field(description="Anchoring method used.")
     anchor_reason: str = Field(min_length=1, description="Why this widget was selected or failed.")
 
@@ -201,6 +221,16 @@ class AnchorResult(BaseModel):
     def validate_widget_id(self) -> "AnchorResult":
         if self.target_widget_id < -1:
             raise ValueError("target_widget_id must be >= -1.")
+        if self.target_node_id is not None and int(self.target_node_id) < 0:
+            raise ValueError("target_node_id must be >= 0 when provided.")
+        if self.target_bounds:
+            if len(self.target_bounds) != 4:
+                raise ValueError("target_bounds must contain 4 integers.")
+            x1, y1, x2, y2 = [int(v) for v in self.target_bounds]
+            if x2 <= x1 or y2 <= y1:
+                raise ValueError("target_bounds must satisfy x2>x1 and y2>y1.")
+        if self.target_center and len(self.target_center) != 2:
+            raise ValueError("target_center must contain 2 integers.")
         return self
 
 
@@ -219,8 +249,25 @@ class _AnchorLLMOutput(BaseModel):
         return self
 
 
+class _AnchorXMLTreeLLMOutput(BaseModel):
+    """Structured output for XML-tree fallback in anchor stage."""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    target_node_id: int = Field(default=-1)
+    anchor_reason: str = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def validate_node_id(self) -> "_AnchorXMLTreeLLMOutput":
+        if self.target_node_id < -1:
+            raise ValueError("target_node_id must be >= -1.")
+        return self
+
+
 class Planner:
     """Plan next step from task+screenshot, then anchor target widget when needed."""
+
+    _BOUNDS_RE = re.compile(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]")
 
     def __init__(
         self,
@@ -350,6 +397,7 @@ class Planner:
         plan: PlanResult,
         screenshot: str,
         visible_widgets_list: list[dict[str, Any]] | None = None,
+        dump_tree: dict[str, Any] | None = None,
         replan_anchor_context: dict[str, Any] | None = None,
         step: int | None = None,
     ) -> AnchorResult:
@@ -397,6 +445,7 @@ class Planner:
             plan=plan,
             screenshot=screenshot,
             widgets=widgets,
+            dump_tree=dump_tree,
             replan_anchor_context=replan_anchor_context,
             step=step,
         )
@@ -465,6 +514,7 @@ class Planner:
         plan: PlanResult,
         screenshot: str,
         widgets: list[dict[str, Any]],
+        dump_tree: dict[str, Any] | None,
         replan_anchor_context: dict[str, Any] | None,
         step: int | None,
     ) -> AnchorResult:
@@ -545,10 +595,12 @@ class Planner:
             )
             target_widget_id = int(llm_output.target_widget_id)
             if target_widget_id < 0:
-                return AnchorResult(
-                    target_widget_id=-1,
-                    anchor_method="failed",
-                    anchor_reason=f"llm rejected target: {llm_output.anchor_reason}",
+                return self._anchor_with_xml_tree_fallback(
+                    plan=plan,
+                    screenshot=screenshot_path,
+                    dump_tree=dump_tree,
+                    first_pass_reason=str(llm_output.anchor_reason or ""),
+                    step=step,
                 )
             if target_widget_id not in widget_ids:
                 return AnchorResult(
@@ -570,6 +622,167 @@ class Planner:
                 anchor_method="failed",
                 anchor_reason=f"llm_anchor_error: {exc}",
             )
+
+    def _anchor_with_xml_tree_fallback(
+        self,
+        plan: PlanResult,
+        screenshot: str,
+        dump_tree: dict[str, Any] | None,
+        first_pass_reason: str,
+        step: int | None,
+    ) -> AnchorResult:
+        if not isinstance(dump_tree, dict):
+            return AnchorResult(
+                target_widget_id=-1,
+                anchor_method="failed",
+                anchor_reason="xml_tree_fallback_failed: dump_tree is empty or invalid",
+            )
+
+        xml_nodes = self._collect_xml_anchor_nodes(dump_tree=dump_tree)
+        if not xml_nodes:
+            return AnchorResult(
+                target_widget_id=-1,
+                anchor_method="failed",
+                anchor_reason="xml_tree_fallback_failed: no valid xml nodes",
+            )
+
+        user_prompt = PLANNER_ANCHOR_XML_USER_PROMPT.format(
+            action_type=str(plan.action_type or ""),
+            goal=str(plan.goal or ""),
+            target_description=str(plan.target_description or ""),
+            first_pass_reason=str(first_pass_reason or ""),
+            xml_nodes_json=json.dumps(xml_nodes, ensure_ascii=False),
+        )
+        request = LLMRequest(
+            system=PLANNER_ANCHOR_XML_SYSTEM_PROMPT,
+            user=user_prompt,
+            images=[str(screenshot or "")],
+            response_format=_AnchorXMLTreeLLMOutput,
+            audit_meta={
+                "artifact_kind": "AnchorResult",
+                "step": step,
+                "stage": "planner_anchor_xml_fallback",
+            },
+        )
+
+        node_index = {
+            int(item.get("node_id")): item
+            for item in xml_nodes
+            if self._safe_int(item.get("node_id")) is not None
+        }
+        try:
+            parsed = self.llm.chat(request)
+            xml_output = (
+                parsed
+                if isinstance(parsed, _AnchorXMLTreeLLMOutput)
+                else _AnchorXMLTreeLLMOutput.model_validate(parsed)
+            )
+            target_node_id = int(xml_output.target_node_id)
+            if target_node_id < 0:
+                return AnchorResult(
+                    target_widget_id=-1,
+                    anchor_method="failed",
+                    anchor_reason=f"xml_tree_fallback_rejected: {xml_output.anchor_reason}",
+                )
+            node = node_index.get(target_node_id)
+            if not isinstance(node, dict):
+                return AnchorResult(
+                    target_widget_id=-1,
+                    anchor_method="failed",
+                    anchor_reason=(
+                        f"xml_tree_fallback_invalid_node_id={target_node_id}; "
+                        f"reason={xml_output.anchor_reason}"
+                    ),
+                )
+
+            bounds = self._parse_bounds_from_value(node.get("bounds"))
+            if bounds is None:
+                return AnchorResult(
+                    target_widget_id=-1,
+                    anchor_method="failed",
+                    anchor_reason=(
+                        f"xml_tree_fallback_node_bounds_invalid node_id={target_node_id}; "
+                        f"reason={xml_output.anchor_reason}"
+                    ),
+                )
+            x1, y1, x2, y2 = bounds
+            center = [(x1 + x2) // 2, (y1 + y2) // 2]
+            return AnchorResult(
+                target_widget_id=-1,
+                target_node_id=int(target_node_id),
+                target_bounds=[x1, y1, x2, y2],
+                target_center=center,
+                target_resource_id=str(node.get("resource-id") or ""),
+                anchor_method="llm_xml_tree",
+                anchor_reason=f"xml_tree_fallback: {xml_output.anchor_reason}",
+            )
+        except Exception as exc:
+            logger.warning("XML 树锚定失败: %s", exc)
+            return AnchorResult(
+                target_widget_id=-1,
+                anchor_method="failed",
+                anchor_reason=f"xml_tree_fallback_error: {exc}",
+            )
+
+    def _collect_xml_anchor_nodes(
+        self,
+        dump_tree: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        nodes: list[dict[str, Any]] = []
+
+        def walk(node: Any) -> None:
+            if not isinstance(node, dict):
+                return
+            raw_node_id = self._safe_int(node.get("node_id"))
+            bounds = self._parse_bounds_from_value(node.get("bounds"))
+            if raw_node_id is not None and bounds is not None:
+                x1, y1, x2, y2 = bounds
+                nodes.append(
+                    {
+                        "node_id": int(raw_node_id),
+                        "bounds": [x1, y1, x2, y2],
+                        "text": str(node.get("text") or ""),
+                        "class": str(node.get("class") or ""),
+                        "resource-id": str(node.get("resource-id") or ""),
+                    }
+                )
+            children = node.get("children")
+            if isinstance(children, list):
+                for child in children:
+                    walk(child)
+
+        walk(dump_tree)
+        return nodes
+
+    def _parse_bounds_from_value(
+        self,
+        value: Any,
+    ) -> tuple[int, int, int, int] | None:
+        if isinstance(value, (list, tuple)) and len(value) == 4:
+            try:
+                x1, y1, x2, y2 = [int(item) for item in value]
+            except Exception:
+                return None
+            if x2 <= x1 or y2 <= y1:
+                return None
+            return x1, y1, x2, y2
+
+        raw = str(value or "").strip()
+        if not raw:
+            return None
+        match = self._BOUNDS_RE.match(raw)
+        if not match:
+            return None
+        try:
+            x1 = int(match.group(1))
+            y1 = int(match.group(2))
+            x2 = int(match.group(3))
+            y2 = int(match.group(4))
+        except Exception:
+            return None
+        if x2 <= x1 or y2 <= y1:
+            return None
+        return x1, y1, x2, y2
 
     def _normalize_replan_anchor_context(
         self,
