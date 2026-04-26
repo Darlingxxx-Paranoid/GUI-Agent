@@ -14,6 +14,7 @@ from Perception.uied_controls import (
     get_uied_visible_widgets_list,
 )
 from prompt.planner_prompt import (
+    PLANNER_ANCHOR_REPLAN_CONTEXT_TEMPLATE,
     PLANNER_ANCHOR_SYSTEM_PROMPT,
     PLANNER_ANCHOR_USER_PROMPT,
     PLANNER_DEVICE_CONTEXT_TEMPLATE,
@@ -349,6 +350,7 @@ class Planner:
         plan: PlanResult,
         screenshot: str,
         visible_widgets_list: list[dict[str, Any]] | None = None,
+        replan_anchor_context: dict[str, Any] | None = None,
         step: int | None = None,
     ) -> AnchorResult:
         action_type = str(plan.action_type or "").strip().lower()
@@ -395,6 +397,7 @@ class Planner:
             plan=plan,
             screenshot=screenshot,
             widgets=widgets,
+            replan_anchor_context=replan_anchor_context,
             step=step,
         )
         logger.info(
@@ -462,14 +465,9 @@ class Planner:
         plan: PlanResult,
         screenshot: str,
         widgets: list[dict[str, Any]],
+        replan_anchor_context: dict[str, Any] | None,
         step: int | None,
     ) -> AnchorResult:
-        user_prompt = PLANNER_ANCHOR_USER_PROMPT.format(
-            action_type=str(plan.action_type or ""),
-            goal=str(plan.goal or ""),
-            target_description=str(plan.target_description or ""),
-        )
-
         screenshot_path = str(screenshot or "").strip()
         if not screenshot_path:
             return AnchorResult(
@@ -494,10 +492,43 @@ class Planner:
                 anchor_reason=f"llm_anchor_error: anchor_overlay_build_failed: {exc}",
             )
 
+        images = [anchor_image_path]
+        replan_context_block = ""
+        replan_payload = self._normalize_replan_anchor_context(replan_anchor_context)
+        if replan_payload is not None:
+            previous_screenshot_path = str(replan_payload.get("previous_screenshot_path") or "").strip()
+            previous_widgets = list(replan_payload.get("previous_widgets") or [])
+            previous_step = self._safe_int(replan_payload.get("previous_step"))
+            try:
+                previous_anchor_image_path = build_uied_numbered_anchor_image(
+                    screenshot_path=previous_screenshot_path,
+                    widgets=previous_widgets,
+                    cv_output_dir=self.cv_output_dir,
+                    step=previous_step,
+                    bbox_output_dir=self.bbox_output_dir,
+                )
+                images.append(previous_anchor_image_path)
+                replan_context_block = self._build_replan_anchor_context_block(replan_payload)
+                logger.info(
+                    "LLM 锚定注入 replan 上下文: prev_step=%s prev_widget_id=%s images=%d",
+                    previous_step,
+                    replan_payload.get("previous_target_widget_id"),
+                    len(images),
+                )
+            except Exception as exc:
+                logger.warning("LLM 锚定 replan 上下文降级(上一轮编号图生成失败): %s", exc)
+
+        user_prompt = PLANNER_ANCHOR_USER_PROMPT.format(
+            action_type=str(plan.action_type or ""),
+            goal=str(plan.goal or ""),
+            target_description=str(plan.target_description or ""),
+            replan_context_block=replan_context_block,
+        )
+
         request = LLMRequest(
             system=PLANNER_ANCHOR_SYSTEM_PROMPT,
             user=user_prompt,
-            images=[anchor_image_path],
+            images=images,
             response_format=_AnchorLLMOutput,
             audit_meta={
                 "artifact_kind": "AnchorResult",
@@ -539,6 +570,74 @@ class Planner:
                 anchor_method="failed",
                 anchor_reason=f"llm_anchor_error: {exc}",
             )
+
+    def _normalize_replan_anchor_context(
+        self,
+        replan_anchor_context: dict[str, Any] | None,
+    ) -> dict[str, Any] | None:
+        if not isinstance(replan_anchor_context, dict):
+            return None
+
+        screenshot_path = str(replan_anchor_context.get("previous_screenshot_path") or "").strip()
+        if not screenshot_path:
+            return None
+
+        widgets_raw = replan_anchor_context.get("previous_widgets")
+        if not isinstance(widgets_raw, list):
+            return None
+        widgets = [item for item in widgets_raw if isinstance(item, dict)]
+        if not widgets:
+            return None
+
+        previous_target_widget_id = self._safe_int(replan_anchor_context.get("previous_target_widget_id"))
+        if previous_target_widget_id is None or previous_target_widget_id < 0:
+            return None
+
+        selected_widget_raw = replan_anchor_context.get("previous_selected_widget")
+        selected_widget = (
+            dict(selected_widget_raw)
+            if isinstance(selected_widget_raw, dict)
+            else {}
+        )
+
+        return {
+            "previous_step": self._safe_int(replan_anchor_context.get("previous_step")),
+            "previous_screenshot_path": screenshot_path,
+            "previous_widgets": widgets,
+            "previous_target_widget_id": int(previous_target_widget_id),
+            "previous_anchor_reason": str(replan_anchor_context.get("previous_anchor_reason") or ""),
+            "previous_selected_widget": selected_widget,
+            "post_oracle_decision": str(replan_anchor_context.get("post_oracle_decision") or ""),
+            "post_oracle_reason": str(replan_anchor_context.get("post_oracle_reason") or ""),
+        }
+
+    def _build_replan_anchor_context_block(
+        self,
+        replan_payload: dict[str, Any],
+    ) -> str:
+        selected_widget = replan_payload.get("previous_selected_widget")
+        selected_widget_payload: dict[str, Any]
+        if isinstance(selected_widget, dict):
+            selected_widget_payload = {
+                "widget_id": self._safe_int(selected_widget.get("widget_id")),
+                "class": str(selected_widget.get("class") or ""),
+                "text": str(selected_widget.get("text") or ""),
+                "bounds": list(selected_widget.get("bounds") or []),
+            }
+        else:
+            selected_widget_payload = {}
+
+        context_payload = {
+            "previous_step": replan_payload.get("previous_step"),
+            "previous_target_widget_id": replan_payload.get("previous_target_widget_id"),
+            "previous_anchor_reason": replan_payload.get("previous_anchor_reason"),
+            "previous_selected_widget": selected_widget_payload,
+            "post_oracle_decision": replan_payload.get("post_oracle_decision"),
+            "post_oracle_reason": replan_payload.get("post_oracle_reason"),
+        }
+        return PLANNER_ANCHOR_REPLAN_CONTEXT_TEMPLATE.format(
+            replan_context_json=json.dumps(context_payload, ensure_ascii=False),
+        )
 
     def _load_widgets_for_anchor(
         self,

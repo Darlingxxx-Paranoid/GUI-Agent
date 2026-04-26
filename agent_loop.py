@@ -36,6 +36,20 @@ class StepObservation:
     keyboard_visible: bool
 
 
+@dataclass
+class AnchorReplanContext:
+    """One-shot context passed to planner anchor LLM during UI-unchanged replan."""
+
+    previous_step: int
+    previous_screenshot_path: str
+    previous_widgets: list[dict[str, Any]]
+    previous_target_widget_id: int
+    previous_anchor_reason: str
+    previous_selected_widget: dict[str, Any]
+    post_oracle_decision: str
+    post_oracle_reason: str
+
+
 class AgentLoop:
     """A minimal yet complete loop: observe -> plan -> pre-oracle -> act -> post-oracle."""
 
@@ -78,6 +92,8 @@ class AgentLoop:
         self._cached_before_observation: StepObservation | None = None
         self._cached_before_step: int | None = None
         self._cached_before_source_step: int | None = None
+        self._pending_anchor_replan_context: AnchorReplanContext | None = None
+        self._pending_anchor_replan_context_step: int | None = None
         self._ui_changed_signature_counts: dict[str, int] = {}
         logger.info("AgentLoop 初始化完成(最小闭环), max_steps=%d", config.max_steps)
 
@@ -92,6 +108,7 @@ class AgentLoop:
         self.progress_context = []
         self.experience_context = []
         self._ui_changed_signature_counts = {}
+        self._clear_anchor_replan_context()
         self._task_target_app = self._resolve_task_target_app(task)
         if self._task_target_app:
             logger.info(
@@ -210,10 +227,12 @@ class AgentLoop:
             anchor_reason=f"action_type={action_type} does not require widget anchor",
         )
         if self._action_requires_widget(action_type):
+            replan_anchor_context = self._consume_anchor_replan_context(step=step)
             anchor_result = self.planner.anchor(
                 plan=plan,
                 screenshot=before.screenshot_path,
                 visible_widgets_list=before.widgets,
+                replan_anchor_context=replan_anchor_context,
                 step=step,
             )
         self._record_step_artifact(
@@ -424,6 +443,7 @@ class AgentLoop:
         )
 
         if post_result.decision == "semantic_success":
+            self._clear_anchor_replan_context()
             progress_item = {
                 "goal": str(plan.goal or ""),
                 "action_type": str(plan.action_type or ""),
@@ -451,6 +471,7 @@ class AgentLoop:
             return True, False
 
         if post_result.decision == "semantic_fail_ui_changed":
+            self._clear_anchor_replan_context()
             self._clear_reusable_observation()
             self._set_runtime_replan_hint(action_text=f"post_oracle_semantic_fail_ui_changed:{plan.goal}")
             self._append_experience_context(
@@ -492,10 +513,17 @@ class AgentLoop:
                     else "post_oracle_semantic_fail_ui_unchanged"
                 ),
             )
+            self._cache_anchor_replan_context(
+                step=step,
+                observation=before,
+                anchor_result=anchor_result,
+                post_result=post_result,
+            )
             logger.warning("Post-Oracle 语义失败且 UI 无变化(step=%d)，直接重规划", step)
             self._cache_reusable_observation(step=step, observation=after)
             return False, False
 
+        self._clear_anchor_replan_context()
         logger.warning("Post-Oracle 返回未知 decision=%s(step=%d)，按无变化失败处理", post_result.decision, step)
         self._set_runtime_replan_hint(action_text=f"post_oracle_unknown_decision:{plan.goal}")
         self._append_experience_context(
@@ -569,6 +597,110 @@ class AgentLoop:
         self._cached_before_observation = None
         self._cached_before_step = None
         self._cached_before_source_step = None
+
+    def _cache_anchor_replan_context(
+        self,
+        step: int,
+        observation: StepObservation,
+        anchor_result: AnchorResult,
+        post_result: Any,
+    ) -> None:
+        target_widget_id = int(getattr(anchor_result, "target_widget_id", -1))
+        if target_widget_id < 0:
+            self._clear_anchor_replan_context()
+            logger.debug("跳过缓存 anchor replan context: target_widget_id=%d", target_widget_id)
+            return
+
+        screenshot_path = str(observation.screenshot_path or "").strip()
+        if not screenshot_path:
+            self._clear_anchor_replan_context()
+            logger.debug("跳过缓存 anchor replan context: previous screenshot 为空")
+            return
+
+        widgets = [item for item in list(observation.widgets or []) if isinstance(item, dict)]
+        if not widgets:
+            self._clear_anchor_replan_context()
+            logger.debug("跳过缓存 anchor replan context: previous widgets 为空")
+            return
+
+        selected_widget = self._find_widget_by_id(widgets, target_widget_id)
+        context = AnchorReplanContext(
+            previous_step=int(step),
+            previous_screenshot_path=screenshot_path,
+            previous_widgets=widgets,
+            previous_target_widget_id=target_widget_id,
+            previous_anchor_reason=str(getattr(anchor_result, "anchor_reason", "") or ""),
+            previous_selected_widget=self._compact_widget_for_anchor_context(selected_widget),
+            post_oracle_decision=str(getattr(post_result, "decision", "") or ""),
+            post_oracle_reason=str(getattr(post_result, "reason", "") or ""),
+        )
+        self._pending_anchor_replan_context = context
+        self._pending_anchor_replan_context_step = int(step) + 1
+        logger.info(
+            "缓存 anchor replan context: prev_step=%d -> target_step=%d widget_id=%d",
+            int(step),
+            int(step) + 1,
+            target_widget_id,
+        )
+
+    def _consume_anchor_replan_context(self, step: int) -> dict[str, Any] | None:
+        context = self._pending_anchor_replan_context
+        target_step = self._pending_anchor_replan_context_step
+        if context is None or target_step is None:
+            return None
+        if int(target_step) != int(step):
+            logger.debug(
+                "跳过 anchor replan context: target_step=%s, current_step=%d",
+                target_step,
+                step,
+            )
+            self._clear_anchor_replan_context()
+            return None
+
+        self._clear_anchor_replan_context()
+        logger.info(
+            "注入 anchor replan context: prev_step=%d -> current_step=%d widget_id=%d",
+            int(context.previous_step),
+            int(step),
+            int(context.previous_target_widget_id),
+        )
+        return {
+            "previous_step": int(context.previous_step),
+            "previous_screenshot_path": str(context.previous_screenshot_path or ""),
+            "previous_widgets": list(context.previous_widgets or []),
+            "previous_target_widget_id": int(context.previous_target_widget_id),
+            "previous_anchor_reason": str(context.previous_anchor_reason or ""),
+            "previous_selected_widget": dict(context.previous_selected_widget or {}),
+            "post_oracle_decision": str(context.post_oracle_decision or ""),
+            "post_oracle_reason": str(context.post_oracle_reason or ""),
+        }
+
+    def _clear_anchor_replan_context(self) -> None:
+        self._pending_anchor_replan_context = None
+        self._pending_anchor_replan_context_step = None
+
+    def _compact_widget_for_anchor_context(
+        self,
+        widget: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        if not isinstance(widget, dict):
+            return {}
+        widget_id = -1
+        try:
+            widget_id = int(widget.get("widget_id"))
+        except Exception:
+            widget_id = -1
+        return {
+            "widget_id": widget_id,
+            "class": str(widget.get("class") or ""),
+            "text": str(
+                widget.get("text")
+                or widget.get("text_content")
+                or ""
+            ),
+            "bounds": list(widget.get("bounds") or []),
+            "center": list(widget.get("center") or []),
+        }
 
     def _build_ui_changed_signature(
         self,

@@ -67,6 +67,17 @@ Rules:
 5) Do not invent widget ids. Returning an invalid id triggers runtime replan.
 """
 
+PLANNER_ANCHOR_REPLAN_CONTEXT_TEMPLATE = """Previous failed anchor context (for replan only):
+{replan_context_json}
+
+Additional rules for this replan:
+- Image #1 is the current numbered screenshot (this step).
+- Image #2 is the previous failed numbered screenshot (last step).
+- If the current UI is similar to the previous failed UI, avoid selecting the same widget_id again.
+- If no reliable alternative target exists, set target_widget_id=-1 and explain why.
+
+"""
+
 PLANNER_ANCHOR_USER_PROMPT = """Action type: {action_type}
 Goal: {goal}
 Target description: {target_description}
@@ -76,4 +87,5 @@ Hint:
 - The number on each box is the widget_id to return.
 - If uncertain, return target_widget_id=-1.
 - Returning an id not present in the screenshot will trigger replan.
-"""
+
+{replan_context_block}"""
