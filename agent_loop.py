@@ -373,7 +373,7 @@ class AgentLoop:
             if dry_run:
                 logger.info("[DRY RUN] 跳过执行动作: %s", action)
             else:
-                self.executor.execute(action)
+                self.executor.execute(action, current_state=before)
             wait_progress_item = {
                 "goal": str(plan.goal or ""),
                 "action_type": "wait",
@@ -456,7 +456,7 @@ class AgentLoop:
         if dry_run:
             logger.info("[DRY RUN] 跳过执行动作: %s", action)
         else:
-            self.executor.execute(action)
+            self.executor.execute(action, current_state=before)
         executed_action_type = str(action.get("type") or "").strip().lower().replace("-", "_")
         launch_action_aliases = {
             "launch_app",
@@ -1178,6 +1178,12 @@ class AgentLoop:
             return {
                 "type": "input",
                 "params": {"x": center[0], "y": center[1], "text": str(plan.input_description or "")},
+                "target": self._build_action_target_payload(
+                    anchor_result=anchor_result,
+                    widget=widget,
+                    bounds=bounds,
+                    center=center,
+                ),
             }
 
         if action_type == "swipe":
@@ -1260,6 +1266,60 @@ class AgentLoop:
             except Exception:
                 pass
         return self._widget_bounds(widget=widget)
+
+    def _build_action_target_payload(
+        self,
+        anchor_result: AnchorResult,
+        widget: dict[str, Any] | None,
+        bounds: tuple[int, int, int, int] | None,
+        center: tuple[int, int],
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "bounds": list(bounds) if bounds is not None else [],
+            "center": [int(center[0]), int(center[1])],
+        }
+
+        try:
+            payload["widget_id"] = int(getattr(anchor_result, "target_widget_id", -1))
+        except Exception:
+            payload["widget_id"] = -1
+
+        node_id = getattr(anchor_result, "target_node_id", None)
+        try:
+            payload["node_id"] = int(node_id) if node_id is not None else None
+        except Exception:
+            payload["node_id"] = None
+
+        target_resource_id = str(getattr(anchor_result, "target_resource_id", "") or "").strip()
+        if target_resource_id:
+            payload["resource_id"] = target_resource_id
+
+        if widget:
+            resolved: dict[str, Any] = {}
+            try:
+                resolved_widget_id = int(widget.get("widget_id"))
+                resolved["widget_id"] = resolved_widget_id
+                if int(payload.get("widget_id", -1)) < 0:
+                    payload["widget_id"] = resolved_widget_id
+            except Exception:
+                pass
+
+            widget_bounds = self._widget_bounds(widget=widget)
+            if widget_bounds is not None:
+                resolved["bounds"] = list(widget_bounds)
+                if not payload.get("bounds"):
+                    payload["bounds"] = list(widget_bounds)
+
+            widget_resource_id = str(widget.get("resource_id") or "").strip()
+            if widget_resource_id:
+                resolved["resource_id"] = widget_resource_id
+                if not payload.get("resource_id"):
+                    payload["resource_id"] = widget_resource_id
+
+            if resolved:
+                payload["resolved"] = resolved
+
+        return payload
 
     def _append_experience_context(
         self,

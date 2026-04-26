@@ -265,7 +265,11 @@ class ActionExecutor:
         x = self._get_int_param(spec.params, "x", 0)
         y = self._get_int_param(spec.params, "y", 0)
         text = self._get_text_param(spec.params, key="text")
-        if not self._is_input_target_ready(target=spec.target, ui_state=current_state):
+        if not self._is_input_target_ready(
+            target=spec.target,
+            ui_state=current_state,
+            input_point=(x, y),
+        ):
             self.tap(x, y)
             time.sleep(0.4)
         self.input_text(text)
@@ -307,74 +311,289 @@ class ActionExecutor:
         logger.info("执行等待: %.2f 秒", seconds)
         time.sleep(seconds)
 
-    def _is_input_target_ready(self, target: Any, ui_state: Any) -> bool:
+    def _is_input_target_ready(
+        self,
+        target: Any,
+        ui_state: Any,
+        input_point: Optional[Tuple[int, int]] = None,
+    ) -> bool:
         """
         判断输入焦点是否已就绪（用于 input 动作，避免重复 tap）。
         """
         if ui_state is None:
             return False
-        if not bool(getattr(ui_state, "keyboard_visible", False)):
-            return False
 
-        target_widget_id, target_bounds = self._extract_target_identity(target)
-        widgets = getattr(ui_state, "widgets", []) or []
+        (
+            target_widget_id,
+            target_node_id,
+            target_bounds,
+            target_point,
+            target_resource_id,
+        ) = self._extract_target_identity(target=target, fallback_point=input_point)
+        has_target_identity = any(
+            [
+                target_widget_id is not None,
+                target_node_id is not None,
+                target_bounds is not None,
+                target_point is not None,
+                bool(target_resource_id),
+            ]
+        )
+
+        dump_tree = self._read_field(ui_state, "dump_tree", default=None)
+        any_ready_node = False
+        if isinstance(dump_tree, Mapping):
+            for node in self._iter_tree_nodes(dump_tree):
+                if not self._is_focus_ready_node(node):
+                    continue
+                any_ready_node = True
+                if self._target_matches_node(
+                    node=node,
+                    target_node_id=target_node_id,
+                    target_bounds=target_bounds,
+                    target_point=target_point,
+                    target_resource_id=target_resource_id,
+                ):
+                    return True
+            if any_ready_node and not has_target_identity:
+                return True
+
+        widgets = self._read_field(ui_state, "widgets", default=[]) or []
+        any_ready_widget = False
         for widget in widgets:
-            same_target = False
-            widget_id = getattr(widget, "widget_id", -1)
-            widget_bounds = getattr(widget, "bounds", (0, 0, 0, 0))
-
-            if target_widget_id is not None and int(target_widget_id) == int(widget_id):
-                same_target = True
-            elif target_bounds is not None and self._bounds_overlap(target_bounds, widget_bounds):
-                same_target = True
-
-            if same_target and bool(getattr(widget, "focused", False)) and bool(
-                getattr(widget, "editable", False) or getattr(widget, "focusable", False)
+            if not self._is_focus_ready_widget(widget):
+                continue
+            any_ready_widget = True
+            if self._target_matches_widget(
+                widget=widget,
+                target_widget_id=target_widget_id,
+                target_bounds=target_bounds,
+                target_point=target_point,
+                target_resource_id=target_resource_id,
             ):
                 return True
 
-        return any(
-            bool(getattr(widget, "focused", False))
-            and bool(getattr(widget, "editable", False) or getattr(widget, "focusable", False))
-            for widget in widgets
+        if any_ready_widget and not has_target_identity:
+            return True
+        return False
+
+    def _extract_target_identity(
+        self,
+        target: Any,
+        fallback_point: Optional[Tuple[int, int]] = None,
+    ) -> Tuple[
+        Optional[int],
+        Optional[int],
+        Optional[Tuple[int, int, int, int]],
+        Optional[Tuple[int, int]],
+        str,
+    ]:
+        if target is None:
+            return None, None, None, fallback_point, ""
+
+        resolved = self._read_field(target, "resolved", default=None)
+
+        raw_widget_id = self._coalesce(
+            self._read_field(target, "widget_id", default=None),
+            self._read_field(resolved, "widget_id", default=None),
+        )
+        raw_node_id = self._coalesce(
+            self._read_field(target, "node_id", default=None),
+            self._read_field(resolved, "node_id", default=None),
+        )
+        raw_bounds = self._coalesce(
+            self._read_field(target, "bounds", default=None),
+            self._read_field(resolved, "bounds", default=None),
+        )
+        raw_center = self._coalesce(
+            self._read_field(target, "center", default=None),
+            self._read_field(target, "point", default=None),
+            self._read_field(resolved, "center", default=None),
+            self._read_field(resolved, "point", default=None),
+        )
+        raw_resource_id = self._coalesce(
+            self._read_field(target, "resource_id", default=None),
+            self._read_field(target, "resource-id", default=None),
+            self._read_field(resolved, "resource_id", default=None),
+            self._read_field(resolved, "resource-id", default=None),
         )
 
-    def _extract_target_identity(self, target: Any) -> Tuple[Optional[int], Optional[Tuple[int, int, int, int]]]:
-        if target is None:
-            return None, None
+        widget_id = self._to_int(raw_widget_id)
+        node_id = self._to_int(raw_node_id)
+        bounds = self._coerce_bounds(raw_bounds)
+        center = self._coerce_point(raw_center)
+        if center is None:
+            center = fallback_point
 
-        if isinstance(target, Mapping):
-            resolved = target.get("resolved")
-        else:
-            resolved = getattr(target, "resolved", None)
+        resource_id = str(raw_resource_id or "").strip()
+        return widget_id, node_id, bounds, center, resource_id
 
-        if resolved is None:
-            return None, None
+    def _read_field(self, payload: Any, key: str, default: Any = None) -> Any:
+        if payload is None:
+            return default
+        if isinstance(payload, Mapping):
+            return payload.get(key, default)
+        return getattr(payload, key, default)
 
-        if isinstance(resolved, Mapping):
-            raw_widget_id = resolved.get("widget_id")
-            raw_bounds = resolved.get("bounds")
-        else:
-            raw_widget_id = getattr(resolved, "widget_id", None)
-            raw_bounds = getattr(resolved, "bounds", None)
+    def _coalesce(self, *values: Any) -> Any:
+        for value in values:
+            if value is None:
+                continue
+            if isinstance(value, str) and value.strip() == "":
+                continue
+            return value
+        return None
 
-        widget_id: Optional[int]
-        if raw_widget_id is None:
-            widget_id = None
-        else:
+    def _to_int(self, value: Any) -> Optional[int]:
+        if value is None:
+            return None
+        try:
+            return int(value)
+        except Exception:
+            return None
+
+    def _to_bool(self, value: Any) -> bool:
+        if isinstance(value, bool):
+            return value
+        token = str(value or "").strip().lower()
+        return token in {"1", "true", "yes", "y", "on"}
+
+    def _coerce_point(self, value: Any) -> Optional[Tuple[int, int]]:
+        if isinstance(value, (list, tuple)) and len(value) == 2:
             try:
-                widget_id = int(raw_widget_id)
+                return int(value[0]), int(value[1])
             except Exception:
-                widget_id = None
+                return None
+        return None
 
-        bounds: Optional[Tuple[int, int, int, int]] = None
-        if isinstance(raw_bounds, (list, tuple)) and len(raw_bounds) == 4:
+    def _coerce_bounds(self, value: Any) -> Optional[Tuple[int, int, int, int]]:
+        if isinstance(value, (list, tuple)) and len(value) == 4:
             try:
-                bounds = tuple(int(v) for v in raw_bounds)  # type: ignore[assignment]
+                x1, y1, x2, y2 = [int(v) for v in value]
+                if x2 > x1 and y2 > y1:
+                    return x1, y1, x2, y2
             except Exception:
-                bounds = None
+                return None
+            return None
+        if isinstance(value, str):
+            match = re.match(r"\[(\-?\d+),(\-?\d+)\]\[(\-?\d+),(\-?\d+)\]", value.strip())
+            if match:
+                x1, y1, x2, y2 = [int(match.group(i)) for i in range(1, 5)]
+                if x2 > x1 and y2 > y1:
+                    return x1, y1, x2, y2
+        return None
 
-        return widget_id, bounds
+    def _iter_tree_nodes(self, root: Any):
+        stack: list[Any] = [root]
+        while stack:
+            node = stack.pop()
+            if not isinstance(node, Mapping):
+                continue
+            yield node
+            children = node.get("children")
+            if isinstance(children, list):
+                stack.extend(reversed(children))
+
+    def _is_input_class(self, class_name: str) -> bool:
+        token = str(class_name or "").strip().lower()
+        return (
+            "edittext" in token
+            or "autocompletetextview" in token
+            or "textinputedittext" in token
+        )
+
+    def _is_focus_ready_node(self, node: Mapping[str, Any]) -> bool:
+        if not self._to_bool(node.get("focused", False)):
+            return False
+        editable = self._to_bool(node.get("editable", False)) or self._to_bool(node.get("focusable", False))
+        class_name = str(node.get("class") or "")
+        return editable or self._is_input_class(class_name)
+
+    def _target_matches_node(
+        self,
+        node: Mapping[str, Any],
+        target_node_id: Optional[int],
+        target_bounds: Optional[Tuple[int, int, int, int]],
+        target_point: Optional[Tuple[int, int]],
+        target_resource_id: str,
+    ) -> bool:
+        if target_node_id is None and target_bounds is None and target_point is None and not target_resource_id:
+            return True
+
+        if target_node_id is not None:
+            node_id = self._to_int(node.get("node_id"))
+            if node_id is not None and node_id == target_node_id:
+                return True
+
+        node_resource_id = str(node.get("resource-id") or node.get("resource_id") or "").strip()
+        if target_resource_id and node_resource_id and node_resource_id == target_resource_id:
+            return True
+
+        node_bounds = self._coerce_bounds(node.get("bounds"))
+        if node_bounds is None:
+            return False
+        if target_bounds is not None and self._bounds_overlap(target_bounds, node_bounds):
+            return True
+        if target_point is not None and self._point_in_bounds(target_point, node_bounds):
+            return True
+        return False
+
+    def _is_focus_ready_widget(self, widget: Any) -> bool:
+        focused = self._to_bool(self._read_field(widget, "focused", default=False))
+        if not focused:
+            return False
+
+        editable = (
+            self._to_bool(self._read_field(widget, "editable", default=False))
+            or self._to_bool(self._read_field(widget, "focusable", default=False))
+        )
+        class_name = str(
+            self._coalesce(
+                self._read_field(widget, "class", default=None),
+                self._read_field(widget, "class_name", default=None),
+                "",
+            )
+        )
+        return editable or self._is_input_class(class_name)
+
+    def _target_matches_widget(
+        self,
+        widget: Any,
+        target_widget_id: Optional[int],
+        target_bounds: Optional[Tuple[int, int, int, int]],
+        target_point: Optional[Tuple[int, int]],
+        target_resource_id: str,
+    ) -> bool:
+        if target_widget_id is None and target_bounds is None and target_point is None and not target_resource_id:
+            return True
+
+        widget_id = self._to_int(self._read_field(widget, "widget_id", default=None))
+        if target_widget_id is not None and widget_id is not None and widget_id == target_widget_id:
+            return True
+
+        widget_resource_id = str(
+            self._coalesce(
+                self._read_field(widget, "resource_id", default=None),
+                self._read_field(widget, "resource-id", default=None),
+                "",
+            )
+        ).strip()
+        if target_resource_id and widget_resource_id and widget_resource_id == target_resource_id:
+            return True
+
+        widget_bounds = self._coerce_bounds(self._read_field(widget, "bounds", default=None))
+        if widget_bounds is None:
+            return False
+        if target_bounds is not None and self._bounds_overlap(target_bounds, widget_bounds):
+            return True
+        if target_point is not None and self._point_in_bounds(target_point, widget_bounds):
+            return True
+        return False
+
+    def _point_in_bounds(self, point: Tuple[int, int], bounds: Tuple[int, int, int, int]) -> bool:
+        px, py = point
+        x1, y1, x2, y2 = bounds
+        return x1 <= px <= x2 and y1 <= py <= y2
 
     def _bounds_overlap(self, box_a: tuple, box_b: tuple) -> bool:
         if not box_a or not box_b or len(box_a) != 4 or len(box_b) != 4:
