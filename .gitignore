@@ -18,3 +18,5 @@ myvenv/
 .DS_Store
 
 runs/
+
+*tmp*/
