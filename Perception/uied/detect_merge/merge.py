@@ -498,6 +498,117 @@ def merge_list_rows(elements, img_shape):
     return new_elements
 
 
+def recover_floating_round_overlays(elements, screen):
+    """
+    Recover medium circular overlays (e.g. floating action buttons) that may be
+    merged into a wide bottom-row component in earlier CV steps.
+    """
+    if screen is None or len(elements) < 2:
+        return elements
+
+    img_h, img_w = screen.shape[:2]
+    if img_h <= 0 or img_w <= 0:
+        return elements
+
+    min_r = max(10, int(min(img_h, img_w) * 0.03))
+    max_r = max(min_r + 2, int(min(img_h, img_w) * 0.12))
+    bbox_pad = max(2, int(min(img_h, img_w) * 0.006))
+    added = []
+
+    for host in elements:
+        if host.category == "Text":
+            continue
+        if host.width / img_w < 0.55:
+            continue
+        h_ratio = host.height / img_h
+        if h_ratio < 0.035 or h_ratio > 0.24:
+            continue
+        if host.row_min / img_h < 0.62:
+            continue
+
+        x1, y1, x2, y2 = host.put_bbox()
+        clip = screen[y1:y2, x1:x2]
+        if clip.size == 0:
+            continue
+
+        gray = cv2.cvtColor(clip, cv2.COLOR_BGR2GRAY)
+        gray = cv2.GaussianBlur(gray, (5, 5), 0)
+        host_max_r = min(max_r, max(min_r + 1, int(min(host.width, host.height) * 0.70)))
+        if host_max_r <= min_r:
+            continue
+
+        circles = cv2.HoughCircles(
+            gray,
+            cv2.HOUGH_GRADIENT,
+            dp=1.2,
+            minDist=max(14, int(min(host.width, host.height) * 0.38)),
+            param1=90,
+            param2=18,
+            minRadius=min_r,
+            maxRadius=host_max_r,
+        )
+        if circles is None:
+            continue
+
+        circles = sorted(np.round(circles[0, :]).astype(int), key=lambda c: c[2], reverse=True)
+        for cx, cy, radius in circles:
+            cx = int(cx)
+            cy = int(cy)
+            radius = int(radius)
+            if radius <= 0:
+                continue
+            # Keep edge-attached circles near the right-bottom region of a wide host,
+            # which are common for floating overlays merged into a list row.
+            dist_right = host.width - cx
+            if dist_right > int(1.65 * radius):
+                continue
+            # Some hosts include extra lower strips; require lower-half presence
+            # instead of strictly touching the host bottom.
+            if (cy + 0.5 * radius) < (host.height * 0.55):
+                continue
+
+            gx1 = int(max(0, x1 + cx - radius - bbox_pad))
+            gy1 = int(max(0, y1 + cy - radius - bbox_pad))
+            gx2 = int(min(img_w, x1 + cx + radius + bbox_pad))
+            gy2 = int(min(img_h, y1 + cy + radius + bbox_pad))
+            if gx2 - gx1 < max(14, int(min(img_h, img_w) * 0.035)):
+                continue
+            if gy2 - gy1 < max(14, int(min(img_h, img_w) * 0.035)):
+                continue
+            if gy2 < int(img_h * 0.76):
+                continue
+
+            # Require enough local edge evidence to avoid smooth false positives.
+            roi = gray[max(0, cy - radius):min(host.height, cy + radius), max(0, cx - radius):min(host.width, cx + radius)]
+            if roi.size == 0:
+                continue
+            edges = cv2.Canny(roi, 80, 180)
+            if (np.count_nonzero(edges) / float(edges.size)) < 0.04:
+                continue
+
+            candidate = Element(-1, (gx1, gy1, gx2, gy2), "Compo")
+            duplicated = False
+            for existing in elements + added:
+                if existing is host:
+                    continue
+                _, iou, ioa, _ = candidate.calc_intersection_area(existing, bias=(2, 2))
+                if iou >= 0.70:
+                    duplicated = True
+                    break
+                if ioa >= 0.92 and existing.width <= host.width * 0.50 and existing.height <= host.height * 1.20:
+                    duplicated = True
+                    break
+            if duplicated:
+                continue
+
+            added.append(candidate)
+            break
+
+    if not added:
+        return elements
+    return elements + added
+
+
 def check_containment(elements):
     for i in range(len(elements) - 1):
         for j in range(i + 1, len(elements)):
@@ -647,6 +758,7 @@ def merge(
         elements = merge_related_elements(elements)
         show_elements(img_resize, elements, show=show, win_name="3", wait_key=wait_key)
     elements = merge_list_rows(elements, img_shape=compo_json.get("img_shape"))
+    elements = recover_floating_round_overlays(elements, img_resize)
     show_elements(img_resize, elements, show=show, win_name="4", wait_key=wait_key)
     reassign_ids(elements)
     check_containment(elements)
