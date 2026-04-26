@@ -1150,7 +1150,42 @@ class OraclePre:
                     return widget
             except Exception:
                 continue
-        return None
+        bounds_raw = list(getattr(anchor_result, "target_widget_bounds", []) or [])
+        center_raw = list(getattr(anchor_result, "target_widget_center", []) or [])
+        if len(bounds_raw) != 4 and len(center_raw) != 2:
+            return None
+        try:
+            bounds = (
+                [int(bounds_raw[0]), int(bounds_raw[1]), int(bounds_raw[2]), int(bounds_raw[3])]
+                if len(bounds_raw) == 4
+                else []
+            )
+            center = (
+                [int(center_raw[0]), int(center_raw[1])]
+                if len(center_raw) == 2
+                else []
+            )
+        except Exception:
+            return None
+
+        payload: dict[str, Any] = {
+            "widget_id": int(target_widget_id),
+            "class": str(getattr(anchor_result, "target_widget_class", "") or ""),
+            "text": str(getattr(anchor_result, "target_widget_text", "") or ""),
+            "resource_id": str(getattr(anchor_result, "target_widget_resource_id", "") or ""),
+            "content_desc": str(getattr(anchor_result, "target_widget_content_desc", "") or ""),
+            "hint": str(getattr(anchor_result, "target_widget_hint", "") or ""),
+            "source": str(getattr(anchor_result, "target_widget_source", "") or ""),
+        }
+        if len(bounds) == 4:
+            payload["bounds"] = bounds
+            payload["width"] = max(1, int(bounds[2] - bounds[0]))
+            payload["height"] = max(1, int(bounds[3] - bounds[1]))
+        if len(center) == 2:
+            payload["center"] = center
+        elif len(bounds) == 4:
+            payload["center"] = [int((bounds[0] + bounds[2]) // 2), int((bounds[1] + bounds[3]) // 2)]
+        return payload
 
     def _widget_bounds(self, widget: dict[str, Any] | None) -> tuple[int, int, int, int] | None:
         if not isinstance(widget, dict):

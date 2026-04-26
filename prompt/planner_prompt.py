@@ -64,7 +64,10 @@ Rules:
 2) target_widget_id must come from the provided visible widgets list.
 3) If no reliable target exists, set target_widget_id=-1 and explain why.
 4) Prefer widgets whose text/class/location best match target_description and goal.
-5) Do not invent widget ids.
+5) For field-focus/input targets (To/Subject/search/input/recipient), prefer editable/focusable field widgets over nearby text labels.
+6) Respect strong position constraints in target_description (top/right/bottom/left). Do not choose candidates that contradict them.
+7) If a candidate only matches as a decorative/label node and not an interactable target, reject it.
+8) Do not invent widget ids.
 """
 
 PLANNER_ANCHOR_USER_PROMPT = """Action type: {action_type}
