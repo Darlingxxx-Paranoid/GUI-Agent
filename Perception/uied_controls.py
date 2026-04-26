@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
+import re
 from typing import Any
 
 import cv2
@@ -103,6 +104,95 @@ def get_uied_visible_widgets_list(
     return visible_widgets_list
 
 
+def build_uied_numbered_anchor_image(
+    screenshot_path: str,
+    widgets: list[dict[str, Any]],
+    cv_output_dir: str,
+    step: int | None = None,
+    bbox_output_dir: str | None = None,
+) -> str:
+    """
+    Render numbered UIED boxes on top of the original screenshot for LLM anchoring.
+
+    The overlaid number is widget_id, which should be aligned with the executor-side
+    widget list used after anchoring.
+    """
+    screenshot = _resolve_existing_file(screenshot_path)
+    cv_root = Path(str(cv_output_dir or "").strip()).expanduser().resolve()
+    context_dir = cv_root / "context"
+    context_dir.mkdir(parents=True, exist_ok=True)
+
+    image = cv2.imread(str(screenshot))
+    if image is None:
+        raise RuntimeError(f"Failed to read screenshot for anchor overlay: {screenshot}")
+
+    drawn = 0
+    img_h, img_w = image.shape[:2]
+    for widget in list(widgets or []):
+        parsed = _parse_widget_for_overlay(widget=widget, img_w=img_w, img_h=img_h)
+        if parsed is None:
+            continue
+        widget_id, (x1, y1, x2, y2) = parsed
+        # Keep the same style as UIED Element.visualize_element.
+        x1 = max(0, x1 - 3)
+        y1 = max(0, y1 - 3)
+        x2 = min(img_w - 1, x2 + 3)
+        y2 = min(img_h - 1, y2 + 3)
+        cv2.rectangle(image, (x1, y1), (x2, y2), (0, 255, 0), 1)
+
+        text = f"{widget_id}"
+        tx = max(0, x1 - (20 if widget_id >= 10 else 10))
+        ty = min(max(16, y1 + 12), max(16, img_h - 4))
+        cv2.putText(
+            image,
+            text,
+            (tx, ty),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.5,
+            (255, 255, 255),
+            4,
+            lineType=cv2.LINE_AA,
+        )
+        cv2.putText(
+            image,
+            text,
+            (tx, ty),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.5,
+            (0, 0, 0),
+            2,
+            lineType=cv2.LINE_AA,
+        )
+        drawn += 1
+
+    if drawn <= 0:
+        raise RuntimeError("No valid widgets can be drawn on anchor overlay image")
+
+    context_out_path = context_dir / f"{screenshot.stem}.uied_anchor_numbered.jpg"
+    ok = cv2.imwrite(str(context_out_path), image)
+    if not ok:
+        raise RuntimeError(f"Failed to write anchor overlay image: {context_out_path}")
+
+    bbox_dir = _resolve_bbox_output_dir(
+        cv_root=cv_root,
+        bbox_output_dir=bbox_output_dir,
+    )
+    bbox_dir.mkdir(parents=True, exist_ok=True)
+    bbox_name = _build_bbox_filename(screenshot=screenshot, step=step)
+    bbox_out_path = bbox_dir / bbox_name
+    ok = cv2.imwrite(str(bbox_out_path), image)
+    if not ok:
+        raise RuntimeError(f"Failed to write bbox screenshot image: {bbox_out_path}")
+
+    logger.info(
+        "UIED anchor numbered image saved: context=%s, bbox=%s (drawn=%d)",
+        context_out_path,
+        bbox_out_path,
+        drawn,
+    )
+    return str(bbox_out_path)
+
+
 def get_uied_visible_controls(
     screenshot_path: str,
     cv_output_dir: str,
@@ -171,6 +261,74 @@ def _normalize_control(
         "width": width,
         "height": height,
     }
+
+
+def _parse_widget_for_overlay(
+    widget: dict[str, Any],
+    img_w: int,
+    img_h: int,
+) -> tuple[int, tuple[int, int, int, int]] | None:
+    if not isinstance(widget, dict):
+        return None
+
+    try:
+        widget_id = int(widget.get("widget_id"))
+    except Exception:
+        return None
+
+    bounds = widget.get("bounds")
+    if not isinstance(bounds, (list, tuple)) or len(bounds) != 4:
+        return None
+    try:
+        x1 = int(bounds[0])
+        y1 = int(bounds[1])
+        x2 = int(bounds[2])
+        y2 = int(bounds[3])
+    except Exception:
+        return None
+
+    if img_w > 0:
+        x1 = max(0, min(x1, img_w - 1))
+        x2 = max(0, min(x2, img_w))
+    if img_h > 0:
+        y1 = max(0, min(y1, img_h - 1))
+        y2 = max(0, min(y2, img_h))
+    if x2 <= x1 or y2 <= y1:
+        return None
+    return widget_id, (x1, y1, x2, y2)
+
+
+def _resolve_bbox_output_dir(cv_root: Path, bbox_output_dir: str | None) -> Path:
+    text = str(bbox_output_dir or "").strip()
+    if text:
+        path = Path(text).expanduser()
+        if not path.is_absolute():
+            path = (Path.cwd() / path).resolve()
+        return path
+
+    if cv_root.name == "cv_output":
+        return cv_root.parent / "bbox_screenshots"
+    return cv_root / "bbox_screenshots"
+
+
+def _build_bbox_filename(screenshot: Path, step: int | None) -> str:
+    stem = str(screenshot.stem or "")
+    match = re.match(r"^step_(\d+)(?:_(before|after))?$", stem)
+    phase = "anchor"
+    parsed_step: int | None = None
+    if match:
+        try:
+            parsed_step = int(match.group(1))
+        except Exception:
+            parsed_step = None
+        phase_token = str(match.group(2) or "").strip()
+        if phase_token in {"before", "after"}:
+            phase = phase_token
+
+    step_num = int(step) if step is not None else parsed_step
+    if step_num is not None and step_num >= 0:
+        return f"step_{step_num}_{phase}_bbox.jpg"
+    return f"{stem}_bbox.jpg"
 
 
 def _resolve_existing_file(path_text: str) -> Path:

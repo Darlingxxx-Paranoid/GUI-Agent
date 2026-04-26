@@ -29,6 +29,7 @@ class AgentConfig:
         # CV/UIED 配置
         # ========================
         self.cv_output_dir: str = os.path.join(os.path.dirname(__file__), "data", "cv_output")
+        self.bbox_screenshot_dir: str = os.path.join(os.path.dirname(__file__), "data", "bbox_screenshots")
         self.cv_resize_height: int = 800
 
         # ========================
@@ -44,6 +45,7 @@ class AgentConfig:
             self.screenshot_dir,
             self.dump_dir,
             self.cv_output_dir,
+            self.bbox_screenshot_dir,
         ]
         for d in dirs:
             os.makedirs(d, exist_ok=True)

@@ -61,6 +61,7 @@ class AgentLoop:
             llm_client=self.llm,
             cv_output_dir=config.cv_output_dir,
             cv_resize_height=config.cv_resize_height,
+            bbox_output_dir=config.bbox_screenshot_dir,
         )
         self.oracle_pre = OraclePre(llm_client=self.llm)
         self.post_oracle = PostOracle(llm_client=self.llm)

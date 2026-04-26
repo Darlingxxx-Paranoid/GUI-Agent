@@ -12,7 +12,10 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from Perception.uied_controls import get_uied_visible_widgets_list
+from Perception.uied_controls import (
+    build_uied_numbered_anchor_image,
+    get_uied_visible_widgets_list,
+)
 from prompt.planner_prompt import (
     PLANNER_ANCHOR_SYSTEM_PROMPT,
     PLANNER_ANCHOR_USER_PROMPT,
@@ -193,17 +196,27 @@ class _HeuristicAnchorStats:
 class Planner:
     """Plan next step from task+screenshot, then anchor target widget when needed."""
 
-    def __init__(self, llm_client, cv_output_dir: str | None = None, cv_resize_height: int = 800):
+    def __init__(
+        self,
+        llm_client,
+        cv_output_dir: str | None = None,
+        cv_resize_height: int = 800,
+        bbox_output_dir: str | None = None,
+    ):
         self.llm = llm_client
         project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        data_root = os.path.join(project_root, "data")
         default_cv_dir = os.path.join(project_root, "data", "cv_output")
+        default_bbox_dir = os.path.join(data_root, "bbox_screenshots")
         self.cv_output_dir = str(cv_output_dir or default_cv_dir)
         self.cv_resize_height = int(cv_resize_height or 800)
+        self.bbox_output_dir = str(bbox_output_dir or default_bbox_dir)
         self.anchor_confidence_min_score = 38.0
         self.anchor_confidence_min_gap = 8.0
         logger.info(
-            "Planner 初始化完成 (v2: semantic plan + anchor), cv_output_dir=%s",
+            "Planner 初始化完成 (v2: semantic plan + anchor), cv_output_dir=%s, bbox_output_dir=%s",
             self.cv_output_dir,
+            self.bbox_output_dir,
         )
 
     def plan(
@@ -351,7 +364,7 @@ class Planner:
         if heuristic is not None:
             if heuristic.low_confidence:
                 logger.info(
-                    "锚定低置信度(heuristic): widget_id=%s score=%.1f gap=%.1f，转LLM复核",
+                    "锚定低置信度(heuristic): widget_id=%s score=%.1f gap=%.1f，转LLM直接锚定",
                     heuristic.result.target_widget_id,
                     heuristic.top_score,
                     heuristic.score_gap,
@@ -362,18 +375,12 @@ class Planner:
                     widgets=widgets,
                     step=step,
                 )
-                if int(llm_result.target_widget_id) >= 0:
-                    logger.info(
-                        "锚定完成(llm override): widget_id=%s method=%s",
-                        llm_result.target_widget_id,
-                        llm_result.anchor_method,
-                    )
-                    return llm_result
                 logger.info(
-                    "LLM 复核未给出有效候选，回退 heuristic 结果: widget_id=%s",
-                    heuristic.result.target_widget_id,
+                    "锚定完成(llm): widget_id=%s method=%s",
+                    llm_result.target_widget_id,
+                    llm_result.anchor_method,
                 )
-                return heuristic.result
+                return llm_result
             logger.info(
                 "锚定命中(heuristic): widget_id=%s method=%s score=%.1f gap=%.1f",
                 heuristic.result.target_widget_id,
@@ -582,18 +589,40 @@ class Planner:
         widgets: list[dict[str, Any]],
         step: int | None,
     ) -> AnchorResult:
-        widgets_json = json.dumps(widgets[:200], ensure_ascii=False)
         user_prompt = PLANNER_ANCHOR_USER_PROMPT.format(
             action_type=str(plan.action_type or ""),
             goal=str(plan.goal or ""),
             target_description=str(plan.target_description or ""),
-            uied_visible_widgets_list_json=widgets_json,
         )
+
+        screenshot_path = str(screenshot or "").strip()
+        if not screenshot_path:
+            return AnchorResult(
+                target_widget_id=-1,
+                anchor_method="failed",
+                anchor_reason="llm_anchor_error: screenshot path is empty",
+            )
+        try:
+            anchor_image_path = build_uied_numbered_anchor_image(
+                screenshot_path=screenshot_path,
+                widgets=widgets,
+                cv_output_dir=self.cv_output_dir,
+                step=step,
+                bbox_output_dir=self.bbox_output_dir,
+            )
+            logger.info("LLM 锚定使用编号截图: %s", anchor_image_path)
+        except Exception as exc:
+            logger.warning("LLM 锚定编号图生成失败: %s", exc)
+            return AnchorResult(
+                target_widget_id=-1,
+                anchor_method="failed",
+                anchor_reason=f"llm_anchor_error: anchor_overlay_build_failed: {exc}",
+            )
 
         request = LLMRequest(
             system=PLANNER_ANCHOR_SYSTEM_PROMPT,
             user=user_prompt,
-            images=[str(screenshot or "").strip()],
+            images=[anchor_image_path],
             response_format=_AnchorLLMOutput,
             audit_meta={
                 "artifact_kind": "AnchorResult",
