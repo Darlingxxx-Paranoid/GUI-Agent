@@ -6,11 +6,13 @@ import cv2
 import json
 import time
 import os
+import re
 from os.path import join as p_join
 import logging
 
 logger = logging.getLogger(__name__)
 _OCR_DETECTOR = None
+_KEY_TOKEN_RE = re.compile(r"^[0-9+\-*/xX×÷=%().,:]+$")
 
 
 def _get_ocr_detector() -> OCRDetector:
@@ -56,7 +58,42 @@ def visualize_texts(org_img, texts, shown_resize_height=None, show=False, write_
         cv2.imwrite(write_path, img)
 
 
-def text_sentences_recognition(texts):
+def _is_symbolic_key_token(value):
+    token = str(value or "").strip()
+    if not token or len(token) > 2:
+        return False
+    return bool(_KEY_TOKEN_RE.fullmatch(token))
+
+
+def _should_skip_same_line_merge(text_a, text_b, img_shape=None):
+    token_a = str(getattr(text_a, "content", "") or "").strip()
+    token_b = str(getattr(text_b, "content", "") or "").strip()
+    if not (_is_symbolic_key_token(token_a) and _is_symbolic_key_token(token_b)):
+        return False
+
+    a = text_a.location
+    b = text_b.location
+    span = max(a["right"], b["right"]) - min(a["left"], b["left"])
+    gap = min(abs(a["right"] - b["left"]), abs(b["right"] - a["left"]))
+
+    h_ratio = max(text_a.height, text_b.height) / max(1, min(text_a.height, text_b.height))
+    if h_ratio > 1.8:
+        return False
+
+    if img_shape is not None and len(img_shape) > 1:
+        img_w = int(img_shape[1])
+        if img_w > 0 and (text_a.width / img_w > 0.35 or text_b.width / img_w > 0.35):
+            return False
+        if img_w > 0 and span / img_w >= 0.62:
+            return True
+        if img_w > 0 and gap > max(40, int(0.20 * img_w)):
+            return False
+    elif gap > 80:
+        return False
+    return True
+
+
+def text_sentences_recognition(texts, img_shape=None):
     changed = True
     while changed:
         changed = False
@@ -64,6 +101,8 @@ def text_sentences_recognition(texts):
         for text_a in texts:
             merged = False
             for text_b in temp_set:
+                if _should_skip_same_line_merge(text_a, text_b, img_shape=img_shape):
+                    continue
                 if text_a.is_on_same_line(
                     text_b, 'h',
                     bias_justify=0.2 * min(text_a.height, text_b.height),
@@ -193,6 +232,101 @@ def text_filter_noise(texts, img_shape=None):
     return valid_texts
 
 
+def split_compact_symbol_sequences(texts, img_shape=None):
+    """
+    Split compact OCR rows like "4 5 6" into per-token text boxes.
+
+    This is intentionally generic: it only triggers for short symbolic tokens
+    in a wide horizontal OCR region and leaves natural-language phrases intact.
+    """
+    split_texts = []
+    next_id = 0
+    img_w = int(img_shape[1]) if img_shape is not None and len(img_shape) > 1 else 0
+
+    for text in texts:
+        content = str(getattr(text, "content", "") or "").strip()
+        if not content or (" " not in content and "\t" not in content):
+            text.id = next_id
+            next_id += 1
+            split_texts.append(text)
+            continue
+
+        tokens = [token for token in re.split(r"\s+", content) if token]
+        if len(tokens) < 2 or len(tokens) > 6:
+            text.id = next_id
+            next_id += 1
+            split_texts.append(text)
+            continue
+
+        if not all(_is_symbolic_key_token(token) for token in tokens):
+            text.id = next_id
+            next_id += 1
+            split_texts.append(text)
+            continue
+
+        if text.width < max(90, int(0.16 * img_w) if img_w > 0 else 90):
+            text.id = next_id
+            next_id += 1
+            split_texts.append(text)
+            continue
+
+        if text.height <= 0 or (text.width / max(1, text.height)) < 2.2:
+            text.id = next_id
+            next_id += 1
+            split_texts.append(text)
+            continue
+
+        left = int(text.location["left"])
+        right = int(text.location["right"])
+        top = int(text.location["top"])
+        bottom = int(text.location["bottom"])
+        if right <= left or bottom <= top:
+            text.id = next_id
+            next_id += 1
+            split_texts.append(text)
+            continue
+
+        total_units = sum(max(1, len(token)) for token in tokens)
+        start = left
+        used_units = 0
+        created = []
+        for index, token in enumerate(tokens):
+            token_units = max(1, len(token))
+            end_units = used_units + token_units
+            if index == len(tokens) - 1:
+                end = right
+            else:
+                end = int(round(left + (end_units / float(total_units)) * (right - left)))
+            end = max(start + 1, min(end, right))
+            piece = Text(
+                id=-1,
+                content=str(token),
+                location={
+                    "left": int(start),
+                    "top": int(top),
+                    "right": int(end),
+                    "bottom": int(bottom),
+                },
+            )
+            piece.confidence = float(getattr(text, "confidence", 1.0))
+            created.append(piece)
+            start = end
+            used_units = end_units
+
+        if len(created) >= 2:
+            for piece in created:
+                piece.id = next_id
+                next_id += 1
+                split_texts.append(piece)
+            continue
+
+        text.id = next_id
+        next_id += 1
+        split_texts.append(text)
+
+    return split_texts
+
+
 def text_detection(input_file, output_file, show=False):
     start = time.perf_counter()
     name = input_file.split('/')[-1][:-4]
@@ -224,7 +358,10 @@ def text_detection(input_file, output_file, show=False):
     texts = text_filter_noise(texts, img_shape=img.shape)
     logger.debug("After filter: %d", len(texts))
 
-    texts = text_sentences_recognition(texts)
+    texts = split_compact_symbol_sequences(texts, img_shape=img.shape)
+    logger.debug("After compact symbol split: %d", len(texts))
+
+    texts = text_sentences_recognition(texts, img_shape=img.shape)
     logger.debug("After sentence merge: %d", len(texts))
 
     for i, text in enumerate(texts[:5]):
