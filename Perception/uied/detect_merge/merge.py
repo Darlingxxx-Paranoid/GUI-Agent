@@ -10,6 +10,7 @@ import shutil
 from Perception.uied.detect_merge.Element import Element
 
 _ACTION_TEXT_RE = re.compile(r"[a-z0-9]+")
+_KEY_TEXT_RE = re.compile(r"^[0-9+\-*/xX×÷=%().,:]+$")
 _ACTION_WORDS = {
     "ok",
     "yes",
@@ -200,6 +201,12 @@ def refine_elements(compos, texts, intersection_bias=(2, 2), containment_ratio=0
         # Short uppercase labels are often modal actions (e.g. SEND/CANCEL).
         return len(letters) <= 10 and value.upper() == value
 
+    def is_symbolic_key_text(text_content):
+        value = str(text_content or "").strip().replace(" ", "")
+        if not value or len(value) > 3:
+            return False
+        return bool(_KEY_TEXT_RE.fullmatch(value))
+
     def should_keep_contained_text(compo, text):
         # Keep action-like labels inside lower wide strips (e.g. transient bars)
         # so they remain independently tappable.
@@ -234,7 +241,8 @@ def refine_elements(compos, texts, intersection_bias=(2, 2), containment_ratio=0
                 and (t_w * t_h) / max(1.0, float(compo.area)) <= 0.18
             )
             has_meaningful_text = len(text_content) >= 3 and any(ch.isalnum() for ch in text_content)
-            if panel_like and compact_line and has_meaningful_text:
+            has_symbolic_key = is_symbolic_key_text(text_content)
+            if panel_like and compact_line and (has_meaningful_text or has_symbolic_key):
                 return True
 
         if c_w / img_w < 0.65 or c_h / img_h > 0.12:
@@ -425,8 +433,89 @@ def merge_list_rows(elements, img_shape):
     if cur:
         bands.append(cur)
 
-    new_elements = elements.copy()
+    def control_cols(band):
+        cols = []
+        for e in band:
+            e_w = e.col_max - e.col_min
+            e_h = e.row_max - e.row_min
+            if e_w <= 0 or e_h <= 0:
+                continue
+            if e_w / img_w > 0.42 or e_h / img_h > 0.16:
+                continue
+            if e_h / img_h < 0.025:
+                continue
+            ratio = e_w / float(max(1, e_h))
+            if ratio < 0.45 or ratio > 2.20:
+                continue
+            cols.append((e.col_min + e.col_max) / 2.0)
+        cols = sorted(cols)
+        if not cols:
+            return []
+
+        cluster_gap = max(30, int(0.09 * img_w))
+        clustered = [cols[0]]
+        for cx in cols[1:]:
+            if abs(cx - clustered[-1]) > cluster_gap:
+                clustered.append(cx)
+        return clustered
+
+    band_stats = []
     for band in bands:
+        bx1 = min(e.col_min for e in band)
+        by1 = min(e.row_min for e in band)
+        bx2 = max(e.col_max for e in band)
+        by2 = max(e.row_max for e in band)
+        cols = control_cols(band)
+        band_stats.append(
+            {
+                "band": band,
+                "bx1": bx1,
+                "by1": by1,
+                "bx2": bx2,
+                "by2": by2,
+                "cy": (by1 + by2) / 2.0,
+                "cols": cols,
+            }
+        )
+
+    def cols_align(cols_a, cols_b):
+        if not cols_a or not cols_b:
+            return False
+        tolerance = max(34, int(0.10 * img_w))
+        matched = 0
+        for col in cols_a:
+            if min(abs(col - other) for other in cols_b) <= tolerance:
+                matched += 1
+        ratio = matched / float(max(1, min(len(cols_a), len(cols_b))))
+        return ratio >= 0.66
+
+    def looks_like_repetitive_control_grid(band_idx):
+        source = band_stats[band_idx]
+        cols = source["cols"]
+        if len(cols) < 3:
+            return False
+        if source["by1"] / img_h < 0.30:
+            return False
+
+        source_span = max(1, source["bx2"] - source["bx1"])
+        for idx, target in enumerate(band_stats):
+            if idx == band_idx:
+                continue
+            if len(target["cols"]) < 3:
+                continue
+            if abs(source["cy"] - target["cy"]) > max(120, int(0.22 * img_h)):
+                continue
+
+            overlap = max(0, min(source["bx2"], target["bx2"]) - max(source["bx1"], target["bx1"]))
+            min_span = max(1, min(source_span, target["bx2"] - target["bx1"]))
+            if overlap / float(min_span) < 0.65:
+                continue
+            if cols_align(cols, target["cols"]):
+                return True
+        return False
+
+    new_elements = elements.copy()
+    for band_idx, band in enumerate(bands):
         if len(band) < 4:
             continue
 
@@ -443,6 +532,11 @@ def merge_list_rows(elements, img_shape):
         if b_w / img_w < 0.62:
             continue
         if b_h / img_h > 0.24:
+            continue
+
+        # Keep repetitive control grids (e.g. calculator/numeric keypads)
+        # as independent controls instead of merging each row into one region.
+        if looks_like_repetitive_control_grid(band_idx):
             continue
 
         # Avoid merging list rows with lower overlay actions (e.g., floating

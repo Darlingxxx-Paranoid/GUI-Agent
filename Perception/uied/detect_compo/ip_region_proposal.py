@@ -91,5 +91,9 @@ def compo_detection(
 
     # *** Step 5 *** save detection result
     Compo.compos_update(compos=ui_compos, org_shape=org.shape)
-    file.save_corners_json(file_path=p_join(ip_root, name + ".json"), compos=ui_compos)
+    file.save_corners_json(
+        file_path=p_join(ip_root, name + ".json"),
+        compos=ui_compos,
+        img_shape=org.shape,
+    )
     # print("[Compo Detection Completed in %.3f s] Input: %s Output: %s" % (time.perf_counter() - start, img_path, p_join(ip_root, name + ".json")))
