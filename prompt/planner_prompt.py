@@ -115,7 +115,7 @@ Goal: {goal}
 Target description: {target_description}
 First-pass visual anchor fail reason: {first_pass_reason}
 
-XML node candidates (JSON list, each item has node_id/bounds/text/class/resource-id):
+XML node candidates (JSON list, each item has node_id/bounds/text/class/content-desc/checked/enabled/focused/selected/resource-id):
 {xml_nodes_json}
 
 Hint:

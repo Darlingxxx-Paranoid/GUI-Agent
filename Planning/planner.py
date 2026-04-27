@@ -995,6 +995,11 @@ class Planner:
                         "bounds": [x1, y1, x2, y2],
                         "text": str(node.get("text") or ""),
                         "class": str(node.get("class") or ""),
+                        "content-desc": str(node.get("content-desc") or ""),
+                        "checked": self._safe_bool_attr(node.get("checked"), default=False),
+                        "enabled": self._safe_bool_attr(node.get("enabled"), default=True),
+                        "focused": self._safe_bool_attr(node.get("focused"), default=False),
+                        "selected": self._safe_bool_attr(node.get("selected"), default=False),
                         "resource-id": str(node.get("resource-id") or ""),
                     }
                 )
@@ -1235,3 +1240,13 @@ class Planner:
             return int(value)
         except Exception:
             return None
+
+    def _safe_bool_attr(self, value: Any, default: bool = False) -> bool:
+        if isinstance(value, bool):
+            return value
+        raw = str(value or "").strip().lower()
+        if raw == "true":
+            return True
+        if raw == "false":
+            return False
+        return bool(default)
