@@ -32,7 +32,9 @@ Rules:
    - activity_change
 5. For navigation-like outcomes, prioritize package/activity hints.
 6. For content or attribute updates, prioritize target selectors + expected_text/expected_bool.
-7. Return valid JSON only, with no markdown and no extra keys.
+7. For non-widget actions (for example back/enter/home/recent/wait), avoid fabricating widget selectors.
+   Use page-level semantic hints (package/activity/expected outcome) unless a concrete target is truly explicit.
+8. Return valid JSON only, with no markdown and no extra keys.
 """
 
 ORACLE_PRE_USER_PROMPT = """## PlanResult (reasoning removed)

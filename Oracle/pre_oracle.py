@@ -32,6 +32,7 @@ TransitionType = Literal[
 ]
 AssertionCategory = Literal["widget", "activity", "package"]
 AssertionRelation = Literal["exact_match", "contains", "is_true", "is_false"]
+AssertionMode = Literal["xml_assertions", "semantic_only"]
 
 
 class SemanticHint(BaseModel):
@@ -109,7 +110,15 @@ class UIAssertionContract(BaseModel):
     context_mode: ContextMode
     transition_type: TransitionType
     success_definition: str = Field(min_length=1)
-    assertions: list[UIAssertion] = Field(min_length=1)
+    assertion_mode: AssertionMode = "xml_assertions"
+    mapping_reason: str = Field(default="")
+    assertions: list[UIAssertion] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_by_mode(self) -> "UIAssertionContract":
+        if self.assertion_mode == "xml_assertions" and not self.assertions:
+            raise ValueError("xml_assertions 模式需要至少一条 assertion")
+        return self
 
 
 class PreOracleOutput(BaseModel):
@@ -214,15 +223,33 @@ class OraclePre:
                 )
                 semantic_contract = semantic_contract.model_copy(update={"context_mode": actual_mode})
 
-            assertion_contract = self._map_semantic_to_assertions(
-                semantic_contract=semantic_contract,
-                plan=plan,
-                node_index=node_index,
-                rid_index=rid_index,
-                dump_tree=dump_tree,
-                anchor_result=anchor_result,
-                widgets=list(widgets or []),
-            )
+            try:
+                assertion_contract = self._map_semantic_to_assertions(
+                    semantic_contract=semantic_contract,
+                    plan=plan,
+                    node_index=node_index,
+                    rid_index=rid_index,
+                    dump_tree=dump_tree,
+                    anchor_result=anchor_result,
+                    widgets=list(widgets or []),
+                )
+            except Exception as map_exc:
+                if not self._should_fallback_to_semantic_only(error=map_exc):
+                    raise
+                mapping_reason = str(map_exc)
+                logger.warning(
+                    "Pre-Oracle 映射失败，降级 semantic_only: transition=%s, reason=%s",
+                    semantic_contract.transition_type,
+                    mapping_reason,
+                )
+                assertion_contract = UIAssertionContract(
+                    context_mode=semantic_contract.context_mode,
+                    transition_type=semantic_contract.transition_type,
+                    success_definition=semantic_contract.success_definition,
+                    assertion_mode="semantic_only",
+                    mapping_reason=mapping_reason,
+                    assertions=[],
+                )
             output = PreOracleOutput(
                 semantic_contract=semantic_contract,
                 assertion_contract=assertion_contract,
@@ -239,6 +266,18 @@ class OraclePre:
             self._record_pre_error(step=step, error=str(exc))
             logger.error("Pre-Oracle 生成失败: %s", exc)
             raise
+
+    def _should_fallback_to_semantic_only(self, error: Exception) -> bool:
+        message = str(error or "")
+        if not message:
+            return False
+        fallback_tokens = [
+            "无法解析到 node",
+            "未找到可用 target 选择器",
+            "target_text/target_class 无法解析到 node",
+            "target_node_id=",
+        ]
+        return any(token in message for token in fallback_tokens)
 
     def _preferred_context_mode(self, action_type: str) -> ContextMode:
         token = str(action_type or "").strip().lower()
@@ -405,6 +444,8 @@ class OraclePre:
             context_mode=semantic_contract.context_mode,
             transition_type=semantic_contract.transition_type,
             success_definition=semantic_contract.success_definition,
+            assertion_mode="xml_assertions",
+            mapping_reason="",
             assertions=assertions,
         )
 

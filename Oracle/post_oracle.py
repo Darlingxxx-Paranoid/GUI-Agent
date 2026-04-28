@@ -88,9 +88,74 @@ class PostOracle:
         if not isinstance(before_dump_tree, dict):
             before_dump_tree = {}
 
-        assertion_items = self._normalize_assertions(assertion_contract)
+        assertion_items, assertion_mode, mapping_reason = self._normalize_assertions(assertion_contract)
         node_index = self._index_dump_tree(after_dump_tree)
         activity_after, package_after = self._extract_app_context(after_dump_tree)
+
+        if assertion_mode == "semantic_only":
+            logger.info("Post-Oracle 跳过 XML 断言(semantic_only): reason=%s", mapping_reason or "n/a")
+            summary = AssertionSummary(total=0, failed=0)
+            fallback_failed_items: list[dict[str, Any]] = []
+            if mapping_reason:
+                fallback_failed_items.append(
+                    {
+                        "index": 0,
+                        "message": f"semantic_only_mapping: {mapping_reason}",
+                        "assertion": {},
+                    }
+                )
+            llm_recheck = self._secondary_verify_with_llm(
+                before_screenshot_path=before_screenshot_path,
+                after_screenshot_path=after_screenshot_path,
+                action=action or {},
+                semantic_contract=semantic_contract,
+                assertion_items=assertion_items,
+                failed_items=fallback_failed_items,
+                before_dump_tree=before_dump_tree,
+                after_dump_tree=after_dump_tree,
+                step=step,
+            )
+            if llm_recheck is None:
+                result = PostOracleResult(
+                    decision="semantic_fail_ui_unchanged",
+                    needs_back=False,
+                    reason="llm_secondary_failed_after_retry",
+                    evidence_source="llm_secondary_retry_fallback",
+                    assertion_summary=summary,
+                    failed_assertions=[],
+                    llm_recheck=None,
+                )
+                self._record_post_oracle_artifact(step=step, result=result)
+                logger.warning("Post-Oracle semantic_only 二次验证失败(重试后降级): decision=%s", result.decision)
+                return result
+
+            if llm_recheck.semantic_success:
+                decision: PostOracleDecision = "semantic_success"
+                needs_back = False
+            elif llm_recheck.ui_changed:
+                decision = "semantic_fail_ui_changed"
+                needs_back = True
+            else:
+                decision = "semantic_fail_ui_unchanged"
+                needs_back = False
+
+            result = PostOracleResult(
+                decision=decision,
+                needs_back=needs_back,
+                reason=llm_recheck.rationale,
+                evidence_source="llm_secondary",
+                assertion_summary=summary,
+                failed_assertions=[],
+                llm_recheck=llm_recheck,
+            )
+            self._record_post_oracle_artifact(step=step, result=result)
+            logger.info(
+                "Post-Oracle semantic_only 二次验证完成: decision=%s, needs_back=%s, attempts=%d",
+                result.decision,
+                result.needs_back,
+                int(llm_recheck.attempts),
+            )
+            return result
 
         failed_messages: list[str] = []
         failed_items: list[dict[str, Any]] = []
@@ -302,9 +367,13 @@ class PostOracle:
     def _normalize_assertions(
         self,
         assertion_contract: UIAssertionContract | Sequence[UIAssertion] | Sequence[dict[str, Any]],
-    ) -> list[UIAssertion]:
+    ) -> tuple[list[UIAssertion], str, str]:
+        assertion_mode = "xml_assertions"
+        mapping_reason = ""
         if isinstance(assertion_contract, UIAssertionContract):
             items = list(assertion_contract.assertions or [])
+            assertion_mode = str(assertion_contract.assertion_mode or "xml_assertions")
+            mapping_reason = str(assertion_contract.mapping_reason or "")
         elif isinstance(assertion_contract, Sequence) and not isinstance(assertion_contract, (str, bytes)):
             items = []
             for value in assertion_contract:
@@ -315,9 +384,11 @@ class PostOracle:
         else:
             raise ValueError("assertion_contract 必须是 UIAssertionContract 或 UIAssertion 列表")
 
+        if assertion_mode == "semantic_only":
+            return items, assertion_mode, mapping_reason
         if not items:
             raise ValueError("assertions 不能为空")
-        return items
+        return items, assertion_mode, mapping_reason
 
     def _index_dump_tree(self, dump_tree: dict) -> Dict[int, dict]:
         index: Dict[int, dict] = {}
@@ -395,9 +466,16 @@ class PostOracle:
             if expected_rid:
                 node_rid = str(node.get("resource-id", "") or "")
                 if expected_rid != node_rid:
-                    return False, (
-                        f"resource_id 不匹配(node_id={node_id}, expected='{expected_rid}', actual='{node_rid}')"
+                    rematched_id, rematched_node = self._relocate_by_expected_resource_id(
+                        expected_resource_id=expected_rid,
+                        target=target,
+                        node_index=node_index,
                     )
+                    if rematched_node is None or rematched_id is None:
+                        return False, (
+                            f"resource_id 不匹配(node_id={node_id}, expected='{expected_rid}', actual='{node_rid}')"
+                        )
+                    node_id, node = rematched_id, rematched_node
 
             field = str(target.field or "")
             if field not in node:
@@ -482,6 +560,35 @@ class PostOracle:
         if best_id is None:
             return None, None
         return best_id, node_index.get(best_id)
+
+    def _relocate_by_expected_resource_id(
+        self,
+        expected_resource_id: str,
+        target: UIAssertionTarget,
+        node_index: Dict[int, dict],
+    ) -> tuple[int | None, dict[str, Any] | None]:
+        expected = str(expected_resource_id or "").strip()
+        if not expected:
+            return None, None
+        rematch_target = UIAssertionTarget(
+            node_id=None,
+            resource_id=expected,
+            field=str(target.field or ""),
+            text=str(target.text or ""),
+            class_name=str(target.class_name or ""),
+        )
+        rematched_id, rematched_node = self._locate_widget_node(target=rematch_target, node_index=node_index)
+        if rematched_node is not None and rematched_id is not None:
+            return rematched_id, rematched_node
+
+        fallback_target = UIAssertionTarget(
+            node_id=None,
+            resource_id=expected,
+            field=str(target.field or ""),
+            text="",
+            class_name="",
+        )
+        return self._locate_widget_node(target=fallback_target, node_index=node_index)
 
     def _match_relation(self, relation: str, actual_value: Any, expected_content: str) -> bool:
         if relation == "exact_match":
